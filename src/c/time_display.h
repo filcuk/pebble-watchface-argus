@@ -2,7 +2,7 @@
 
 #include <pebble.h>
 
-#define TIME_BLOCK_HEIGHT 50
+#define TIME_BLOCK_HEIGHT 64
 
 typedef struct TimeDisplay TimeDisplay;
 

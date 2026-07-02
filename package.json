@@ -40,7 +40,10 @@
       "PrecipMax",
       "WeatherTempHourly",
       "WeatherPrecipHourly",
-      "WeatherFetchTime"
+      "WeatherWindHourly",
+      "WeatherFetchTime",
+      "WeatherIsDayHourly",
+      "WindMax"
     ],
     "resources": {
       "media": []

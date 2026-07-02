@@ -15,6 +15,8 @@ static TimeDisplay *s_time_display;
 static WeatherChart *s_weather_chart;
 static UnobstructedAreaHandlers s_unobstructed_handlers;
 
+#define TIME_WEATHER_GAP 16
+
 static void prv_update_layout(void) {
   if (!s_window_layer) {
     return;
@@ -24,25 +26,37 @@ static void prv_update_layout(void) {
   int width = bounds.size.w;
   int height = bounds.size.h;
 
-  int weather_h = WEATHER_CHART_HEIGHT;
-  if (weather_h > height / 2) {
-    weather_h = height / 2;
-  }
-
   int time_h = TIME_BLOCK_HEIGHT;
   int calendar_h = CALENDAR_HEIGHT;
   int header_h = HEADER_HEIGHT;
+  int time_zone_top = header_h + calendar_h;
 
-  int used = header_h + calendar_h + time_h + weather_h;
-  int time_y = header_h + calendar_h;
-  if (used < height) {
-    time_y = header_h + calendar_h + (height - used) / 2;
+  int time_y = time_zone_top;
+  int weather_y = time_y + time_h + TIME_WEATHER_GAP;
+  int weather_h = height - weather_y;
+
+  int max_weather_h = WEATHER_CHART_HEIGHT;
+  if (max_weather_h > height / 2) {
+    max_weather_h = height / 2;
+  }
+
+  if (weather_h > max_weather_h) {
+    weather_h = max_weather_h;
+    weather_y = height - weather_h;
+    int time_zone_bottom = weather_y - TIME_WEATHER_GAP;
+    if (time_zone_bottom >= time_zone_top + time_h) {
+      time_y = time_zone_top + (time_zone_bottom - time_zone_top - time_h) / 2;
+    } else {
+      time_y = time_zone_top;
+      weather_y = time_y + time_h + TIME_WEATHER_GAP;
+      weather_h = height - weather_y;
+    }
   }
 
   header_set_bounds(s_header, GRect(0, 0, width, header_h));
   calendar_set_bounds(s_calendar, GRect(0, header_h, width, calendar_h));
   time_display_set_bounds(s_time_display, GRect(0, time_y, width, time_h));
-  weather_chart_set_bounds(s_weather_chart, GRect(0, height - weather_h, width, weather_h));
+  weather_chart_set_bounds(s_weather_chart, GRect(0, weather_y, width, weather_h));
 }
 
 static void prv_unobstructed_change(AnimationProgress progress, void *context) {
@@ -153,9 +167,14 @@ static void prv_window_unload(Window *window) {
   s_window_layer = NULL;
 }
 
+static void prv_weather_updated(void) {
+  weather_chart_refresh(s_weather_chart);
+}
+
 static void init(void) {
   settings_init();
   weather_init();
+  weather_set_updated_handler(prv_weather_updated);
 
   s_main_window = window_create();
   window_set_background_color(s_main_window, GColorBlack);

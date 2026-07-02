@@ -16,32 +16,6 @@ struct Header {
 
 static Header *s_header;
 
-static int prv_iso_week_number(struct tm *date) {
-  struct tm copy = *date;
-  char week_buf[4];
-  if (strftime(week_buf, sizeof(week_buf), "%V", &copy) > 0) {
-    return atoi(week_buf);
-  }
-  return 1;
-}
-
-static int prv_gregorian_week_number(struct tm *date) {
-  struct tm copy = *date;
-  copy.tm_hour = 12;
-  copy.tm_min = 0;
-  copy.tm_sec = 0;
-  mktime(&copy);
-
-  struct tm year_start = copy;
-  year_start.tm_mon = 0;
-  year_start.tm_mday = 1;
-  mktime(&year_start);
-
-  int jan1_wday = year_start.tm_wday;
-  int offset = (copy.tm_yday + 7 - jan1_wday) / 7;
-  return offset + 1;
-}
-
 static void prv_bt_update_proc(Layer *layer, GContext *ctx) {
   (void)layer;
   Header *header = s_header;
@@ -152,14 +126,10 @@ void header_update(Header *header, struct tm *now) {
     return;
   }
 
-  const ArgusSettings *settings = settings_get();
-  int week = settings->week_number_mode == WEEK_NUMBER_ISO ? prv_iso_week_number(now)
-                                                            : prv_gregorian_week_number(now);
-
-  static char month_buf[16];
-  static char buffer[32];
-  strftime(month_buf, sizeof(month_buf), "%b %Y", now);
-  snprintf(buffer, sizeof(buffer), "W%d %s", week, month_buf);
+  static char month_buf[8];
+  static char buffer[16];
+  strftime(month_buf, sizeof(month_buf), "%b", now);
+  snprintf(buffer, sizeof(buffer), "%d %s", now->tm_mday, month_buf);
   text_layer_set_text(header->status_text, buffer);
 }
 
