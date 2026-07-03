@@ -104,6 +104,27 @@ module.exports = [
     ],
   },
   {
+    type: 'section',
+    items: [
+      {
+        type: 'heading',
+        defaultValue: 'Debug',
+      },
+      {
+        type: 'toggle',
+        messageKey: 'DebugMode',
+        label: 'Debug mode',
+        defaultValue: false,
+      },
+      {
+        type: 'toggle',
+        messageKey: 'DemoWeather',
+        label: 'Demo weather',
+        defaultValue: false,
+      },
+    ],
+  },
+  {
     type: 'submit',
     defaultValue: 'Save Settings',
   },

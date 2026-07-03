@@ -40,6 +40,8 @@ typedef struct {
   uint8_t forecast_hours;
   bool temperature_fahrenheit;
   bool show_event_indicators;
+  bool debug_mode;
+  bool demo_weather;
 } ArgusSettings;
 
 void settings_init(void);

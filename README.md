@@ -39,6 +39,25 @@ pebble install --emulator emery
 pebble logs --emulator emery
 ```
 
+## Install on a physical watch (CloudPebble)
+
+One-time setup:
+
+1. Install the [rePebble app](https://repebble.com/app) on your phone.
+2. In the app: **Devices** → **⋯** → **Enable Dev Connect**, then sign in with GitHub.
+3. On your computer: `pebble login` (same GitHub account).
+
+Then build and send to the watch over the cloud relay (phone and computer do not need to be on the same Wi‑Fi):
+
+```bash
+pebble build
+pebble install --cloudpebble
+```
+
+Logs from the watch: `pebble logs --cloudpebble`
+
+Alternatively, open the project in the [CloudPebble IDE](https://cloudpebble.repebble.com) (GitHub import), compile in the browser, and install from there with Dev Connect enabled on the phone.
+
 ## Emulator testing
 
 ```bash

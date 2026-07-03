@@ -1,5 +1,7 @@
 #include "weather.h"
 
+#include "settings.h"
+
 #include <string.h>
 #include <time.h>
 
@@ -66,6 +68,27 @@ static void prv_recompute_extremes(void) {
   s_weather.wind_max = wind_max;
 }
 
+static time_t prv_cache_timestamp(void) {
+  if (s_weather.cached_at > 0) {
+    return s_weather.cached_at;
+  }
+  return s_weather.fetch_time;
+}
+
+static bool weather_cache_is_valid(void) {
+  if (s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
+    return false;
+  }
+
+  time_t now = time(NULL);
+  time_t cache_time = prv_cache_timestamp();
+  if (cache_time <= 0 || now < cache_time) {
+    return false;
+  }
+
+  return (now - cache_time) <= WEATHER_CACHE_MAX_AGE_S;
+}
+
 static void prv_cancel_timers(void) {
   if (s_retry_timer) {
     app_timer_cancel(s_retry_timer);
@@ -86,10 +109,69 @@ static void prv_retry_callback(void *context) {
 static void prv_timeout_callback(void *context) {
   (void)context;
   s_timeout_timer = NULL;
-  if (s_weather.state == WEATHER_STATE_LOADING) {
+  if (s_weather.state != WEATHER_STATE_LOADING) {
+    return;
+  }
+
+  if (weather_use_demo_data()) {
     APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — using demo data");
     weather_apply_demo_data();
+    return;
   }
+
+  if (weather_cache_is_valid()) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — keeping cached forecast");
+    s_weather.state = WEATHER_STATE_READY;
+    prv_cancel_timers();
+    prv_notify_updated();
+    return;
+  }
+
+  if (!connection_service_peek_pebble_app_connection()) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — phone unavailable");
+    weather_mark_unavailable();
+  } else {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — fetch failed");
+    weather_mark_error();
+  }
+}
+
+bool weather_use_demo_data(void) {
+  const ArgusSettings *settings = settings_get();
+  return settings->debug_mode && settings->demo_weather;
+}
+
+void weather_mark_unavailable(void) {
+  if (weather_cache_is_valid()) {
+    s_weather.state = WEATHER_STATE_READY;
+    prv_notify_updated();
+    return;
+  }
+
+  s_weather.state = WEATHER_STATE_UNAVAILABLE;
+  prv_cancel_timers();
+  prv_notify_updated();
+}
+
+void weather_refresh_for_connection(bool phone_connected) {
+  if (phone_connected) {
+    weather_request();
+    return;
+  }
+
+  if (weather_use_demo_data()) {
+    weather_apply_demo_data();
+    return;
+  }
+
+  if (weather_cache_is_valid()) {
+    s_weather.state = WEATHER_STATE_READY;
+    prv_cancel_timers();
+    prv_notify_updated();
+    return;
+  }
+
+  weather_mark_unavailable();
 }
 
 void weather_init(void) {
@@ -102,6 +184,14 @@ void weather_init(void) {
       memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
     }
     weather_slide_stale_hours();
+    if (s_weather.cached_at == 0 && s_weather.hour_count > 0 && s_weather.state == WEATHER_STATE_READY) {
+      s_weather.cached_at = time(NULL);
+      persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+    }
+  }
+
+  if (!connection_service_peek_pebble_app_connection()) {
+    weather_refresh_for_connection(false);
   }
 }
 
@@ -118,6 +208,10 @@ void weather_mark_error(void) {
 }
 
 void weather_apply_demo_data(void) {
+  if (!weather_use_demo_data()) {
+    return;
+  }
+
   s_weather.hour_count = 24;
   s_weather.temp_min = 6;
   s_weather.temp_max = 16;
@@ -137,6 +231,7 @@ void weather_apply_demo_data(void) {
   s_weather.has_is_day = true;
   s_weather.has_wind = true;
 
+  s_weather.cached_at = time(NULL);
   s_weather.state = WEATHER_STATE_READY;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
   prv_cancel_timers();
@@ -225,6 +320,7 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   }
 
   s_weather.hour_count = count;
+  s_weather.cached_at = time(NULL);
   s_weather.state = WEATHER_STATE_READY;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
   prv_cancel_timers();
@@ -260,8 +356,14 @@ void weather_slide_stale_hours(void) {
   }
 
   if (hours_elapsed >= s_weather.hour_count) {
-    s_weather.state = WEATHER_STATE_LOADING;
-    weather_request();
+    s_weather.hour_count = 0;
+    persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+    if (connection_service_peek_pebble_app_connection()) {
+      s_weather.state = WEATHER_STATE_LOADING;
+      weather_request();
+    } else {
+      weather_mark_unavailable();
+    }
     return;
   }
 
@@ -291,8 +393,11 @@ void weather_request(void) {
     weather_schedule_retry();
     return;
   }
-  if (s_weather.hour_count == 0 || s_weather.state == WEATHER_STATE_ERROR) {
-    s_weather.state = WEATHER_STATE_LOADING;
+  if (s_weather.hour_count == 0 || s_weather.state == WEATHER_STATE_ERROR ||
+      s_weather.state == WEATHER_STATE_UNAVAILABLE) {
+    if (!weather_cache_is_valid()) {
+      s_weather.state = WEATHER_STATE_LOADING;
+    }
   }
   weather_schedule_retry();
 }

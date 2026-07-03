@@ -33,6 +33,8 @@
       "ManualLocation",
       "ForecastHours",
       "TemperatureUnit",
+      "DebugMode",
+      "DemoWeather",
       "REQUEST_WEATHER",
       "WeatherHourCount",
       "TempMin",

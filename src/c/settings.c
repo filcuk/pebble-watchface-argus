@@ -14,6 +14,8 @@ static void settings_set_defaults(void) {
   s_settings.forecast_hours = 24;
   s_settings.temperature_fahrenheit = false;
   s_settings.show_event_indicators = false;
+  s_settings.debug_mode = false;
+  s_settings.demo_weather = false;
 }
 
 void settings_init(void) {
@@ -84,6 +86,18 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   t = dict_find(iter, MESSAGE_KEY_TemperatureUnit);
   if (t) {
     s_settings.temperature_fahrenheit = t->value->int32 != 0;
+    changed = true;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_DebugMode);
+  if (t) {
+    s_settings.debug_mode = t->value->int32 != 0;
+    changed = true;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_DemoWeather);
+  if (t) {
+    s_settings.demo_weather = t->value->int32 != 0;
     changed = true;
   }
 

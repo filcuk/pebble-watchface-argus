@@ -93,6 +93,10 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   settings_apply_from_message(iter);
   weather_apply_from_message(iter);
 
+  if (dict_find(iter, MESSAGE_KEY_DebugMode) || dict_find(iter, MESSAGE_KEY_DemoWeather)) {
+    weather_refresh_for_connection(connection_service_peek_pebble_app_connection());
+  }
+
   time_t now = time(NULL);
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
@@ -124,12 +128,8 @@ static void prv_battery_handler(BatteryChargeState state) {
 
 static void prv_bt_handler(bool connected) {
   header_refresh_bt(s_header, connected);
-  if (connected) {
-    weather_request();
-  } else {
-    weather_mark_error();
-    weather_chart_refresh(s_weather_chart);
-  }
+  weather_refresh_for_connection(connected);
+  weather_chart_refresh(s_weather_chart);
 }
 
 static void prv_window_load(Window *window) {
