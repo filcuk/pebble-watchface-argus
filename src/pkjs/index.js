@@ -79,7 +79,26 @@ function packUint8Array(values, count) {
   return arr;
 }
 
+function parseOpenMeteoTime(iso) {
+  if (!iso) {
+    return Math.floor(Date.now() / 1000);
+  }
+  var parts = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!parts) {
+    return Math.floor(Date.now() / 1000);
+  }
+  var date = new Date(
+    parseInt(parts[1], 10),
+    parseInt(parts[2], 10) - 1,
+    parseInt(parts[3], 10),
+    parseInt(parts[4], 10),
+    parseInt(parts[5], 10)
+  );
+  return Math.floor(date.getTime() / 1000);
+}
+
 function packWeatherPayload(json, hours) {
+  var times = json.hourly.time || [];
   var temps = json.hourly.temperature_2m;
   var precips = json.hourly.precipitation;
   var winds = json.hourly.wind_speed_10m || [];
@@ -147,7 +166,7 @@ function packWeatherPayload(json, hours) {
     ),
     windBytes: packUint8Array(winds, count),
     isDayBytes: packUint8Array(isDay, count),
-    fetchTime: Math.floor(Date.now() / 1000),
+    fetchTime: parseOpenMeteoTime(times[0]),
   };
 }
 
@@ -188,7 +207,8 @@ function fetchForecast(latitude, longitude) {
     '&longitude=' +
     longitude +
     '&hourly=temperature_2m,precipitation,wind_speed_10m,is_day&forecast_hours=' +
-    hours;
+    hours +
+    '&timezone=auto';
 
   xhrRequest(url, function (responseText) {
     if (!responseText) {

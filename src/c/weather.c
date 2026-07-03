@@ -1,6 +1,7 @@
 #include "weather.h"
 
 #include <string.h>
+#include <time.h>
 
 static WeatherData s_weather;
 static AppTimer *s_retry_timer;
@@ -11,6 +12,58 @@ static void prv_notify_updated(void) {
   if (s_updated_handler) {
     s_updated_handler();
   }
+}
+
+static time_t prv_current_hour_start(void) {
+  time_t now = time(NULL);
+  struct tm *tm = localtime(&now);
+  if (!tm) {
+    return now;
+  }
+  tm->tm_min = 0;
+  tm->tm_sec = 0;
+  return mktime(tm);
+}
+
+static void prv_recompute_extremes(void) {
+  if (s_weather.hour_count == 0) {
+    return;
+  }
+
+  int8_t temp_min = 127;
+  int8_t temp_max = -128;
+  uint8_t precip_max = 0;
+  uint8_t wind_max = 0;
+
+  for (uint8_t i = 0; i < s_weather.hour_count; i++) {
+    if (s_weather.temps[i] < temp_min) {
+      temp_min = s_weather.temps[i];
+    }
+    if (s_weather.temps[i] > temp_max) {
+      temp_max = s_weather.temps[i];
+    }
+    if (s_weather.precips[i] > precip_max) {
+      precip_max = s_weather.precips[i];
+    }
+    if (s_weather.winds[i] > wind_max) {
+      wind_max = s_weather.winds[i];
+    }
+  }
+
+  if (temp_max <= temp_min) {
+    temp_max = temp_min + 1;
+  }
+  if (precip_max == 0) {
+    precip_max = 1;
+  }
+  if (wind_max == 0) {
+    wind_max = 1;
+  }
+
+  s_weather.temp_min = temp_min;
+  s_weather.temp_max = temp_max;
+  s_weather.precip_max = precip_max;
+  s_weather.wind_max = wind_max;
 }
 
 static void prv_cancel_timers(void) {
@@ -48,6 +101,7 @@ void weather_init(void) {
     if (s_weather.hour_count > 0 && !s_weather.has_is_day) {
       memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
     }
+    weather_slide_stale_hours();
   }
 }
 
@@ -69,7 +123,7 @@ void weather_apply_demo_data(void) {
   s_weather.temp_max = 16;
   s_weather.precip_max = 40;
   s_weather.wind_max = 30;
-  s_weather.fetch_time = time(NULL);
+  s_weather.fetch_time = prv_current_hour_start();
 
   for (uint8_t i = 0; i < 24; i++) {
     s_weather.temps[i] = (int8_t)(8 + ((i * 3) % 9));
@@ -192,6 +246,36 @@ void weather_cancel_retry(void) {
 
 void weather_set_updated_handler(WeatherUpdatedHandler handler) {
   s_updated_handler = handler;
+}
+
+void weather_slide_stale_hours(void) {
+  if (s_weather.state != WEATHER_STATE_READY || s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
+    return;
+  }
+
+  time_t now = time(NULL);
+  int hours_elapsed = (int)((now - s_weather.fetch_time) / 3600);
+  if (hours_elapsed <= 0) {
+    return;
+  }
+
+  if (hours_elapsed >= s_weather.hour_count) {
+    s_weather.state = WEATHER_STATE_LOADING;
+    weather_request();
+    return;
+  }
+
+  uint8_t remain = s_weather.hour_count - (uint8_t)hours_elapsed;
+  memmove(s_weather.temps, s_weather.temps + hours_elapsed, remain);
+  memmove(s_weather.precips, s_weather.precips + hours_elapsed, remain);
+  memmove(s_weather.winds, s_weather.winds + hours_elapsed, remain);
+  memmove(s_weather.is_day, s_weather.is_day + hours_elapsed, remain);
+
+  s_weather.hour_count = remain;
+  s_weather.fetch_time += (time_t)hours_elapsed * 3600;
+  prv_recompute_extremes();
+  persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+  prv_notify_updated();
 }
 
 void weather_request(void) {

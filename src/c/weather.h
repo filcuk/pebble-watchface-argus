@@ -39,3 +39,4 @@ void weather_mark_error(void);
 void weather_schedule_retry(void);
 void weather_cancel_retry(void);
 void weather_set_updated_handler(WeatherUpdatedHandler handler);
+void weather_slide_stale_hours(void);

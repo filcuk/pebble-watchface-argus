@@ -73,9 +73,10 @@ static void prv_refresh_time_modules(struct tm *now) {
 }
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  weather_slide_stale_hours();
   prv_refresh_time_modules(tick_time);
 
-  if (tick_time->tm_min % 30 == 0) {
+  if (tick_time->tm_min == 0 || tick_time->tm_min % 30 == 0) {
     weather_request();
   }
 }
