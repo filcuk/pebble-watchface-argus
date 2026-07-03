@@ -5,13 +5,16 @@
 #include <stdio.h>
 #include <string.h>
 
-#define TIME_CHAR_SPACING 6
+#define TIME_CHAR_SPACING_24H 6
+#define TIME_CHAR_SPACING_12H 4
+#define AM_PM_GAP 4
 
 struct TimeDisplay {
   Layer *container;
   Layer *time_layer;
-  TextLayer *ampm_layer;
   char time_text[8];
+  char ampm_text[4];
+  bool show_ampm;
 };
 
 static TimeDisplay *s_time_display;
@@ -40,23 +43,29 @@ static GSize prv_char_size(char ch, GFont font) {
                                                GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
 }
 
-static void prv_draw_spaced_time(GContext *ctx, const char *text, GRect bounds) {
+static int prv_measure_spaced_time(const char *text, int spacing) {
   int len = strlen(text);
   if (len == 0) {
-    return;
+    return 0;
   }
 
   int total_w = 0;
   for (int i = 0; i < len; i++) {
     total_w += prv_char_size(text[i], prv_font_for_char(text[i])).w;
     if (i < len - 1) {
-      total_w += TIME_CHAR_SPACING;
+      total_w += spacing;
     }
   }
+  return total_w;
+}
 
-  int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+static void prv_draw_spaced_time(GContext *ctx, const char *text, GRect bounds, int spacing, int x) {
+  int len = strlen(text);
+  if (len == 0) {
+    return;
+  }
+
   char ch[2] = {'\0', '\0'};
-
   for (int i = 0; i < len; i++) {
     ch[0] = text[i];
     GFont font = prv_font_for_char(ch[0]);
@@ -64,8 +73,23 @@ static void prv_draw_spaced_time(GContext *ctx, const char *text, GRect bounds) 
     graphics_context_set_text_color(ctx, GColorWhite);
     graphics_draw_text(ctx, ch, font, GRect(x, bounds.origin.y, size.w + 2, bounds.size.h),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    x += size.w + TIME_CHAR_SPACING;
+    x += size.w + spacing;
   }
+}
+
+static GSize prv_ampm_size(const char *text) {
+  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+  return graphics_text_layout_get_content_size(text, font, GRect(0, 0, 40, TIME_BLOCK_HEIGHT),
+                                               GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
+}
+
+static void prv_draw_ampm(GContext *ctx, const char *text, GRect bounds, int x) {
+  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+  GSize size = prv_ampm_size(text);
+  int y = bounds.origin.y + bounds.size.h - size.h - 6;
+  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_draw_text(ctx, text, font, GRect(x, y, size.w + 2, size.h),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
 static void prv_time_layer_update_proc(Layer *layer, GContext *ctx) {
@@ -73,7 +97,22 @@ static void prv_time_layer_update_proc(Layer *layer, GContext *ctx) {
   if (!s_time_display) {
     return;
   }
-  prv_draw_spaced_time(ctx, s_time_display->time_text, layer_get_bounds(layer));
+
+  GRect bounds = layer_get_bounds(layer);
+  int spacing = s_time_display->show_ampm ? TIME_CHAR_SPACING_12H : TIME_CHAR_SPACING_24H;
+  int time_w = prv_measure_spaced_time(s_time_display->time_text, spacing);
+  int start_x = bounds.origin.x;
+
+  if (s_time_display->show_ampm && s_time_display->ampm_text[0] != '\0') {
+    GSize ampm_size = prv_ampm_size(s_time_display->ampm_text);
+    int total_w = time_w + AM_PM_GAP + ampm_size.w;
+    start_x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+    prv_draw_spaced_time(ctx, s_time_display->time_text, bounds, spacing, start_x);
+    prv_draw_ampm(ctx, s_time_display->ampm_text, bounds, start_x + time_w + AM_PM_GAP);
+  } else {
+    start_x = bounds.origin.x + (bounds.size.w - time_w) / 2;
+    prv_draw_spaced_time(ctx, s_time_display->time_text, bounds, spacing, start_x);
+  }
 }
 
 TimeDisplay *time_display_create(Layer *parent) {
@@ -90,14 +129,9 @@ TimeDisplay *time_display_create(Layer *parent) {
   layer_set_update_proc(display->time_layer, prv_time_layer_update_proc);
   layer_add_child(display->container, display->time_layer);
 
-  display->ampm_layer = text_layer_create(GRect(bounds.size.w - 36, bounds.size.h - 24, 32, 20));
-  text_layer_set_background_color(display->ampm_layer, GColorClear);
-  text_layer_set_text_color(display->ampm_layer, GColorWhite);
-  text_layer_set_font(display->ampm_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
-  text_layer_set_text_alignment(display->ampm_layer, GTextAlignmentLeft);
-  layer_add_child(display->container, text_layer_get_layer(display->ampm_layer));
-
   display->time_text[0] = '\0';
+  display->ampm_text[0] = '\0';
+  display->show_ampm = false;
   s_time_display = display;
   return display;
 }
@@ -109,7 +143,6 @@ void time_display_destroy(TimeDisplay *display) {
   if (s_time_display == display) {
     s_time_display = NULL;
   }
-  text_layer_destroy(display->ampm_layer);
   layer_destroy(display->time_layer);
   layer_destroy(display->container);
   free(display);
@@ -121,7 +154,6 @@ void time_display_set_bounds(TimeDisplay *display, GRect frame) {
   }
   layer_set_frame(display->container, frame);
   layer_set_frame(display->time_layer, GRect(0, 0, frame.size.w, frame.size.h));
-  layer_set_frame(text_layer_get_layer(display->ampm_layer), GRect(frame.size.w - 36, frame.size.h - 24, 32, 20));
 }
 
 void time_display_update(TimeDisplay *display, struct tm *now) {
@@ -142,13 +174,12 @@ void time_display_update(TimeDisplay *display, struct tm *now) {
     snprintf(display->time_text, sizeof(display->time_text), "%d:%02d", hour, now->tm_min);
   }
 
-  layer_mark_dirty(display->time_layer);
-
+  display->show_ampm = !use_24h;
   if (use_24h) {
-    text_layer_set_text(display->ampm_layer, "");
+    display->ampm_text[0] = '\0';
   } else {
-    static char ampm_buf[4];
-    strftime(ampm_buf, sizeof(ampm_buf), "%p", now);
-    text_layer_set_text(display->ampm_layer, ampm_buf);
+    strftime(display->ampm_text, sizeof(display->ampm_text), "%p", now);
   }
+
+  layer_mark_dirty(display->time_layer);
 }
