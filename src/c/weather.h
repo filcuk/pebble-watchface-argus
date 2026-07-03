@@ -4,6 +4,7 @@
 
 #define WEATHER_MAX_HOURS 72
 #define WEATHER_PERSIST_KEY 3
+#define WEATHER_PERSIST_VERSION 1
 #define WEATHER_CACHE_MAX_AGE_S (12 * 3600)
 
 typedef enum {
@@ -14,6 +15,7 @@ typedef enum {
 } WeatherState;
 
 typedef struct {
+  uint8_t version;
   WeatherState state;
   uint8_t hour_count;
   int8_t temps[WEATHER_MAX_HOURS];
@@ -37,12 +39,10 @@ WeatherData *weather_get(void);
 void weather_apply_from_message(DictionaryIterator *iter);
 void weather_apply_demo_data(void);
 void weather_request(void);
-void weather_mark_loading(void);
 void weather_mark_error(void);
 void weather_mark_unavailable(void);
 bool weather_use_demo_data(void);
 void weather_refresh_for_connection(bool phone_connected);
 void weather_schedule_retry(void);
-void weather_cancel_retry(void);
 void weather_set_updated_handler(WeatherUpdatedHandler handler);
 void weather_slide_stale_hours(void);

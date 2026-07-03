@@ -1,6 +1,6 @@
 #include "weather_chart.h"
 
-#include "settings.h"
+#include "formatting.h"
 #include "weather.h"
 
 #include <stdio.h>
@@ -14,6 +14,15 @@ struct WeatherChart {
   GPoint temp_points[WEATHER_MAX_HOURS];
   uint8_t point_count;
 };
+
+typedef struct {
+  int plot_left;
+  int plot_right;
+  int plot_top;
+  int axis_y;
+  int plot_w;
+  int plot_h;
+} ChartGeometry;
 
 typedef struct {
   int plot_left;
@@ -58,7 +67,7 @@ static WeatherChart *s_weather_chart;
 #define CHART_MARGIN_BOTTOM 2
 #define X_AXIS_HEIGHT (X_MAJOR_TICK_LENGTH + X_TICK_TO_LABEL_GAP + X_LABEL_HEIGHT + X_LABEL_Y_OFFSET)
 #define WIND_X_ARM 2
-#define NIGHT_HATCH_SPACING 8
+#define NIGHT_HATCH_SPACING 12
 #define Y_AXIS_FLOOR_PADDING 1
 #define CHART_AXIS_COLOR GColorDarkGray
 #define CHART_TICK_COLOR GColorDarkGray
@@ -75,15 +84,7 @@ static WeatherChart *s_weather_chart;
 #define TEMP_POINT_RADIUS 1
 #define PLOT_TOP_OVERFLOW ((TEMP_LINE_STROKE_WIDTH / 2) + TEMP_POINT_RADIUS + 1)
 
-static int8_t prv_display_temp(int8_t celsius) {
-  const ArgusSettings *settings = settings_get();
-  if (!settings->temperature_fahrenheit) {
-    return celsius;
-  }
-  return (int8_t)(((celsius * 9) + (celsius >= 0 ? 2 : -2)) / 5 + 32);
-}
-
-static bool prv_compute_layout(GRect bounds, const WeatherData *data, ChartLayout *layout) {
+static void prv_chart_geometry(GRect bounds, ChartGeometry *geo) {
   int plot_left = CHART_MARGIN_H + Y_LABEL_WIDTH + Y_LABEL_AXIS_GAP;
   int plot_right = bounds.size.w - CHART_MARGIN_RIGHT - WIND_X_ARM;
   int plot_w = plot_right - plot_left;
@@ -97,8 +98,20 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, ChartLayou
     plot_h = 8;
   }
 
-  int8_t min_temp = prv_display_temp(data->temp_min);
-  int8_t max_temp = prv_display_temp(data->temp_max);
+  geo->plot_left = plot_left;
+  geo->plot_right = plot_right;
+  geo->plot_top = plot_top;
+  geo->axis_y = axis_y;
+  geo->plot_w = plot_w;
+  geo->plot_h = plot_h;
+}
+
+static bool prv_compute_layout(GRect bounds, const WeatherData *data, ChartLayout *layout) {
+  ChartGeometry geo;
+  prv_chart_geometry(bounds, &geo);
+
+  int8_t min_temp = formatting_display_temp(data->temp_min);
+  int8_t max_temp = formatting_display_temp(data->temp_max);
   if (max_temp <= min_temp) {
     max_temp = min_temp + 1;
   }
@@ -118,12 +131,12 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, ChartLayou
     wind_max = 1;
   }
 
-  layout->plot_left = plot_left;
-  layout->plot_right = plot_right;
-  layout->plot_top = plot_top;
-  layout->axis_y = axis_y;
-  layout->plot_w = plot_w;
-  layout->plot_h = plot_h;
+  layout->plot_left = geo.plot_left;
+  layout->plot_right = geo.plot_right;
+  layout->plot_top = geo.plot_top;
+  layout->axis_y = geo.axis_y;
+  layout->plot_w = geo.plot_w;
+  layout->plot_h = geo.plot_h;
   layout->axis_min = axis_min;
   layout->axis_max = axis_max;
   layout->precip_max = precip_max;
@@ -133,20 +146,10 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, ChartLayou
 }
 
 static void prv_sync_plot_layer_frame(WeatherChart *chart, GRect decor_bounds) {
-  int plot_left = CHART_MARGIN_H + Y_LABEL_WIDTH + Y_LABEL_AXIS_GAP;
-  int plot_right = decor_bounds.size.w - CHART_MARGIN_RIGHT - WIND_X_ARM;
-  int plot_w = plot_right - plot_left;
-  int plot_top = CHART_PLOT_TOP;
-  int axis_y = decor_bounds.size.h - CHART_MARGIN_BOTTOM - X_AXIS_HEIGHT - Y_LABEL_HEIGHT / 2;
-  int plot_h = axis_y - plot_top;
-  if (plot_w < 8) {
-    plot_w = 8;
-  }
-  if (plot_h < 8) {
-    plot_h = 8;
-  }
+  ChartGeometry geo;
+  prv_chart_geometry(decor_bounds, &geo);
   layer_set_frame(chart->plot_layer,
-                  GRect(plot_left, plot_top - PLOT_TOP_OVERFLOW, plot_w, plot_h + PLOT_TOP_OVERFLOW));
+                  GRect(geo.plot_left, geo.plot_top - PLOT_TOP_OVERFLOW, geo.plot_w, geo.plot_h + PLOT_TOP_OVERFLOW));
 }
 
 static time_t prv_forecast_time_for_index(const WeatherData *data, int index) {
@@ -156,32 +159,7 @@ static time_t prv_forecast_time_for_index(const WeatherData *data, int index) {
 
 static void prv_format_time_label(char *buf, size_t len, time_t when) {
   struct tm *tm = localtime(&when);
-  if (!tm) {
-    if (len > 0) {
-      buf[0] = '\0';
-    }
-    return;
-  }
-
-  const ArgusSettings *settings = settings_get();
-  bool use_24h = settings->hour_format == HOUR_FORMAT_24H ||
-                 (settings->hour_format == HOUR_FORMAT_SYSTEM && clock_is_24h_style());
-
-  if (use_24h) {
-    snprintf(buf, len, "%d", tm->tm_hour);
-  } else {
-    int hour = tm->tm_hour % 12;
-    if (hour == 0) {
-      hour = 12;
-    }
-    snprintf(buf, len, "%d", hour);
-  }
-}
-
-static bool prv_use_24h_time(void) {
-  const ArgusSettings *settings = settings_get();
-  return settings->hour_format == HOUR_FORMAT_24H ||
-         (settings->hour_format == HOUR_FORMAT_SYSTEM && clock_is_24h_style());
+  formatting_clock_hour_label(buf, len, tm);
 }
 
 static bool prv_is_even_clock_hour(time_t when) {
@@ -190,7 +168,7 @@ static bool prv_is_even_clock_hour(time_t when) {
     return false;
   }
 
-  if (prv_use_24h_time()) {
+  if (formatting_use_24h()) {
     return (tm->tm_hour % 2) == 0;
   }
 
@@ -604,21 +582,17 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
   prv_draw_wind_marks(ctx, data, plot_left, plot_w, axis_y, plot_h, layout.wind_max);
 
   for (int i = 0; i < data->hour_count; i++) {
-    int8_t temp = prv_display_temp(data->temps[i]);
+    int8_t temp = formatting_display_temp(data->temps[i]);
     chart->temp_points[i] = GPoint(prv_plot_x(plot_left, plot_w, i, data->hour_count),
                                    prv_plot_y(plot_top, plot_h, temp, layout.axis_min, layout.axis_max));
   }
 
   if (chart->point_count >= 2) {
-    GPathInfo path_info = {
-        .num_points = chart->point_count,
-        .points = chart->temp_points,
-    };
-    GPath *path = gpath_create(&path_info);
     graphics_context_set_stroke_color(ctx, TEMP_LINE_COLOR);
     graphics_context_set_stroke_width(ctx, TEMP_LINE_STROKE_WIDTH);
-    gpath_draw_outline_open(ctx, path);
-    gpath_destroy(path);
+    for (int i = 0; i < chart->point_count - 1; i++) {
+      graphics_draw_line(ctx, chart->temp_points[i], chart->temp_points[i + 1]);
+    }
   }
 
   graphics_context_set_fill_color(ctx, TEMP_POINT_COLOR);

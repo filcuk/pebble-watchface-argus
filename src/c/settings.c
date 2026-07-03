@@ -6,6 +6,7 @@
 static ArgusSettings s_settings;
 
 static void settings_set_defaults(void) {
+  s_settings.version = SETTINGS_PERSIST_VERSION;
   s_settings.hour_format = HOUR_FORMAT_SYSTEM;
   s_settings.week_start = WEEK_START_MONDAY;
   s_settings.week_number_mode = WEEK_NUMBER_ISO;
@@ -32,7 +33,18 @@ static void settings_validate(void) {
 void settings_init(void) {
   settings_set_defaults();
   if (persist_exists(SETTINGS_PERSIST_KEY)) {
+    if (persist_get_size(SETTINGS_PERSIST_KEY) != sizeof(ArgusSettings)) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Settings persist size mismatch — resetting defaults");
+      settings_save();
+      return;
+    }
     persist_read_data(SETTINGS_PERSIST_KEY, &s_settings, sizeof(s_settings));
+    if (s_settings.version != SETTINGS_PERSIST_VERSION) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Settings persist version mismatch — resetting defaults");
+      settings_set_defaults();
+      settings_save();
+      return;
+    }
     settings_validate();
   }
 }
@@ -143,6 +155,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   }
 
   if (changed) {
+    s_settings.version = SETTINGS_PERSIST_VERSION;
     settings_save();
   }
 }

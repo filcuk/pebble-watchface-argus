@@ -7,6 +7,8 @@ var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false });
 
 var DEFAULT_LAT = 51.5074;
 var DEFAULT_LON = -0.1278;
+var weatherFetchInFlight = false;
+var weatherRequestTimer = null;
 
 function getClaySetting(key, defaultValue) {
   try {
@@ -173,6 +175,7 @@ function packWeatherPayload(json, hours) {
 
 function sendWeatherPayload(payload) {
   if (!payload) {
+    weatherFetchInFlight = false;
     return;
   }
 
@@ -192,9 +195,11 @@ function sendWeatherPayload(payload) {
     dict,
     function () {
       console.log('Weather sent to watch (' + payload.count + 'h)');
+      weatherFetchInFlight = false;
     },
     function (e) {
       console.log('Weather send failed: ' + JSON.stringify(e));
+      weatherFetchInFlight = false;
     }
   );
 }
@@ -214,6 +219,7 @@ function fetchForecast(latitude, longitude) {
   xhrRequest(url, function (responseText) {
     if (!responseText) {
       console.log('Weather fetch failed');
+      weatherFetchInFlight = false;
       return;
     }
     try {
@@ -222,11 +228,41 @@ function fetchForecast(latitude, longitude) {
       sendWeatherPayload(payload);
     } catch (e) {
       console.log('Weather parse error: ' + e);
+      weatherFetchInFlight = false;
     }
   });
 }
 
+function readGeocodeCache(city) {
+  try {
+    var raw = localStorage.getItem('geocode:' + city.toLowerCase());
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeGeocodeCache(city, latitude, longitude) {
+  try {
+    localStorage.setItem(
+      'geocode:' + city.toLowerCase(),
+      JSON.stringify({ lat: latitude, lon: longitude })
+    );
+  } catch (e) {
+    console.log('Geocode cache write failed');
+  }
+}
+
 function geocodeCity(city, callback) {
+  var cached = readGeocodeCache(city);
+  if (cached) {
+    callback({ latitude: cached.lat, longitude: cached.lon });
+    return;
+  }
+
   var url =
     'https://geocoding-api.open-meteo.com/v1/search?name=' +
     encodeURIComponent(city) +
@@ -242,7 +278,9 @@ function geocodeCity(city, callback) {
         callback(null);
         return;
       }
-      callback(json.results[0]);
+      var result = json.results[0];
+      writeGeocodeCache(city, result.latitude, result.longitude);
+      callback(result);
     } catch (e) {
       callback(null);
     }
@@ -250,6 +288,11 @@ function geocodeCity(city, callback) {
 }
 
 function getWeather() {
+  if (weatherFetchInFlight) {
+    return;
+  }
+  weatherFetchInFlight = true;
+
   if (getLocationMode() === 'manual') {
     var city = getManualLocation();
     if (!city) {
@@ -280,14 +323,23 @@ function getWeather() {
   );
 }
 
+function scheduleWeatherRequest() {
+  if (weatherRequestTimer) {
+    clearTimeout(weatherRequestTimer);
+  }
+  weatherRequestTimer = setTimeout(function () {
+    weatherRequestTimer = null;
+    getWeather();
+  }, 500);
+}
+
 Pebble.addEventListener('ready', function () {
   console.log('Argus PKJS ready');
-  getWeather();
 });
 
 Pebble.addEventListener('appmessage', function (e) {
   if (e.payload && e.payload[keys.REQUEST_WEATHER]) {
-    getWeather();
+    scheduleWeatherRequest();
   }
 });
 

@@ -185,18 +185,31 @@ void weather_refresh_for_connection(bool phone_connected) {
 
 void weather_init(void) {
   memset(&s_weather, 0, sizeof(s_weather));
+  s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.state = WEATHER_STATE_LOADING;
   memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
   if (persist_exists(WEATHER_PERSIST_KEY)) {
-    persist_read_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
-    prv_sanitize_persisted_weather();
-    if (s_weather.hour_count > 0 && !s_weather.has_is_day) {
-      memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
-    }
-    weather_slide_stale_hours();
-    if (s_weather.cached_at == 0 && s_weather.hour_count > 0 && s_weather.state == WEATHER_STATE_READY) {
-      s_weather.cached_at = time(NULL);
-      persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+    if (persist_get_size(WEATHER_PERSIST_KEY) != sizeof(WeatherData)) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Weather persist size mismatch — starting fresh");
+    } else {
+      persist_read_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+      if (s_weather.version != WEATHER_PERSIST_VERSION) {
+        APP_LOG(APP_LOG_LEVEL_INFO, "Weather persist version mismatch — starting fresh");
+        memset(&s_weather, 0, sizeof(s_weather));
+        s_weather.version = WEATHER_PERSIST_VERSION;
+        s_weather.state = WEATHER_STATE_LOADING;
+        memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
+      } else {
+        prv_sanitize_persisted_weather();
+        if (s_weather.hour_count > 0 && !s_weather.has_is_day) {
+          memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
+        }
+        weather_slide_stale_hours();
+        if (s_weather.cached_at == 0 && s_weather.hour_count > 0 && s_weather.state == WEATHER_STATE_READY) {
+          s_weather.cached_at = time(NULL);
+          persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+        }
+      }
     }
   }
 
@@ -207,10 +220,6 @@ void weather_init(void) {
 
 WeatherData *weather_get(void) {
   return &s_weather;
-}
-
-void weather_mark_loading(void) {
-  s_weather.state = WEATHER_STATE_LOADING;
 }
 
 void weather_mark_error(void) {
@@ -241,6 +250,7 @@ void weather_apply_demo_data(void) {
   s_weather.has_is_day = true;
   s_weather.has_wind = true;
 
+  s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.cached_at = time(NULL);
   s_weather.state = WEATHER_STATE_READY;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
@@ -334,6 +344,7 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   }
 
   s_weather.hour_count = count;
+  s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.cached_at = time(NULL);
   s_weather.state = WEATHER_STATE_READY;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
@@ -348,10 +359,6 @@ void weather_schedule_retry(void) {
   if (!s_timeout_timer) {
     s_timeout_timer = app_timer_register(15000, prv_timeout_callback, NULL);
   }
-}
-
-void weather_cancel_retry(void) {
-  prv_cancel_timers();
 }
 
 void weather_set_updated_handler(WeatherUpdatedHandler handler) {
@@ -391,6 +398,7 @@ void weather_slide_stale_hours(void) {
 
   s_weather.hour_count = remain;
   s_weather.fetch_time += (time_t)hours_elapsed * 3600;
+  s_weather.version = WEATHER_PERSIST_VERSION;
   prv_recompute_extremes();
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
   prv_notify_updated();

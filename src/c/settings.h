@@ -3,6 +3,7 @@
 #include <pebble.h>
 
 #define SETTINGS_PERSIST_KEY 2
+#define SETTINGS_PERSIST_VERSION 1
 
 typedef enum {
   HOUR_FORMAT_SYSTEM = 0,
@@ -37,6 +38,7 @@ typedef enum {
 } HeaderDisplayMode;
 
 typedef struct {
+  uint8_t version;
   HourFormat hour_format;
   WeekStart week_start;
   WeekNumberMode week_number_mode;

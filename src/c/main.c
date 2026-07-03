@@ -65,7 +65,10 @@ static void prv_unobstructed_change(AnimationProgress progress, void *context) {
   prv_update_layout();
 }
 
-static void prv_refresh_time_modules(struct tm *now) {
+static void prv_refresh_all_modules(struct tm *now) {
+  header_invalidate(s_header);
+  calendar_invalidate(s_calendar);
+  header_apply_settings(s_header);
   header_update(s_header, now);
   calendar_update(s_calendar, now);
   time_display_update(s_time_display, now);
@@ -74,7 +77,12 @@ static void prv_refresh_time_modules(struct tm *now) {
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   weather_slide_stale_hours();
-  prv_refresh_time_modules(tick_time);
+  time_display_update(s_time_display, tick_time);
+
+  if (units_changed & DAY_UNIT) {
+    calendar_update(s_calendar, tick_time);
+    header_update(s_header, tick_time);
+  }
 
   if (tick_time->tm_min == 0 || tick_time->tm_min % 30 == 0) {
     weather_request();
@@ -90,6 +98,11 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     request_weather = true;
   }
 
+  bool calendar_settings = dict_find(iter, MESSAGE_KEY_WeekStart) || dict_find(iter, MESSAGE_KEY_WeekNumberMode) ||
+                           dict_find(iter, MESSAGE_KEY_HeaderDisplay);
+  bool header_settings = dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
+                         dict_find(iter, MESSAGE_KEY_BluetoothDisplay);
+
   settings_apply_from_message(iter);
   if (dict_find(iter, MESSAGE_KEY_WeatherTempHourly)) {
     weather_apply_from_message(iter);
@@ -99,12 +112,19 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     weather_refresh_for_connection(connection_service_peek_pebble_app_connection());
   }
 
+  if (calendar_settings) {
+    calendar_invalidate(s_calendar);
+  }
+  if (header_settings) {
+    header_invalidate(s_header);
+    header_apply_settings(s_header);
+  }
+
   time_t now = time(NULL);
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
-    prv_refresh_time_modules(tm_now);
+    prv_refresh_all_modules(tm_now);
   }
-  weather_chart_refresh(s_weather_chart);
 
   if (request_weather) {
     weather_request();
@@ -143,10 +163,15 @@ static void prv_window_load(Window *window) {
   s_time_display = time_display_create(root);
   s_weather_chart = weather_chart_create(root);
 
+  if (!s_header || !s_calendar || !s_time_display || !s_weather_chart) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create watchface modules");
+    return;
+  }
+
   time_t now = time(NULL);
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
-    prv_refresh_time_modules(tm_now);
+    prv_refresh_all_modules(tm_now);
   }
 
   header_refresh_bt(s_header, connection_service_peek_pebble_app_connection());
@@ -170,17 +195,14 @@ static void prv_window_unload(Window *window) {
   s_window_layer = NULL;
 }
 
-static void prv_refresh_header(struct tm *now) {
-  header_update(s_header, now);
-}
-
 static void prv_weather_updated(void) {
   weather_chart_refresh(s_weather_chart);
   if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
+    header_invalidate(s_header);
     time_t now = time(NULL);
     struct tm *tm_now = localtime(&now);
     if (tm_now) {
-      prv_refresh_header(tm_now);
+      header_update(s_header, tm_now);
     }
   }
 }
@@ -188,7 +210,7 @@ static void prv_weather_updated(void) {
 #if defined(PBL_HEALTH)
 static void prv_health_handler(HealthEventType event, void *context) {
   (void)context;
-  if (event != HealthEventMovementUpdate && event != HealthEventSignificantUpdate) {
+  if (event != HealthEventSignificantUpdate) {
     return;
   }
   if (settings_get()->header_display_mode != HEADER_DISPLAY_STEPS) {
@@ -197,7 +219,8 @@ static void prv_health_handler(HealthEventType event, void *context) {
   time_t now = time(NULL);
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
-    prv_refresh_header(tm_now);
+    header_invalidate(s_header);
+    header_update(s_header, tm_now);
   }
 }
 #endif
