@@ -7,7 +7,7 @@ rePebble watch face for Pebble Time 2 (Emery) with a calendar-focused layout: tw
 - **Header**: week number (ISO or Gregorian), month/year, Bluetooth status, battery level
 - **Calendar**: current and next week with Monday or Sunday week start; today highlighted
 - **Time**: 12h/24h (system override or forced format)
-- **Weather**: Open-Meteo hourly temperature line and precipitation bars (24/48/72h)
+- **Weather**: Open-Meteo hourly temperature line and precipitation bars (12/24/48h)
 - **Settings**: Clay configuration page on the phone
 
 ## Environment setup

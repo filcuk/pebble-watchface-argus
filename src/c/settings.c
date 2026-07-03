@@ -118,7 +118,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   t = dict_find(iter, MESSAGE_KEY_ForecastHours);
   if (t) {
     uint8_t hours = (uint8_t)settings_tuple_to_int32(t);
-    if (hours == 24 || hours == 48 || hours == 72) {
+    if (hours == 12 || hours == 24 || hours == 48) {
       s_settings.forecast_hours = hours;
       changed = true;
     }

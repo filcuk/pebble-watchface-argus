@@ -47,7 +47,7 @@ function xhrRequest(url, callback) {
 
 function getForecastHours() {
   var hours = parseInt(getClaySetting('ForecastHours', '24'), 10);
-  if (hours !== 24 && hours !== 48 && hours !== 72) {
+  if (hours !== 12 && hours !== 24 && hours !== 48) {
     hours = 24;
   }
   return hours;

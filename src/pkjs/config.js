@@ -101,9 +101,9 @@ module.exports = [
         label: 'Forecast Length',
         defaultValue: '24',
         options: [
+          { label: '12 hours', value: '12' },
           { label: '24 hours', value: '24' },
           { label: '48 hours', value: '48' },
-          { label: '72 hours', value: '72' },
         ],
       },
       {

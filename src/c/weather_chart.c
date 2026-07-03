@@ -43,6 +43,7 @@ static WeatherChart *s_weather_chart;
 #define Y_MAJOR_TICK_THICKNESS 1
 #define Y_MINOR_TICK_LENGTH 2
 #define X_MAJOR_LABEL_INTERVALS 2
+#define X_LABEL_REFERENCE_HOURS 24
 #define X_MINOR_TICKS_PER_INTERVAL 1
 #define X_MAJOR_TICK_LENGTH 3
 #define X_MAJOR_TICK_THICKNESS 1
@@ -198,6 +199,83 @@ static bool prv_is_even_clock_hour(time_t when) {
     hour = 12;
   }
   return (hour % 2) == 0;
+}
+
+static bool prv_is_interior_hour_index(int hour, int hour_count) {
+  return hour > 0 && hour < hour_count - 1;
+}
+
+static int prv_x_label_target_count(const WeatherData *data) {
+  int count = 0;
+  for (int hour = 1; hour < X_LABEL_REFERENCE_HOURS - 1; hour++) {
+    time_t when = prv_forecast_time_for_index(data, hour);
+    if (prv_is_even_clock_hour(when)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+static bool prv_is_x_label_index(const WeatherData *data, int hour) {
+  int hour_count = (int)data->hour_count;
+  if (hour < 0 || hour >= hour_count) {
+    return false;
+  }
+
+  int target = prv_x_label_target_count(data);
+  if (target <= 0 || hour_count <= 0) {
+    return false;
+  }
+
+  if (target >= hour_count) {
+    if (!prv_is_interior_hour_index(hour, hour_count)) {
+      return false;
+    }
+    time_t when = prv_forecast_time_for_index(data, hour);
+    return prv_is_even_clock_hour(when);
+  }
+
+  if (hour_count == X_LABEL_REFERENCE_HOURS) {
+    if (!prv_is_interior_hour_index(hour, hour_count)) {
+      return false;
+    }
+    time_t when = prv_forecast_time_for_index(data, hour);
+    return prv_is_even_clock_hour(when);
+  }
+
+  if (target == 1) {
+    return hour == hour_count / 2;
+  }
+
+  for (int i = 0; i < target; i++) {
+    int label_hour = (i * (hour_count - 1) + (target - 1) / 2) / (target - 1);
+    if (hour == label_hour) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool prv_is_x_major_tick_index(const WeatherData *data, int hour) {
+  return prv_is_x_label_index(data, hour);
+}
+
+static bool prv_is_x_minor_tick_index(const WeatherData *data, int hour) {
+  int hour_count = (int)data->hour_count;
+  if (!prv_is_interior_hour_index(hour, hour_count)) {
+    return false;
+  }
+  if (prv_is_x_major_tick_index(data, hour)) {
+    return false;
+  }
+
+  int target = prv_x_label_target_count(data);
+  if (target >= hour_count || hour_count == X_LABEL_REFERENCE_HOURS) {
+    time_t when = prv_forecast_time_for_index(data, hour);
+    return !prv_is_even_clock_hour(when);
+  }
+
+  return false;
 }
 
 static void prv_format_temp_label(char *buf, size_t len, int8_t temp) {
@@ -451,8 +529,7 @@ static void prv_draw_x_axis_minor_ticks(GContext *ctx, const WeatherData *data, 
   graphics_context_set_stroke_width(ctx, 1);
 
   for (int hour = 0; hour < (int)data->hour_count; hour++) {
-    time_t when = prv_forecast_time_for_index(data, hour);
-    if (prv_is_even_clock_hour(when)) {
+    if (!prv_is_x_minor_tick_index(data, hour)) {
       continue;
     }
 
@@ -471,17 +548,17 @@ static void prv_draw_x_axis(GContext *ctx, const WeatherData *data, GFont font, 
   graphics_context_set_stroke_width(ctx, X_MAJOR_TICK_THICKNESS);
 
   for (int hour = 0; hour < (int)data->hour_count; hour++) {
-    time_t when = prv_forecast_time_for_index(data, hour);
-    if (!prv_is_even_clock_hour(when)) {
+    if (!prv_is_x_major_tick_index(data, hour)) {
       continue;
     }
 
+    time_t when = prv_forecast_time_for_index(data, hour);
     int x = prv_plot_x(plot_left, plot_w, hour, data->hour_count);
 
     graphics_context_set_stroke_color(ctx, CHART_TICK_COLOR);
     graphics_draw_line(ctx, GPoint(x, axis_y), GPoint(x, axis_y + X_MAJOR_TICK_LENGTH));
 
-    if (hour > 0 && hour < (int)data->hour_count - 1) {
+    if (prv_is_x_label_index(data, hour)) {
       prv_format_time_label(label, sizeof(label), when);
       graphics_context_set_text_color(ctx, CHART_LABEL_COLOR);
       GRect label_rect = GRect(x - label_w / 2,
