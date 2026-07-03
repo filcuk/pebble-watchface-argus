@@ -1,8 +1,9 @@
 var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
+var customClay = require('./custom-clay');
 var keys = require('message_keys');
 
-var clay = new Clay(clayConfig, null, { autoHandleEvents: false });
+var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false });
 
 var DEFAULT_LAT = 51.5074;
 var DEFAULT_LON = -0.1278;

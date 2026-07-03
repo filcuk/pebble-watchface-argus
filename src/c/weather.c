@@ -163,13 +163,13 @@ void weather_mark_unavailable(void) {
 }
 
 void weather_refresh_for_connection(bool phone_connected) {
-  if (phone_connected) {
-    weather_request();
+  if (weather_use_demo_data()) {
+    weather_apply_demo_data();
     return;
   }
 
-  if (weather_use_demo_data()) {
-    weather_apply_demo_data();
+  if (phone_connected) {
+    weather_request();
     return;
   }
 
@@ -249,6 +249,10 @@ void weather_apply_demo_data(void) {
 }
 
 void weather_apply_from_message(DictionaryIterator *iter) {
+  if (weather_use_demo_data()) {
+    return;
+  }
+
   Tuple *t = dict_find(iter, MESSAGE_KEY_WeatherTempHourly);
   if (!t || t->type != TUPLE_BYTE_ARRAY) {
     APP_LOG(APP_LOG_LEVEL_WARNING, "Weather: missing or invalid temp array (type %d)", t ? (int)t->type : -1);
@@ -368,7 +372,9 @@ void weather_slide_stale_hours(void) {
   if (hours_elapsed >= s_weather.hour_count) {
     s_weather.hour_count = 0;
     persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
-    if (connection_service_peek_pebble_app_connection()) {
+    if (weather_use_demo_data()) {
+      weather_apply_demo_data();
+    } else if (connection_service_peek_pebble_app_connection()) {
       s_weather.state = WEATHER_STATE_LOADING;
       weather_request();
     } else {
@@ -391,6 +397,11 @@ void weather_slide_stale_hours(void) {
 }
 
 void weather_request(void) {
+  if (weather_use_demo_data()) {
+    weather_apply_demo_data();
+    return;
+  }
+
   DictionaryIterator *iter;
   if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
     weather_schedule_retry();
