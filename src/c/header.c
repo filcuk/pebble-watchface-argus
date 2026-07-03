@@ -158,19 +158,19 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       GSize min_size = prv_text_size(min_buf);
       GSize sep_size = prv_text_size(" / ");
       GSize max_size = prv_text_size(max_buf);
-      int total_w = ARROW_WIDTH + STATUS_ICON_GAP + min_size.w + sep_size.w + ARROW_WIDTH + STATUS_ICON_GAP +
-                    max_size.w;
+      int total_w = ARROW_WIDTH + STATUS_ICON_GAP + max_size.w + sep_size.w + ARROW_WIDTH + STATUS_ICON_GAP +
+                    min_size.w;
       int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
 
-      prv_draw_down_arrow(ctx, x + ARROW_WIDTH / 2, center_y);
-      x += ARROW_WIDTH + STATUS_ICON_GAP;
-      prv_draw_text(ctx, min_buf, x, bounds);
-      x += min_size.w;
-      prv_draw_text(ctx, " / ", x, bounds);
-      x += sep_size.w;
       prv_draw_up_arrow(ctx, x + ARROW_WIDTH / 2, center_y);
       x += ARROW_WIDTH + STATUS_ICON_GAP;
       prv_draw_text(ctx, max_buf, x, bounds);
+      x += max_size.w;
+      prv_draw_text(ctx, " / ", x, bounds);
+      x += sep_size.w;
+      prv_draw_down_arrow(ctx, x + ARROW_WIDTH / 2, center_y);
+      x += ARROW_WIDTH + STATUS_ICON_GAP;
+      prv_draw_text(ctx, min_buf, x, bounds);
       break;
     }
     case HEADER_DISPLAY_FULL_DATE:
