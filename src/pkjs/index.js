@@ -8,7 +8,18 @@ var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false });
 var DEFAULT_LAT = 51.5074;
 var DEFAULT_LON = -0.1278;
 var weatherFetchInFlight = false;
+var weatherFetchStartedAt = 0;
 var weatherRequestTimer = null;
+var WEATHER_FETCH_STALE_MS = 30000;
+
+function clearWeatherFetchInFlight() {
+  weatherFetchInFlight = false;
+  weatherFetchStartedAt = 0;
+}
+
+function weatherFetchIsStale() {
+  return weatherFetchInFlight && Date.now() - weatherFetchStartedAt >= WEATHER_FETCH_STALE_MS;
+}
 
 function getClaySetting(key, defaultValue) {
   try {
@@ -175,7 +186,7 @@ function packWeatherPayload(json, hours) {
 
 function sendWeatherPayload(payload) {
   if (!payload) {
-    weatherFetchInFlight = false;
+    clearWeatherFetchInFlight();
     return;
   }
 
@@ -195,11 +206,11 @@ function sendWeatherPayload(payload) {
     dict,
     function () {
       console.log('Weather sent to watch (' + payload.count + 'h)');
-      weatherFetchInFlight = false;
+      clearWeatherFetchInFlight();
     },
     function (e) {
       console.log('Weather send failed: ' + JSON.stringify(e));
-      weatherFetchInFlight = false;
+      clearWeatherFetchInFlight();
     }
   );
 }
@@ -219,7 +230,7 @@ function fetchForecast(latitude, longitude) {
   xhrRequest(url, function (responseText) {
     if (!responseText) {
       console.log('Weather fetch failed');
-      weatherFetchInFlight = false;
+      clearWeatherFetchInFlight();
       return;
     }
     try {
@@ -228,7 +239,7 @@ function fetchForecast(latitude, longitude) {
       sendWeatherPayload(payload);
     } catch (e) {
       console.log('Weather parse error: ' + e);
-      weatherFetchInFlight = false;
+      clearWeatherFetchInFlight();
     }
   });
 }
@@ -288,10 +299,15 @@ function geocodeCity(city, callback) {
 }
 
 function getWeather() {
-  if (weatherFetchInFlight) {
+  if (weatherFetchInFlight && !weatherFetchIsStale()) {
     return;
   }
+  if (weatherFetchIsStale()) {
+    console.log('Weather fetch stale — retrying');
+  }
+
   weatherFetchInFlight = true;
+  weatherFetchStartedAt = Date.now();
 
   if (getLocationMode() === 'manual') {
     var city = getManualLocation();
@@ -335,6 +351,8 @@ function scheduleWeatherRequest() {
 
 Pebble.addEventListener('ready', function () {
   console.log('Argus PKJS ready');
+  // Fallback fetch when the watch requested weather before PKJS finished loading.
+  scheduleWeatherRequest();
 });
 
 Pebble.addEventListener('appmessage', function (e) {

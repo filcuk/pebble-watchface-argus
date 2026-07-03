@@ -266,6 +266,9 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   Tuple *t = dict_find(iter, MESSAGE_KEY_WeatherTempHourly);
   if (!t || t->type != TUPLE_BYTE_ARRAY) {
     APP_LOG(APP_LOG_LEVEL_WARNING, "Weather: missing or invalid temp array (type %d)", t ? (int)t->type : -1);
+    weather_mark_error();
+    prv_cancel_timers();
+    prv_notify_updated();
     return;
   }
 
@@ -357,7 +360,7 @@ void weather_schedule_retry(void) {
     s_retry_timer = app_timer_register(3000, prv_retry_callback, NULL);
   }
   if (!s_timeout_timer) {
-    s_timeout_timer = app_timer_register(15000, prv_timeout_callback, NULL);
+    s_timeout_timer = app_timer_register(30000, prv_timeout_callback, NULL);
   }
 }
 
