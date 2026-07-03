@@ -2,7 +2,7 @@ var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
 var keys = require('message_keys');
 
-var clay = new Clay(clayConfig);
+var clay = new Clay(clayConfig, null, { autoHandleEvents: false });
 
 var DEFAULT_LAT = 51.5074;
 var DEFAULT_LON = -0.1278;
@@ -290,6 +290,23 @@ Pebble.addEventListener('appmessage', function (e) {
   }
 });
 
-Pebble.addEventListener('webviewclosed', function () {
-  getWeather();
+Pebble.addEventListener('showConfiguration', function () {
+  Pebble.openURL(clay.generateUrl());
+});
+
+Pebble.addEventListener('webviewclosed', function (e) {
+  if (!e || !e.response) {
+    return;
+  }
+
+  Pebble.sendAppMessage(
+    clay.getSettings(e.response),
+    function () {
+      console.log('Settings sent to watch');
+      getWeather();
+    },
+    function (err) {
+      console.log('Settings send failed: ' + JSON.stringify(err));
+    }
+  );
 });

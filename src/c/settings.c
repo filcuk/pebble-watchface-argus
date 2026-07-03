@@ -1,5 +1,6 @@
 #include "settings.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 static ArgusSettings s_settings;
@@ -45,43 +46,56 @@ void settings_save(void) {
   persist_write_data(SETTINGS_PERSIST_KEY, &s_settings, sizeof(s_settings));
 }
 
+static int32_t settings_tuple_to_int32(const Tuple *t) {
+  if (!t) {
+    return 0;
+  }
+  if (t->type == TUPLE_INT) {
+    return t->value->int32;
+  }
+  if (t->type == TUPLE_CSTRING) {
+    return (int32_t)atoi(t->value->cstring);
+  }
+  return 0;
+}
+
 void settings_apply_from_message(DictionaryIterator *iter) {
   Tuple *t;
   bool changed = false;
 
   t = dict_find(iter, MESSAGE_KEY_HourFormat);
   if (t) {
-    s_settings.hour_format = (HourFormat)t->value->int32;
+    s_settings.hour_format = (HourFormat)settings_tuple_to_int32(t);
     changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_WeekStart);
   if (t) {
-    s_settings.week_start = (WeekStart)t->value->int32;
+    s_settings.week_start = (WeekStart)settings_tuple_to_int32(t);
     changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_WeekNumberMode);
   if (t) {
-    s_settings.week_number_mode = (WeekNumberMode)t->value->int32;
+    s_settings.week_number_mode = (WeekNumberMode)settings_tuple_to_int32(t);
     changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_BluetoothDisplay);
   if (t) {
-    s_settings.bluetooth_display = (BluetoothDisplay)t->value->int32;
+    s_settings.bluetooth_display = (BluetoothDisplay)settings_tuple_to_int32(t);
     changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_LocationMode);
   if (t) {
-    s_settings.location_mode = (LocationMode)t->value->int32;
+    s_settings.location_mode = (LocationMode)settings_tuple_to_int32(t);
     changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_HeaderDisplay);
   if (t) {
-    int32_t mode = t->value->int32;
+    int32_t mode = settings_tuple_to_int32(t);
     if (mode >= HEADER_DISPLAY_FULL_DATE && mode <= HEADER_DISPLAY_TEMP_RANGE) {
       s_settings.header_display_mode = (HeaderDisplayMode)mode;
       changed = true;
@@ -97,7 +111,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
   t = dict_find(iter, MESSAGE_KEY_ForecastHours);
   if (t) {
-    uint8_t hours = (uint8_t)t->value->int32;
+    uint8_t hours = (uint8_t)settings_tuple_to_int32(t);
     if (hours == 24 || hours == 48 || hours == 72) {
       s_settings.forecast_hours = hours;
       changed = true;
@@ -106,19 +120,19 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
   t = dict_find(iter, MESSAGE_KEY_TemperatureUnit);
   if (t) {
-    s_settings.temperature_fahrenheit = t->value->int32 != 0;
+    s_settings.temperature_fahrenheit = settings_tuple_to_int32(t) != 0;
     changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_DebugMode);
   if (t) {
-    s_settings.debug_mode = t->value->int32 != 0;
+    s_settings.debug_mode = settings_tuple_to_int32(t) != 0;
     changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_DemoWeather);
   if (t) {
-    s_settings.demo_weather = t->value->int32 != 0;
+    s_settings.demo_weather = settings_tuple_to_int32(t) != 0;
     changed = true;
   }
 

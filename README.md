@@ -24,6 +24,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 uv tool install pebble-tool
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+python3 scripts/patch-pebble-tool-browser.py
 
 # 3. SDK + project deps
 pebble sdk install latest
@@ -64,6 +65,55 @@ Alternatively, open the project in the [CloudPebble IDE](https://cloudpebble.rep
 pebble emu-battery --percent 30
 pebble emu-bt-connection --connected no
 ```
+
+### Opening settings
+
+Clay settings open in **Firefox** (via WSL). The one-time `browser.py` patch in [Environment setup](#environment-setup) must be applied first.
+
+1. Start the emulator with the watchface installed:
+
+```bash
+pebble install --emulator emery
+```
+
+2. In a **second** WSL terminal (from the project root), open the Clay settings page:
+
+```bash
+pebble emu-app-config --emulator emery
+```
+
+Firefox should open the Argus settings UI. Change options and tap **Save** (or submit the form). Settings are sent back to the emulator over a local HTTP callback and applied on the watch.
+
+If the settings page fails to open or save, see the troubleshooting sections below.
+
+### Settings page fails in Firefox (`$$RETURN_TO$$` in the URL)
+
+Clay settings in the emulator open in Firefox via a temporary HTML file. `pebble-tool` must substitute the Clay return URL before the page is served. If saving settings tries to open a nonsense path like `///wsl$/.../$$RETURN_TO$${...}`, re-run:
+
+```bash
+python3 scripts/patch-pebble-tool-browser.py
+```
+
+Then restart the emulator and open settings again. Re-run the patch after upgrading `pebble-tool`.
+
+### Emulator boot loop or "app install failed"
+
+This usually means several emulator instances are running at once (easy to do if install was interrupted). In WSL:
+
+```bash
+bash scripts/reset-emulator.sh
+pebble build
+pebble install --emulator emery
+```
+
+If it still boot-loops after that, reset the emulator's flash image (safe; only affects the local emulator):
+
+```bash
+bash scripts/reset-emulator.sh --reset-flash
+pebble install --emulator emery
+```
+
+(`reset-emulator.sh` runs `pebble kill --force`.) Only run one `pebble install --emulator` at a time. Close the old emulator window before starting another.
 
 ### Emulator won't start (`GLIBC_2.32` / `GLIBC_2.33` not found)
 

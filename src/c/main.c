@@ -91,7 +91,9 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   }
 
   settings_apply_from_message(iter);
-  weather_apply_from_message(iter);
+  if (dict_find(iter, MESSAGE_KEY_WeatherTempHourly)) {
+    weather_apply_from_message(iter);
+  }
 
   if (dict_find(iter, MESSAGE_KEY_DebugMode) || dict_find(iter, MESSAGE_KEY_DemoWeather)) {
     weather_refresh_for_connection(connection_service_peek_pebble_app_connection());

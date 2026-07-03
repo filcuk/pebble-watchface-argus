@@ -89,6 +89,15 @@ static bool weather_cache_is_valid(void) {
   return (now - cache_time) <= WEATHER_CACHE_MAX_AGE_S;
 }
 
+static void prv_sanitize_persisted_weather(void) {
+  if (s_weather.hour_count > WEATHER_MAX_HOURS) {
+    s_weather.hour_count = 0;
+  }
+  if (s_weather.state > WEATHER_STATE_UNAVAILABLE) {
+    s_weather.state = WEATHER_STATE_UNAVAILABLE;
+  }
+}
+
 static void prv_cancel_timers(void) {
   if (s_retry_timer) {
     app_timer_cancel(s_retry_timer);
@@ -180,6 +189,7 @@ void weather_init(void) {
   memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
   if (persist_exists(WEATHER_PERSIST_KEY)) {
     persist_read_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+    prv_sanitize_persisted_weather();
     if (s_weather.hour_count > 0 && !s_weather.has_is_day) {
       memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
     }
