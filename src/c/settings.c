@@ -24,6 +24,9 @@ static void settings_validate(void) {
   if (s_settings.header_display_mode > HEADER_DISPLAY_TEMP_RANGE) {
     s_settings.header_display_mode = HEADER_DISPLAY_FULL_DATE;
   }
+  if (s_settings.week_start != WEEK_START_MONDAY && s_settings.week_start != WEEK_START_SUNDAY) {
+    s_settings.week_start = WEEK_START_MONDAY;
+  }
 }
 
 void settings_init(void) {
@@ -71,8 +74,11 @@ void settings_apply_from_message(DictionaryIterator *iter) {
 
   t = dict_find(iter, MESSAGE_KEY_WeekStart);
   if (t) {
-    s_settings.week_start = (WeekStart)settings_tuple_to_int32(t);
-    changed = true;
+    int32_t week_start = settings_tuple_to_int32(t);
+    if (week_start == WEEK_START_MONDAY || week_start == WEEK_START_SUNDAY) {
+      s_settings.week_start = (WeekStart)week_start;
+      changed = true;
+    }
   }
 
   t = dict_find(iter, MESSAGE_KEY_WeekNumberMode);

@@ -32,7 +32,7 @@ module.exports = [
         defaultValue: '0',
         options: [
           { label: 'Monday', value: '0' },
-          { label: 'Saturday', value: '1' },
+          { label: 'Sunday', value: '1' },
         ],
       },
       {

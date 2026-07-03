@@ -12,7 +12,7 @@ typedef enum {
 
 typedef enum {
   WEEK_START_MONDAY = 0,
-  WEEK_START_SATURDAY = 1,
+  WEEK_START_SUNDAY = 1,
 } WeekStart;
 
 typedef enum {

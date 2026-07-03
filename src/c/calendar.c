@@ -17,28 +17,27 @@ struct Calendar {
 static Calendar *s_calendar;
 
 static const char *WEEKDAY_LABELS_MON[] = {"M", "T", "W", "T", "F", "S", "S"};
-static const char *WEEKDAY_LABELS_SAT[] = {"S", "S", "M", "T", "W", "T", "F"};
+static const char *WEEKDAY_LABELS_SUN[] = {"S", "M", "T", "W", "T", "F", "S"};
 
-static int prv_weekday_index(int wday, WeekStart week_start) {
-  if (week_start == WEEK_START_SATURDAY) {
-    return (wday + 1) % 7;
-  }
-  return (wday + 6) % 7;
-}
-
-static void prv_add_days(struct tm *date, int days) {
-  date->tm_mday += days;
-  mktime(date);
+static int prv_days_since_week_start(int wday, WeekStart week_start) {
+  int start_wday = (week_start == WEEK_START_SUNDAY) ? 0 : 1;
+  return (wday - start_wday + 7) % 7;
 }
 
 static void prv_fill_days(struct tm *days, struct tm *now, WeekStart week_start) {
   struct tm cursor = *now;
-  int index = prv_weekday_index(cursor.tm_wday, week_start);
-  prv_add_days(&cursor, -index);
+  mktime(&cursor);
+
+  int index = prv_days_since_week_start(cursor.tm_wday, week_start);
+  time_t time = mktime(&cursor);
+  time -= (time_t)index * SECONDS_PER_DAY;
 
   for (int i = 0; i < 14; i++) {
-    days[i] = cursor;
-    prv_add_days(&cursor, 1);
+    struct tm *day_tm = localtime(&time);
+    if (day_tm) {
+      days[i] = *day_tm;
+    }
+    time += SECONDS_PER_DAY;
   }
 }
 
@@ -51,8 +50,8 @@ static bool prv_is_weekend(int wday) {
 }
 
 static bool prv_is_weekend_column(int col, WeekStart week_start) {
-  if (week_start == WEEK_START_SATURDAY) {
-    return col <= 1;
+  if (week_start == WEEK_START_SUNDAY) {
+    return col == 0 || col == 6;
   }
   return col >= 5;
 }
@@ -143,7 +142,7 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
   }
   GRect bounds = layer_get_bounds(layer);
   const ArgusSettings *settings = settings_get();
-  const char **labels = settings->week_start == WEEK_START_SATURDAY ? WEEKDAY_LABELS_SAT : WEEKDAY_LABELS_MON;
+  const char **labels = settings->week_start == WEEK_START_SUNDAY ? WEEKDAY_LABELS_SUN : WEEKDAY_LABELS_MON;
 
   struct tm now = {0};
   now.tm_year = calendar->year;
