@@ -10,7 +10,12 @@ struct Header {
   Layer *container;
   Layer *bt_layer;
   Layer *battery_layer;
-  TextLayer *status_text;
+  Layer *status_layer;
+  char status_text[24];
+  HeaderDisplayMode status_mode;
+  bool status_temp_ready;
+  int8_t status_temp_min;
+  int8_t status_temp_max;
   int battery_percent;
   bool bt_connected;
 };
@@ -55,16 +60,127 @@ static void prv_format_steps(char *buffer, size_t len) {
   snprintf(buffer, len, "--");
 }
 
-static void prv_format_temp_range(char *buffer, size_t len) {
-  const WeatherData *data = weather_get();
-  if (!data || data->state != WEATHER_STATE_READY) {
-    snprintf(buffer, len, "-- / --");
+#define STATUS_ICON_GAP 3
+#define ARROW_WIDTH 8
+#define ARROW_HEIGHT 8
+
+static GFont prv_status_font_bold(void) {
+  return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+}
+
+static GFont prv_status_font_regular(void) {
+  return fonts_get_system_font(FONT_KEY_GOTHIC_18);
+}
+
+static GSize prv_text_size_font(const char *text, GFont font) {
+  return graphics_text_layout_get_content_size(text, font, GRect(0, 0, 200, HEADER_HEIGHT),
+                                               GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
+}
+
+static GSize prv_text_size(const char *text) {
+  return prv_text_size_font(text, prv_status_font_bold());
+}
+
+static void prv_draw_text_font(GContext *ctx, const char *text, GFont font, int x, GRect bounds) {
+  GSize size = prv_text_size_font(text, font);
+  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_draw_text(ctx, text, font, GRect(x, bounds.origin.y, size.w + 2, bounds.size.h),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+}
+
+static void prv_draw_text(GContext *ctx, const char *text, int x, GRect bounds) {
+  prv_draw_text_font(ctx, text, prv_status_font_bold(), x, bounds);
+}
+
+static void prv_draw_up_arrow(GContext *ctx, int cx, int cy) {
+  GPoint points[] = {
+      GPoint(cx, cy - 4),
+      GPoint(cx - 4, cy + 3),
+      GPoint(cx + 4, cy + 3),
+  };
+  GPathInfo path_info = {
+      .num_points = 3,
+      .points = points,
+  };
+  GPath *path = gpath_create(&path_info);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  gpath_draw_filled(ctx, path);
+  gpath_destroy(path);
+}
+
+static void prv_draw_down_arrow(GContext *ctx, int cx, int cy) {
+  GPoint points[] = {
+      GPoint(cx, cy + 4),
+      GPoint(cx - 4, cy - 3),
+      GPoint(cx + 4, cy - 3),
+  };
+  GPathInfo path_info = {
+      .num_points = 3,
+      .points = points,
+  };
+  GPath *path = gpath_create(&path_info);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  gpath_draw_filled(ctx, path);
+  gpath_destroy(path);
+}
+
+static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
+  (void)layer;
+  Header *header = s_header;
+  if (!header) {
     return;
   }
 
-  int8_t min_temp = prv_display_temp(data->temp_min);
-  int8_t max_temp = prv_display_temp(data->temp_max);
-  snprintf(buffer, len, "%d / %d", (int)min_temp, (int)max_temp);
+  GRect bounds = layer_get_bounds(layer);
+  int center_y = bounds.origin.y + bounds.size.h / 2;
+
+  switch (header->status_mode) {
+    case HEADER_DISPLAY_STEPS: {
+      GSize count_size = prv_text_size(header->status_text);
+      GSize suffix_size = prv_text_size_font(" steps", prv_status_font_regular());
+      int total_w = count_size.w + suffix_size.w;
+      int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      prv_draw_text(ctx, header->status_text, x, bounds);
+      prv_draw_text_font(ctx, " steps", prv_status_font_regular(), x + count_size.w, bounds);
+      break;
+    }
+    case HEADER_DISPLAY_TEMP_RANGE: {
+      char min_buf[8];
+      char max_buf[8];
+      if (header->status_temp_ready) {
+        snprintf(min_buf, sizeof(min_buf), "%d", (int)header->status_temp_min);
+        snprintf(max_buf, sizeof(max_buf), "%d", (int)header->status_temp_max);
+      } else {
+        snprintf(min_buf, sizeof(min_buf), "--");
+        snprintf(max_buf, sizeof(max_buf), "--");
+      }
+
+      GSize min_size = prv_text_size(min_buf);
+      GSize sep_size = prv_text_size(" / ");
+      GSize max_size = prv_text_size(max_buf);
+      int total_w = ARROW_WIDTH + STATUS_ICON_GAP + min_size.w + sep_size.w + ARROW_WIDTH + STATUS_ICON_GAP +
+                    max_size.w;
+      int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+
+      prv_draw_down_arrow(ctx, x + ARROW_WIDTH / 2, center_y);
+      x += ARROW_WIDTH + STATUS_ICON_GAP;
+      prv_draw_text(ctx, min_buf, x, bounds);
+      x += min_size.w;
+      prv_draw_text(ctx, " / ", x, bounds);
+      x += sep_size.w;
+      prv_draw_up_arrow(ctx, x + ARROW_WIDTH / 2, center_y);
+      x += ARROW_WIDTH + STATUS_ICON_GAP;
+      prv_draw_text(ctx, max_buf, x, bounds);
+      break;
+    }
+    case HEADER_DISPLAY_FULL_DATE:
+    default: {
+      GSize text_size = prv_text_size(header->status_text);
+      int x = bounds.origin.x + (bounds.size.w - text_size.w) / 2;
+      prv_draw_text(ctx, header->status_text, x, bounds);
+      break;
+    }
+  }
 }
 
 static void prv_bt_update_proc(Layer *layer, GContext *ctx) {
@@ -136,12 +252,9 @@ Header *header_create(Layer *parent) {
   layer_set_update_proc(header->battery_layer, prv_battery_update_proc);
   layer_add_child(header->container, header->battery_layer);
 
-  header->status_text = text_layer_create(GRect(24, 0, bounds.size.w - 52, HEADER_HEIGHT));
-  text_layer_set_background_color(header->status_text, GColorClear);
-  text_layer_set_text_color(header->status_text, GColorWhite);
-  text_layer_set_font(header->status_text, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(header->status_text, GTextAlignmentCenter);
-  layer_add_child(header->container, text_layer_get_layer(header->status_text));
+  header->status_layer = layer_create(GRect(24, 0, bounds.size.w - 52, HEADER_HEIGHT));
+  layer_set_update_proc(header->status_layer, prv_status_layer_update_proc);
+  layer_add_child(header->container, header->status_layer);
 
   header->battery_percent = 100;
   header->bt_connected = true;
@@ -156,7 +269,7 @@ void header_destroy(Header *header) {
   if (s_header == header) {
     s_header = NULL;
   }
-  text_layer_destroy(header->status_text);
+  layer_destroy(header->status_layer);
   layer_destroy(header->bt_layer);
   layer_destroy(header->battery_layer);
   layer_destroy(header->container);
@@ -169,7 +282,7 @@ void header_set_bounds(Header *header, GRect frame) {
   }
   layer_set_frame(header->container, frame);
   layer_set_frame(header->battery_layer, GRect(frame.size.w - 28, 2, 24, HEADER_HEIGHT - 4));
-  layer_set_frame(text_layer_get_layer(header->status_text), GRect(24, 0, frame.size.w - 52, HEADER_HEIGHT));
+  layer_set_frame(header->status_layer, GRect(24, 0, frame.size.w - 52, HEADER_HEIGHT));
 }
 
 void header_update(Header *header, struct tm *now) {
@@ -177,23 +290,30 @@ void header_update(Header *header, struct tm *now) {
     return;
   }
 
-  static char buffer[24];
   const ArgusSettings *settings = settings_get();
+  header->status_mode = settings->header_display_mode;
+  header->status_temp_ready = false;
 
   switch (settings->header_display_mode) {
     case HEADER_DISPLAY_STEPS:
-      prv_format_steps(buffer, sizeof(buffer));
+      prv_format_steps(header->status_text, sizeof(header->status_text));
       break;
-    case HEADER_DISPLAY_TEMP_RANGE:
-      prv_format_temp_range(buffer, sizeof(buffer));
+    case HEADER_DISPLAY_TEMP_RANGE: {
+      const WeatherData *data = weather_get();
+      if (data && data->state == WEATHER_STATE_READY) {
+        header->status_temp_ready = true;
+        header->status_temp_min = prv_display_temp(data->temp_min);
+        header->status_temp_max = prv_display_temp(data->temp_max);
+      }
       break;
+    }
     case HEADER_DISPLAY_FULL_DATE:
     default:
-      prv_format_full_date(buffer, sizeof(buffer), now);
+      prv_format_full_date(header->status_text, sizeof(header->status_text), now);
       break;
   }
 
-  text_layer_set_text(header->status_text, buffer);
+  layer_mark_dirty(header->status_layer);
 }
 
 void header_refresh_bt(Header *header, bool connected) {
