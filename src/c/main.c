@@ -168,9 +168,37 @@ static void prv_window_unload(Window *window) {
   s_window_layer = NULL;
 }
 
+static void prv_refresh_header(struct tm *now) {
+  header_update(s_header, now);
+}
+
 static void prv_weather_updated(void) {
   weather_chart_refresh(s_weather_chart);
+  if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
+    time_t now = time(NULL);
+    struct tm *tm_now = localtime(&now);
+    if (tm_now) {
+      prv_refresh_header(tm_now);
+    }
+  }
 }
+
+#if defined(PBL_HEALTH)
+static void prv_health_handler(HealthEventType event, void *context) {
+  (void)context;
+  if (event != HealthEventMovementUpdate && event != HealthEventSignificantUpdate) {
+    return;
+  }
+  if (settings_get()->header_display_mode != HEADER_DISPLAY_STEPS) {
+    return;
+  }
+  time_t now = time(NULL);
+  struct tm *tm_now = localtime(&now);
+  if (tm_now) {
+    prv_refresh_header(tm_now);
+  }
+}
+#endif
 
 static void init(void) {
   settings_init();
@@ -196,10 +224,17 @@ static void init(void) {
   app_message_register_outbox_failed(prv_outbox_failed);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
 
+#if defined(PBL_HEALTH)
+  health_service_events_subscribe(prv_health_handler, NULL);
+#endif
+
   weather_request();
 }
 
 static void deinit(void) {
+#if defined(PBL_HEALTH)
+  health_service_events_unsubscribe();
+#endif
   tick_timer_service_unsubscribe();
   battery_state_service_unsubscribe();
   connection_service_unsubscribe();

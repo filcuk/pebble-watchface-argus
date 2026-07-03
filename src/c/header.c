@@ -1,6 +1,7 @@
 #include "header.h"
 
 #include "settings.h"
+#include "weather.h"
 
 #include <stdio.h>
 #include <time.h>
@@ -15,6 +16,56 @@ struct Header {
 };
 
 static Header *s_header;
+
+static int8_t prv_display_temp(int8_t celsius) {
+  const ArgusSettings *settings = settings_get();
+  if (!settings->temperature_fahrenheit) {
+    return celsius;
+  }
+  return (int8_t)(((celsius * 9) + (celsius >= 0 ? 2 : -2)) / 5 + 32);
+}
+
+#if defined(PBL_HEALTH)
+static int prv_today_steps(void) {
+  HealthMetric metric = HealthMetricStepCount;
+  time_t start = time_start_of_today();
+  time_t end = time(NULL);
+  HealthServiceAccessibilityMask mask = health_service_metric_accessible(metric, start, end);
+  if (mask & HealthServiceAccessibilityMaskAvailable) {
+    return (int)health_service_sum(metric, start, end);
+  }
+  return -1;
+}
+#endif
+
+static void prv_format_full_date(char *buffer, size_t len, struct tm *now) {
+  static char month_buf[8];
+  strftime(month_buf, sizeof(month_buf), "%b", now);
+  snprintf(buffer, len, "%d %s %d", now->tm_mday, month_buf, now->tm_year + 1900);
+}
+
+static void prv_format_steps(char *buffer, size_t len) {
+#if defined(PBL_HEALTH)
+  int steps = prv_today_steps();
+  if (steps >= 0) {
+    snprintf(buffer, len, "%d", steps);
+    return;
+  }
+#endif
+  snprintf(buffer, len, "--");
+}
+
+static void prv_format_temp_range(char *buffer, size_t len) {
+  const WeatherData *data = weather_get();
+  if (!data || data->state != WEATHER_STATE_READY) {
+    snprintf(buffer, len, "-- / --");
+    return;
+  }
+
+  int8_t min_temp = prv_display_temp(data->temp_min);
+  int8_t max_temp = prv_display_temp(data->temp_max);
+  snprintf(buffer, len, "%d / %d", (int)min_temp, (int)max_temp);
+}
 
 static void prv_bt_update_proc(Layer *layer, GContext *ctx) {
   (void)layer;
@@ -126,10 +177,22 @@ void header_update(Header *header, struct tm *now) {
     return;
   }
 
-  static char month_buf[8];
-  static char buffer[16];
-  strftime(month_buf, sizeof(month_buf), "%b", now);
-  snprintf(buffer, sizeof(buffer), "%d %s", now->tm_mday, month_buf);
+  static char buffer[24];
+  const ArgusSettings *settings = settings_get();
+
+  switch (settings->header_display_mode) {
+    case HEADER_DISPLAY_STEPS:
+      prv_format_steps(buffer, sizeof(buffer));
+      break;
+    case HEADER_DISPLAY_TEMP_RANGE:
+      prv_format_temp_range(buffer, sizeof(buffer));
+      break;
+    case HEADER_DISPLAY_FULL_DATE:
+    default:
+      prv_format_full_date(buffer, sizeof(buffer), now);
+      break;
+  }
+
   text_layer_set_text(header->status_text, buffer);
 }
 

@@ -22,7 +22,8 @@
     },
     "capabilities": [
       "configurable",
-      "location"
+      "location",
+      "health"
     ],
     "messageKeys": [
       "HourFormat",
@@ -45,7 +46,8 @@
       "WeatherWindHourly",
       "WeatherFetchTime",
       "WeatherIsDayHourly",
-      "WindMax"
+      "WindMax",
+      "HeaderDisplay"
     ],
     "resources": {
       "media": []

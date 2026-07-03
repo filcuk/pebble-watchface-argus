@@ -55,6 +55,17 @@ module.exports = [
           { label: 'Only when disconnected', value: '1' },
         ],
       },
+      {
+        type: 'select',
+        messageKey: 'HeaderDisplay',
+        label: 'Top Center',
+        defaultValue: '0',
+        options: [
+          { label: 'Full date', value: '0' },
+          { label: 'Step count', value: '1' },
+          { label: 'Min/max temp', value: '2' },
+        ],
+      },
     ],
   },
   {

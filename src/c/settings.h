@@ -2,7 +2,7 @@
 
 #include <pebble.h>
 
-#define SETTINGS_PERSIST_KEY 1
+#define SETTINGS_PERSIST_KEY 2
 
 typedef enum {
   HOUR_FORMAT_SYSTEM = 0,
@@ -30,12 +30,19 @@ typedef enum {
   LOCATION_MODE_MANUAL = 1,
 } LocationMode;
 
+typedef enum {
+  HEADER_DISPLAY_FULL_DATE = 0,
+  HEADER_DISPLAY_STEPS = 1,
+  HEADER_DISPLAY_TEMP_RANGE = 2,
+} HeaderDisplayMode;
+
 typedef struct {
   HourFormat hour_format;
   WeekStart week_start;
   WeekNumberMode week_number_mode;
   BluetoothDisplay bluetooth_display;
   LocationMode location_mode;
+  HeaderDisplayMode header_display_mode;
   char manual_location[48];
   uint8_t forecast_hours;
   bool temperature_fahrenheit;
@@ -46,5 +53,6 @@ typedef struct {
 
 void settings_init(void);
 const ArgusSettings *settings_get(void);
+bool settings_show_calendar_month(void);
 void settings_apply_from_message(DictionaryIterator *iter);
 void settings_save(void);

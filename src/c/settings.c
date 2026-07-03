@@ -10,6 +10,7 @@ static void settings_set_defaults(void) {
   s_settings.week_number_mode = WEEK_NUMBER_ISO;
   s_settings.bluetooth_display = BT_DISPLAY_DISCONNECTED_ONLY;
   s_settings.location_mode = LOCATION_MODE_GPS;
+  s_settings.header_display_mode = HEADER_DISPLAY_FULL_DATE;
   s_settings.manual_location[0] = '\0';
   s_settings.forecast_hours = 24;
   s_settings.temperature_fahrenheit = false;
@@ -18,15 +19,26 @@ static void settings_set_defaults(void) {
   s_settings.demo_weather = false;
 }
 
+static void settings_validate(void) {
+  if (s_settings.header_display_mode > HEADER_DISPLAY_TEMP_RANGE) {
+    s_settings.header_display_mode = HEADER_DISPLAY_FULL_DATE;
+  }
+}
+
 void settings_init(void) {
   settings_set_defaults();
   if (persist_exists(SETTINGS_PERSIST_KEY)) {
     persist_read_data(SETTINGS_PERSIST_KEY, &s_settings, sizeof(s_settings));
+    settings_validate();
   }
 }
 
 const ArgusSettings *settings_get(void) {
   return &s_settings;
+}
+
+bool settings_show_calendar_month(void) {
+  return s_settings.header_display_mode != HEADER_DISPLAY_FULL_DATE;
 }
 
 void settings_save(void) {
@@ -65,6 +77,15 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   if (t) {
     s_settings.location_mode = (LocationMode)t->value->int32;
     changed = true;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_HeaderDisplay);
+  if (t) {
+    int32_t mode = t->value->int32;
+    if (mode >= HEADER_DISPLAY_FULL_DATE && mode <= HEADER_DISPLAY_TEMP_RANGE) {
+      s_settings.header_display_mode = (HeaderDisplayMode)mode;
+      changed = true;
+    }
   }
 
   t = dict_find(iter, MESSAGE_KEY_ManualLocation);
