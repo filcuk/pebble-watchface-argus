@@ -66,22 +66,26 @@ static void prv_unobstructed_change(AnimationProgress progress, void *context) {
 }
 
 static void prv_refresh_all_modules(struct tm *now) {
+  struct tm now_copy = *now;
+
   header_invalidate(s_header);
   calendar_invalidate(s_calendar);
   header_apply_settings(s_header);
-  header_update(s_header, now);
-  calendar_update(s_calendar, now);
-  time_display_update(s_time_display, now);
+  header_update(s_header, &now_copy);
+  time_display_update(s_time_display, &now_copy);
+  calendar_update(s_calendar, &now_copy);
   weather_chart_refresh(s_weather_chart);
 }
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  struct tm tick_copy = *tick_time;
+
   weather_slide_stale_hours();
-  time_display_update(s_time_display, tick_time);
+  time_display_update(s_time_display, &tick_copy);
 
   if (units_changed & DAY_UNIT) {
-    calendar_update(s_calendar, tick_time);
-    header_update(s_header, tick_time);
+    header_update(s_header, &tick_copy);
+    calendar_update(s_calendar, &tick_copy);
   }
 
   if (tick_time->tm_min == 0 || tick_time->tm_min % 30 == 0) {

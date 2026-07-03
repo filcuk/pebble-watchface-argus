@@ -186,21 +186,22 @@ void time_display_update(TimeDisplay *display, struct tm *now) {
     return;
   }
 
+  struct tm local_now = *now;
   bool use_24h = formatting_use_24h();
   char new_time[sizeof(display->time_text)];
   char new_ampm[sizeof(display->ampm_text)];
   bool new_show_ampm = !use_24h;
 
   if (use_24h) {
-    snprintf(new_time, sizeof(new_time), "%02d:%02d", now->tm_hour, now->tm_min);
+    snprintf(new_time, sizeof(new_time), "%02d:%02d", local_now.tm_hour, local_now.tm_min);
     new_ampm[0] = '\0';
   } else {
-    int hour = now->tm_hour % 12;
+    int hour = local_now.tm_hour % 12;
     if (hour == 0) {
       hour = 12;
     }
-    snprintf(new_time, sizeof(new_time), "%d:%02d", hour, now->tm_min);
-    strftime(new_ampm, sizeof(new_ampm), "%p", now);
+    snprintf(new_time, sizeof(new_time), "%d:%02d", hour, local_now.tm_min);
+    strftime(new_ampm, sizeof(new_ampm), "%p", &local_now);
   }
 
   if (strcmp(display->time_text, new_time) == 0 && strcmp(display->ampm_text, new_ampm) == 0 &&
