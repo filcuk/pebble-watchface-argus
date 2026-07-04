@@ -709,6 +709,11 @@ void weather_chart_set_bounds(WeatherChart *chart, GRect frame) {
   if (!chart) {
     return;
   }
+  if (frame.size.h < WEATHER_CHART_MIN_HEIGHT) {
+    layer_set_hidden(chart->layer, true);
+    return;
+  }
+  layer_set_hidden(chart->layer, false);
   layer_set_frame(chart->layer,
                   GRect(frame.origin.x, frame.origin.y - Y_LABEL_HEADROOM, frame.size.w,
                         frame.size.h + Y_LABEL_HEADROOM));

@@ -3,6 +3,7 @@
 #include <pebble.h>
 
 #define WEATHER_CHART_HEIGHT 96
+#define WEATHER_CHART_MIN_HEIGHT 52
 
 typedef struct WeatherChart WeatherChart;
 

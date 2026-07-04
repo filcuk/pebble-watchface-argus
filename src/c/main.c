@@ -53,6 +53,16 @@ static void prv_update_layout(void) {
     }
   }
 
+  if (weather_h < WEATHER_CHART_MIN_HEIGHT) {
+    weather_h = 0;
+    weather_y = height;
+    if (height >= time_zone_top + time_h) {
+      time_y = time_zone_top + (height - time_zone_top - time_h) / 2;
+    } else {
+      time_y = time_zone_top;
+    }
+  }
+
   header_set_bounds(s_header, GRect(0, 0, width, header_h));
   calendar_set_bounds(s_calendar, GRect(0, header_h, width, calendar_h));
   time_display_set_bounds(s_time_display, GRect(0, time_y, width, time_h));
