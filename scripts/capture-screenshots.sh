@@ -35,8 +35,9 @@ START_TIME="2026-07-06 09:00:00"
 SETTLE_DELAY=""
 WARMUP_SEC=""
 DEMO_WEATHER=-1
-SCREENSHOT_RETRIES=3
-SCREENSHOT_RETRY_DELAY=5
+PEBBLE_RETRIES=4
+PEBBLE_RETRY_DELAY=5
+PEBBLE_CMD_GAP=1
 LIVE_WEATHER_MIN_SETTLE=15
 
 MSG_DEBUG_MODE=10010
@@ -167,23 +168,45 @@ sleep_interruptible() {
 }
 
 pebble_cmd() {
-  pebble "$@" </dev/null
+  pebble "$@" </dev/null 2>/dev/null
 }
 
-take_screenshot() {
-  local filename="$1"
+run_pebble_with_retry() {
+  local desc="$1"
+  shift
   local attempt=1
-  while (( attempt <= SCREENSHOT_RETRIES && !STOP )); do
-    if pebble_cmd screenshot --no-open "$filename" 2>/dev/null; then
+  while (( attempt <= PEBBLE_RETRIES && !STOP )); do
+    if pebble_cmd "$@"; then
+      sleep_interruptible "$PEBBLE_CMD_GAP"
       return 0
     fi
-    if (( attempt < SCREENSHOT_RETRIES )); then
-      echo "  Screenshot timed out (attempt ${attempt}/${SCREENSHOT_RETRIES}), retrying in ${SCREENSHOT_RETRY_DELAY}s..." >&2
-      sleep_interruptible "$SCREENSHOT_RETRY_DELAY"
+    if (( attempt < PEBBLE_RETRIES )); then
+      echo "  ${desc} failed (attempt ${attempt}/${PEBBLE_RETRIES}), retrying in ${PEBBLE_RETRY_DELAY}s..." >&2
+      sleep_interruptible "$PEBBLE_RETRY_DELAY"
     fi
     attempt=$(( attempt + 1 ))
   done
   return 1
+}
+
+wait_for_emulator() {
+  local tmp
+  tmp=$(mktemp /tmp/argus-pebble-check.XXXXXX.png)
+  echo "Checking emulator connection..."
+  if run_pebble_with_retry "Emulator check" screenshot --no-open "$tmp"; then
+    rm -f "$tmp"
+    echo "Emulator ready."
+    return 0
+  fi
+  rm -f "$tmp"
+  echo "Error: cannot connect to the emulator." >&2
+  echo "  Run: bash scripts/reset-emulator.sh && pebble install --emulator emery" >&2
+  exit 1
+}
+
+take_screenshot() {
+  local filename="$1"
+  run_pebble_with_retry "Screenshot" screenshot --no-open "$filename"
 }
 
 send_app_message_int() {
@@ -192,7 +215,7 @@ send_app_message_int() {
     pairs+=(--int "$1=$2")
     shift 2
   done
-  pebble_cmd send-app-message --app-uuid "$APP_UUID" "${pairs[@]}"
+  run_pebble_with_retry "App message" send-app-message --app-uuid "$APP_UUID" "${pairs[@]}"
 }
 
 enable_debug_mode() {
@@ -402,17 +425,22 @@ trap on_interrupt INT TERM
 trap cleanup EXIT
 
 if (( SIMULATE )); then
-  enable_debug_mode
-  sleep_interruptible 1
+  wait_for_emulator
+  enable_debug_mode || {
+    echo "Error: failed to enable debug mode." >&2
+    exit 1
+  }
   if (( DEMO_WEATHER )); then
-    enable_demo_weather
-    sleep_interruptible 1
+    enable_demo_weather || {
+      echo "Error: failed to enable demo weather." >&2
+      exit 1
+    }
   fi
   if (( STOP )); then
     exit 130
   fi
   if ! apply_capture_offset 0; then
-    echo "Error: failed to set CaptureTimeOffset. Is the emulator running with Argus installed?" >&2
+    echo "Error: failed to set CaptureTimeOffset. Is Argus installed on the emulator?" >&2
     exit 1
   fi
   if (( WARMUP_SEC > 0 )); then

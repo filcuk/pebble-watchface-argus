@@ -18,6 +18,8 @@ static void prv_notify_updated(void) {
   }
 }
 
+static void prv_request_refresh(time_t when_hour);
+
 static time_t prv_current_hour_start(void) {
   time_t now = argus_time_now();
   struct tm *tm = localtime(&now);
@@ -391,6 +393,12 @@ void weather_init(void) {
 
   if (!connection_service_peek_pebble_app_connection()) {
     weather_refresh_for_connection(false);
+  } else {
+    WeatherView view;
+    weather_get_view(&view);
+    if (!weather_view_has_data(&view) && s_weather.state == WEATHER_STATE_READY) {
+      prv_request_refresh(prv_current_hour_start());
+    }
   }
 }
 
@@ -620,8 +628,24 @@ void weather_request_for_time(time_t when_hour) {
     if (!weather_cache_is_valid()) {
       s_weather.state = WEATHER_STATE_LOADING;
     }
+  } else {
+    WeatherView view;
+    weather_get_view(&view);
+    if (!weather_view_has_data(&view)) {
+      s_weather.state = WEATHER_STATE_LOADING;
+    }
   }
   weather_schedule_retry();
+}
+
+static void prv_request_refresh(time_t when_hour) {
+  if (connection_service_peek_pebble_app_connection()) {
+    s_weather.state = WEATHER_STATE_LOADING;
+    prv_notify_updated();
+    weather_request_for_time(when_hour);
+  } else if (!weather_cache_is_valid()) {
+    weather_mark_unavailable();
+  }
 }
 
 void weather_slide_stale_hours(void) {
@@ -640,16 +664,7 @@ void weather_slide_stale_hours(void) {
     return;
   }
 
-  time_t now_hour = prv_current_hour_start();
-  int hours_elapsed = (int)((now_hour - s_weather.fetch_time) / 3600);
-  if (hours_elapsed >= s_weather.hour_count) {
-    if (connection_service_peek_pebble_app_connection()) {
-      s_weather.state = WEATHER_STATE_LOADING;
-      weather_request_for_time(now_hour);
-    } else {
-      weather_mark_unavailable();
-    }
-  }
+  prv_request_refresh(prv_current_hour_start());
 }
 
 void weather_request(void) {
