@@ -10,6 +10,7 @@ static WeatherData s_weather;
 static AppTimer *s_retry_timer;
 static AppTimer *s_timeout_timer;
 static WeatherUpdatedHandler s_updated_handler;
+static time_t s_last_weather_request_hour;
 
 static void prv_notify_updated(void) {
   if (s_updated_handler) {
@@ -28,7 +29,15 @@ static time_t prv_current_hour_start(void) {
   return mktime(tm);
 }
 
-static void prv_recompute_extremes(void) {
+static uint8_t prv_forecast_display_hours(void) {
+  uint8_t hours = settings_get()->forecast_hours;
+  if (hours != 12 && hours != 24 && hours != 48) {
+    return 24;
+  }
+  return hours;
+}
+
+static void prv_recompute_extremes_for_range(uint8_t start, uint8_t count) {
   if (s_weather.hour_count == 0) {
     return;
   }
@@ -40,7 +49,7 @@ static void prv_recompute_extremes(void) {
   uint8_t precip_max = 0;
   uint8_t wind_max = 0;
 
-  for (uint8_t i = 0; i < s_weather.hour_count; i++) {
+  for (uint8_t i = start; i < start + count && i < s_weather.hour_count; i++) {
     if (s_weather.temps[i] < temp_min) {
       temp_min = s_weather.temps[i];
     }
@@ -86,12 +95,19 @@ static void prv_recompute_extremes(void) {
   s_weather.wind_max = wind_max;
 }
 
+static void prv_recompute_extremes(void) {
+  if (s_weather.hour_count == 0) {
+    return;
+  }
+  prv_recompute_extremes_for_range(0, s_weather.hour_count);
+}
+
 static bool prv_use_feels(void) {
   const ArgusSettings *settings = settings_get();
   return settings->temperature_display == TEMPERATURE_DISPLAY_FEELS && s_weather.has_feels_temps;
 }
 
-int8_t weather_display_temp_at(uint8_t index) {
+static int8_t prv_display_temp_at_index(uint8_t index) {
   if (index >= s_weather.hour_count) {
     return 0;
   }
@@ -99,6 +115,119 @@ int8_t weather_display_temp_at(uint8_t index) {
     return s_weather.feels_temps[index];
   }
   return s_weather.temps[index];
+}
+
+int8_t weather_display_temp_at(uint8_t index) {
+  return prv_display_temp_at_index(index);
+}
+
+int8_t weather_display_temp_min_for_view(const WeatherView *view) {
+  if (!view || view->hour_count == 0) {
+    return weather_display_temp_min();
+  }
+
+  int8_t temp_min = 127;
+  int8_t temp_max = -128;
+  for (uint8_t i = 0; i < view->hour_count; i++) {
+    int8_t temp = prv_display_temp_at_index((uint8_t)(view->start_index + i));
+    if (temp < temp_min) {
+      temp_min = temp;
+    }
+    if (temp > temp_max) {
+      temp_max = temp;
+    }
+  }
+  if (temp_max <= temp_min) {
+    temp_max = temp_min + 1;
+  }
+  (void)temp_max;
+  return temp_min;
+}
+
+int8_t weather_display_temp_max_for_view(const WeatherView *view) {
+  if (!view || view->hour_count == 0) {
+    return weather_display_temp_max();
+  }
+
+  int8_t temp_min = 127;
+  int8_t temp_max = -128;
+  for (uint8_t i = 0; i < view->hour_count; i++) {
+    int8_t temp = prv_display_temp_at_index((uint8_t)(view->start_index + i));
+    if (temp < temp_min) {
+      temp_min = temp;
+    }
+    if (temp > temp_max) {
+      temp_max = temp;
+    }
+  }
+  if (temp_max <= temp_min) {
+    temp_max = temp_min + 1;
+  }
+  (void)temp_min;
+  return temp_max;
+}
+
+uint8_t weather_precip_max_for_view(const WeatherView *view) {
+  if (!view || view->hour_count == 0) {
+    return s_weather.precip_max ? s_weather.precip_max : 1;
+  }
+
+  uint8_t precip_max = 0;
+  for (uint8_t i = 0; i < view->hour_count; i++) {
+    uint8_t precip = s_weather.precips[view->start_index + i];
+    if (precip > precip_max) {
+      precip_max = precip;
+    }
+  }
+  return precip_max ? precip_max : 1;
+}
+
+uint8_t weather_wind_max_for_view(const WeatherView *view) {
+  if (!view || view->hour_count == 0) {
+    return s_weather.wind_max ? s_weather.wind_max : 1;
+  }
+
+  uint8_t wind_max = 0;
+  for (uint8_t i = 0; i < view->hour_count; i++) {
+    uint8_t wind = s_weather.winds[view->start_index + i];
+    if (wind > wind_max) {
+      wind_max = wind;
+    }
+  }
+  return wind_max ? wind_max : 1;
+}
+
+void weather_get_view(WeatherView *view) {
+  if (!view) {
+    return;
+  }
+
+  view->start_index = 0;
+  view->hour_count = 0;
+
+  if (s_weather.state != WEATHER_STATE_READY || s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
+    return;
+  }
+
+  time_t now_hour = prv_current_hour_start();
+  if (now_hour < s_weather.fetch_time) {
+    return;
+  }
+
+  int elapsed = (int)((now_hour - s_weather.fetch_time) / 3600);
+
+  if (elapsed >= s_weather.hour_count) {
+    return;
+  }
+
+  uint8_t want = prv_forecast_display_hours();
+  uint8_t remain = s_weather.hour_count - (uint8_t)elapsed;
+  view->start_index = (uint8_t)elapsed;
+  view->hour_count = remain < want ? remain : want;
+}
+
+bool weather_view_has_data(const WeatherView *view) {
+  return view && view->hour_count > 0;
 }
 
 int8_t weather_display_temp_min(void) {
@@ -279,27 +408,25 @@ void weather_apply_demo_data(void) {
   }
 
   s_weather.hour_count = 24;
-  s_weather.temp_min = 6;
-  s_weather.temp_max = 16;
-  s_weather.feels_temp_min = 4;
-  s_weather.feels_temp_max = 14;
   s_weather.precip_max = 40;
   s_weather.wind_max = 30;
   s_weather.fetch_time = prv_current_hour_start();
 
   for (uint8_t i = 0; i < 24; i++) {
-    s_weather.temps[i] = (int8_t)(8 + ((i * 3) % 9));
-    s_weather.feels_temps[i] = (int8_t)(s_weather.temps[i] - 2);
-    s_weather.precips[i] = (uint8_t)((i % 5) * 8);
-    s_weather.winds[i] = (uint8_t)(5 + ((i * 7) % 20));
     time_t hour_time = s_weather.fetch_time + (time_t)i * 3600;
     struct tm *tm_hour = localtime(&hour_time);
-    int hour = tm_hour ? tm_hour->tm_hour : (int)i;
-    s_weather.is_day[i] = (hour >= 6 && hour < 20) ? 1 : 0;
+    int clock_hour = tm_hour ? tm_hour->tm_hour : (int)i;
+    s_weather.temps[i] = (int8_t)(8 + ((clock_hour * 3) % 9));
+    s_weather.feels_temps[i] = (int8_t)(s_weather.temps[i] - 2);
+    s_weather.precips[i] = (uint8_t)((clock_hour % 5) * 8);
+    s_weather.winds[i] = (uint8_t)(5 + ((clock_hour * 7) % 20));
+    s_weather.is_day[i] = (clock_hour >= 6 && clock_hour < 20) ? 1 : 0;
   }
   s_weather.has_is_day = true;
   s_weather.has_wind = true;
   s_weather.has_feels_temps = true;
+
+  prv_recompute_extremes();
 
   s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.cached_at = argus_time_now();
@@ -424,6 +551,7 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.cached_at = argus_time_now();
   s_weather.state = WEATHER_STATE_READY;
+  s_last_weather_request_hour = 0;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
   prv_cancel_timers();
   prv_notify_updated();
@@ -442,51 +570,35 @@ void weather_set_updated_handler(WeatherUpdatedHandler handler) {
   s_updated_handler = handler;
 }
 
-void weather_slide_stale_hours(void) {
-  if (s_weather.state != WEATHER_STATE_READY || s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
-    return;
-  }
-
-  time_t now = argus_time_now();
-  int hours_elapsed = (int)((now - s_weather.fetch_time) / 3600);
-  if (hours_elapsed <= 0) {
-    return;
-  }
-
-  if (hours_elapsed >= s_weather.hour_count) {
-    s_weather.hour_count = 0;
-    persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
-    if (weather_use_demo_data()) {
+void weather_ensure_view_coverage(void) {
+  if (weather_use_demo_data()) {
+    time_t now_hour = prv_current_hour_start();
+    if (s_weather.fetch_time != now_hour) {
       weather_apply_demo_data();
-    } else if (connection_service_peek_pebble_app_connection()) {
-      s_weather.state = WEATHER_STATE_LOADING;
-      weather_request();
-    } else {
-      weather_mark_unavailable();
     }
     return;
   }
 
-  uint8_t remain = s_weather.hour_count - (uint8_t)hours_elapsed;
-  memmove(s_weather.temps, s_weather.temps + hours_elapsed, remain);
-  memmove(s_weather.feels_temps, s_weather.feels_temps + hours_elapsed, remain);
-  memmove(s_weather.precips, s_weather.precips + hours_elapsed, remain);
-  memmove(s_weather.winds, s_weather.winds + hours_elapsed, remain);
-  memmove(s_weather.is_day, s_weather.is_day + hours_elapsed, remain);
+  WeatherView view;
+  weather_get_view(&view);
+  if (view.hour_count >= prv_forecast_display_hours()) {
+    return;
+  }
 
-  s_weather.hour_count = remain;
-  s_weather.fetch_time += (time_t)hours_elapsed * 3600;
-  s_weather.version = WEATHER_PERSIST_VERSION;
-  prv_recompute_extremes();
-  persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
-  prv_notify_updated();
+  weather_request_for_time(prv_current_hour_start());
 }
 
-void weather_request(void) {
+void weather_request_for_time(time_t when_hour) {
   if (weather_use_demo_data()) {
     weather_apply_demo_data();
     return;
   }
+
+  time_t request_hour = when_hour > 0 ? when_hour : prv_current_hour_start();
+  if (s_last_weather_request_hour == request_hour && s_weather.state == WEATHER_STATE_LOADING) {
+    return;
+  }
+  s_last_weather_request_hour = request_hour;
 
   DictionaryIterator *iter;
   if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
@@ -494,6 +606,9 @@ void weather_request(void) {
     return;
   }
   dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
+  if (argus_time_get_offset() != 0) {
+    dict_write_int32(iter, MESSAGE_KEY_WeatherForEpoch, (int32_t)request_hour);
+  }
   AppMessageResult result = app_message_outbox_send();
   if (result != APP_MSG_OK) {
     APP_LOG(APP_LOG_LEVEL_WARNING, "Weather request send failed: %d", (int)result);
@@ -507,4 +622,36 @@ void weather_request(void) {
     }
   }
   weather_schedule_retry();
+}
+
+void weather_slide_stale_hours(void) {
+  if (s_weather.state != WEATHER_STATE_READY || s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
+    return;
+  }
+
+  if (weather_use_demo_data() || argus_time_get_offset() != 0) {
+    weather_ensure_view_coverage();
+    return;
+  }
+
+  WeatherView view;
+  weather_get_view(&view);
+  if (weather_view_has_data(&view)) {
+    return;
+  }
+
+  time_t now_hour = prv_current_hour_start();
+  int hours_elapsed = (int)((now_hour - s_weather.fetch_time) / 3600);
+  if (hours_elapsed >= s_weather.hour_count) {
+    if (connection_service_peek_pebble_app_connection()) {
+      s_weather.state = WEATHER_STATE_LOADING;
+      weather_request_for_time(now_hour);
+    } else {
+      weather_mark_unavailable();
+    }
+  }
+}
+
+void weather_request(void) {
+  weather_request_for_time(0);
 }

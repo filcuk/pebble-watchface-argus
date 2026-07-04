@@ -38,6 +38,11 @@ typedef struct {
 
 typedef void (*WeatherUpdatedHandler)(void);
 
+typedef struct {
+  uint8_t start_index;
+  uint8_t hour_count;
+} WeatherView;
+
 void weather_init(void);
 WeatherData *weather_get(void);
 void weather_apply_from_message(DictionaryIterator *iter);
@@ -50,6 +55,14 @@ void weather_refresh_for_connection(bool phone_connected);
 void weather_schedule_retry(void);
 void weather_set_updated_handler(WeatherUpdatedHandler handler);
 void weather_slide_stale_hours(void);
+void weather_get_view(WeatherView *view);
+bool weather_view_has_data(const WeatherView *view);
+void weather_ensure_view_coverage(void);
+void weather_request_for_time(time_t when_hour);
 int8_t weather_display_temp_at(uint8_t index);
+int8_t weather_display_temp_min_for_view(const WeatherView *view);
+int8_t weather_display_temp_max_for_view(const WeatherView *view);
+uint8_t weather_precip_max_for_view(const WeatherView *view);
+uint8_t weather_wind_max_for_view(const WeatherView *view);
 int8_t weather_display_temp_min(void);
 int8_t weather_display_temp_max(void);

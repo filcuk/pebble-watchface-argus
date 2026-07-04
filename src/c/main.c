@@ -153,7 +153,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
       offset = offset_tuple->value->int32;
     }
     argus_time_set_offset(offset);
-    weather_slide_stale_hours();
+    weather_ensure_view_coverage();
     time_t now = argus_time_now();
     struct tm *tm_now = localtime(&now);
     if (tm_now) {

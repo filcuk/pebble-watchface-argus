@@ -107,12 +107,12 @@ static void prv_chart_geometry(GRect bounds, ChartGeometry *geo) {
   geo->plot_h = plot_h;
 }
 
-static bool prv_compute_layout(GRect bounds, const WeatherData *data, ChartLayout *layout) {
+static bool prv_compute_layout(GRect bounds, const WeatherData *data, const WeatherView *view, ChartLayout *layout) {
   ChartGeometry geo;
   prv_chart_geometry(bounds, &geo);
 
-  int8_t min_temp = formatting_display_temp(weather_display_temp_min());
-  int8_t max_temp = formatting_display_temp(weather_display_temp_max());
+  int8_t min_temp = formatting_display_temp(weather_display_temp_min_for_view(view));
+  int8_t max_temp = formatting_display_temp(weather_display_temp_max_for_view(view));
   if (max_temp <= min_temp) {
     max_temp = min_temp + 1;
   }
@@ -122,12 +122,12 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, ChartLayou
     axis_max = axis_min + 1;
   }
 
-  uint8_t precip_max = data->precip_max;
+  uint8_t precip_max = weather_precip_max_for_view(view);
   if (precip_max == 0) {
     precip_max = 1;
   }
 
-  uint8_t wind_max = data->wind_max;
+  uint8_t wind_max = weather_wind_max_for_view(view);
   if (wind_max == 0) {
     wind_max = 1;
   }
@@ -153,9 +153,13 @@ static void prv_sync_plot_layer_frame(WeatherChart *chart, GRect decor_bounds) {
                   GRect(geo.plot_left, geo.plot_top - PLOT_TOP_OVERFLOW, geo.plot_w, geo.plot_h + PLOT_TOP_OVERFLOW));
 }
 
-static time_t prv_forecast_time_for_index(const WeatherData *data, int index) {
+static time_t prv_forecast_time_for_index(const WeatherData *data, const WeatherView *view, int local_index) {
   time_t base = data->fetch_time > 0 ? data->fetch_time : argus_time_now();
-  return base + (time_t)index * 3600;
+  return base + (time_t)(view->start_index + local_index) * 3600;
+}
+
+static int prv_storage_index(const WeatherView *view, int local_index) {
+  return view->start_index + local_index;
 }
 
 static void prv_format_time_label(char *buf, size_t len, time_t when) {
@@ -184,12 +188,12 @@ static bool prv_is_interior_hour_index(int hour, int hour_count) {
   return hour > 0 && hour < hour_count - 1;
 }
 
-static int prv_interior_even_hour_count(const WeatherData *data) {
-  int hour_count = (int)data->hour_count;
+static int prv_interior_even_hour_count(const WeatherData *data, const WeatherView *view) {
+  int hour_count = (int)view->hour_count;
   int count = 0;
 
   for (int h = 1; h < hour_count - 1; h++) {
-    time_t when = prv_forecast_time_for_index(data, h);
+    time_t when = prv_forecast_time_for_index(data, view, h);
     if (prv_is_even_clock_hour(when)) {
       count++;
     }
@@ -197,12 +201,12 @@ static int prv_interior_even_hour_count(const WeatherData *data) {
   return count;
 }
 
-static int prv_nth_interior_even_hour_index(const WeatherData *data, int n) {
-  int hour_count = (int)data->hour_count;
+static int prv_nth_interior_even_hour_index(const WeatherData *data, const WeatherView *view, int n) {
+  int hour_count = (int)view->hour_count;
   int seen = 0;
 
   for (int h = 1; h < hour_count - 1; h++) {
-    time_t when = prv_forecast_time_for_index(data, h);
+    time_t when = prv_forecast_time_for_index(data, view, h);
     if (prv_is_even_clock_hour(when)) {
       if (seen == n) {
         return h;
@@ -213,10 +217,10 @@ static int prv_nth_interior_even_hour_index(const WeatherData *data, int n) {
   return -1;
 }
 
-static int prv_x_label_target_count(const WeatherData *data) {
+static int prv_x_label_target_count(const WeatherData *data, const WeatherView *view) {
   int count = 0;
   for (int hour = 1; hour < X_LABEL_REFERENCE_HOURS - 1; hour++) {
-    time_t when = prv_forecast_time_for_index(data, hour);
+    time_t when = prv_forecast_time_for_index(data, view, hour);
     if (prv_is_even_clock_hour(when)) {
       count++;
     }
@@ -224,8 +228,8 @@ static int prv_x_label_target_count(const WeatherData *data) {
   return count;
 }
 
-static bool prv_is_x_label_index(const WeatherData *data, int hour) {
-  int hour_count = (int)data->hour_count;
+static bool prv_is_x_label_index(const WeatherData *data, const WeatherView *view, int hour) {
+  int hour_count = (int)view->hour_count;
   if (hour < 0 || hour >= hour_count) {
     return false;
   }
@@ -233,17 +237,17 @@ static bool prv_is_x_label_index(const WeatherData *data, int hour) {
     return false;
   }
 
-  time_t when = prv_forecast_time_for_index(data, hour);
+  time_t when = prv_forecast_time_for_index(data, view, hour);
   if (!prv_is_even_clock_hour(when)) {
     return false;
   }
 
-  int target = prv_x_label_target_count(data);
+  int target = prv_x_label_target_count(data, view);
   if (target <= 0 || hour_count <= 0) {
     return false;
   }
 
-  int even_count = prv_interior_even_hour_count(data);
+  int even_count = prv_interior_even_hour_count(data, view);
   if (even_count <= 0) {
     return false;
   }
@@ -253,28 +257,28 @@ static bool prv_is_x_label_index(const WeatherData *data, int hour) {
   }
 
   if (target == 1) {
-    return hour == prv_nth_interior_even_hour_index(data, even_count / 2);
+    return hour == prv_nth_interior_even_hour_index(data, view, even_count / 2);
   }
 
   for (int i = 0; i < target; i++) {
     int pick = (i * (even_count - 1) + (target - 1) / 2) / (target - 1);
-    if (hour == prv_nth_interior_even_hour_index(data, pick)) {
+    if (hour == prv_nth_interior_even_hour_index(data, view, pick)) {
       return true;
     }
   }
   return false;
 }
 
-static bool prv_is_x_major_tick_index(const WeatherData *data, int hour) {
-  return prv_is_x_label_index(data, hour);
+static bool prv_is_x_major_tick_index(const WeatherData *data, const WeatherView *view, int hour) {
+  return prv_is_x_label_index(data, view, hour);
 }
 
-static bool prv_is_x_minor_tick_index(const WeatherData *data, int hour) {
-  int hour_count = (int)data->hour_count;
+static bool prv_is_x_minor_tick_index(const WeatherData *data, const WeatherView *view, int hour) {
+  int hour_count = (int)view->hour_count;
   if (!prv_is_interior_hour_index(hour, hour_count)) {
     return false;
   }
-  return !prv_is_x_major_tick_index(data, hour);
+  return !prv_is_x_major_tick_index(data, view, hour);
 }
 
 static void prv_format_temp_label(char *buf, size_t len, int8_t temp) {
@@ -307,28 +311,30 @@ static void prv_draw_wind_x(GContext *ctx, GPoint center, int arm) {
   graphics_draw_line(ctx, GPoint(center.x - arm, center.y + arm), GPoint(center.x + arm, center.y - arm));
 }
 
-static void prv_draw_wind_marks(GContext *ctx, const WeatherData *data, int plot_left, int plot_w, int axis_y,
-                                int plot_h, uint8_t wind_max) {
+static void prv_draw_wind_marks(GContext *ctx, const WeatherData *data, const WeatherView *view, int plot_left,
+                                int plot_w, int axis_y, int plot_h, uint8_t wind_max) {
   if (!data->has_wind) {
     return;
   }
 
-  for (int i = 0; i < data->hour_count; i++) {
-    if (data->winds[i] == 0) {
+  for (int i = 0; i < view->hour_count; i++) {
+    int storage = prv_storage_index(view, i);
+    if (data->winds[storage] == 0) {
       continue;
     }
 
-    int x = prv_plot_x(plot_left, plot_w, i, data->hour_count);
-    int y = prv_wind_y(axis_y, plot_h, data->winds[i], wind_max);
+    int x = prv_plot_x(plot_left, plot_w, i, view->hour_count);
+    int y = prv_wind_y(axis_y, plot_h, data->winds[storage], wind_max);
     prv_draw_wind_x(ctx, GPoint(x, y), WIND_X_ARM);
   }
 }
 
-static bool prv_is_night(const WeatherData *data, int index) {
-  if (data->has_is_day && index < data->hour_count) {
-    return data->is_day[index] == 0;
+static bool prv_is_night(const WeatherData *data, const WeatherView *view, int local_index) {
+  int storage = prv_storage_index(view, local_index);
+  if (data->has_is_day && storage < data->hour_count) {
+    return data->is_day[storage] == 0;
   }
-  time_t when = prv_forecast_time_for_index(data, index);
+  time_t when = prv_forecast_time_for_index(data, view, local_index);
   struct tm *tm = localtime(&when);
   if (!tm) {
     return false;
@@ -350,23 +356,24 @@ static int prv_segment_right(int plot_left, int plot_right, int plot_w, int inde
   return (prv_plot_x(plot_left, plot_w, index, hour_count) + prv_plot_x(plot_left, plot_w, index + 1, hour_count)) / 2;
 }
 
-static void prv_draw_precip_bars(GContext *ctx, const WeatherData *data, int plot_left, int plot_right, int plot_w,
-                                 int axis_y, int plot_h, uint8_t precip_max) {
+static void prv_draw_precip_bars(GContext *ctx, const WeatherData *data, const WeatherView *view, int plot_left,
+                                 int plot_right, int plot_w, int axis_y, int plot_h, uint8_t precip_max) {
   graphics_context_set_fill_color(ctx, PRECIP_BAR_COLOR);
 
-  for (int i = 0; i < data->hour_count; i++) {
-    if (data->precips[i] == 0) {
+  for (int i = 0; i < view->hour_count; i++) {
+    int storage = prv_storage_index(view, i);
+    if (data->precips[storage] == 0) {
       continue;
     }
 
-    int left = prv_segment_left(plot_left, plot_right, plot_w, i, data->hour_count);
-    int right = prv_segment_right(plot_left, plot_right, plot_w, i, data->hour_count);
+    int left = prv_segment_left(plot_left, plot_right, plot_w, i, view->hour_count);
+    int right = prv_segment_right(plot_left, plot_right, plot_w, i, view->hour_count);
     int bar_w = right - left;
     if (bar_w < 1) {
       continue;
     }
 
-    int top = prv_precip_y(axis_y, plot_h, data->precips[i], precip_max);
+    int top = prv_precip_y(axis_y, plot_h, data->precips[storage], precip_max);
     int bar_h = axis_y - top;
     if (bar_h < 1) {
       bar_h = 1;
@@ -377,13 +384,13 @@ static void prv_draw_precip_bars(GContext *ctx, const WeatherData *data, int plo
   }
 }
 
-static GRect prv_night_region_rect(const WeatherData *data, int plot_left, int plot_right, int plot_w, int plot_top,
-                                   int plot_bottom, int run_start, int run_end) {
+static GRect prv_night_region_rect(const WeatherData *data, const WeatherView *view, int plot_left, int plot_right,
+                                   int plot_w, int plot_top, int plot_bottom, int run_start, int run_end) {
   int left = run_start == 0 ? plot_left
-                            : prv_segment_left(plot_left, plot_right, plot_w, run_start, data->hour_count);
-  int right = run_end >= (int)data->hour_count - 1
+                            : prv_segment_left(plot_left, plot_right, plot_w, run_start, view->hour_count);
+  int right = run_end >= (int)view->hour_count - 1
                               ? plot_right
-                              : prv_segment_right(plot_left, plot_right, plot_w, run_end, data->hour_count);
+                              : prv_segment_right(plot_left, plot_right, plot_w, run_end, view->hour_count);
   return GRect(left, plot_top, right - left, plot_bottom - plot_top);
 }
 
@@ -453,20 +460,20 @@ static void prv_draw_night_region(GContext *ctx, GRect region) {
   graphics_draw_line(ctx, GPoint(right, top), GPoint(right, bottom));
 }
 
-static void prv_draw_night_regions(GContext *ctx, const WeatherData *data, int plot_left, int plot_right, int plot_top,
-                                   int plot_bottom, int plot_w) {
+static void prv_draw_night_regions(GContext *ctx, const WeatherData *data, const WeatherView *view, int plot_left,
+                                   int plot_right, int plot_top, int plot_bottom, int plot_w) {
   int run_start = -1;
 
-  for (int i = 0; i <= data->hour_count; i++) {
-    bool night = i < data->hour_count && prv_is_night(data, i);
+  for (int i = 0; i <= view->hour_count; i++) {
+    bool night = i < view->hour_count && prv_is_night(data, view, i);
 
     if (night && run_start < 0) {
       run_start = i;
     }
 
-    if ((!night || i == data->hour_count) && run_start >= 0) {
+    if ((!night || i == view->hour_count) && run_start >= 0) {
       int end_index = night ? i : i - 1;
-      GRect region = prv_night_region_rect(data, plot_left, plot_right, plot_w, plot_top, plot_bottom, run_start,
+      GRect region = prv_night_region_rect(data, view, plot_left, plot_right, plot_w, plot_top, plot_bottom, run_start,
                                            end_index);
       prv_draw_night_region(ctx, region);
       run_start = -1;
@@ -519,7 +526,8 @@ static void prv_draw_y_axis_ticks(GContext *ctx, GFont font, int plot_left, int 
   }
 }
 
-static void prv_draw_x_axis_minor_ticks(GContext *ctx, const WeatherData *data, int plot_left, int plot_w, int axis_y) {
+static void prv_draw_x_axis_minor_ticks(GContext *ctx, const WeatherData *data, const WeatherView *view, int plot_left,
+                                        int plot_w, int axis_y) {
   if (X_MINOR_TICKS_PER_INTERVAL <= 0) {
     return;
   }
@@ -527,37 +535,37 @@ static void prv_draw_x_axis_minor_ticks(GContext *ctx, const WeatherData *data, 
   graphics_context_set_stroke_color(ctx, CHART_TICK_COLOR);
   graphics_context_set_stroke_width(ctx, 1);
 
-  for (int hour = 0; hour < (int)data->hour_count; hour++) {
-    if (!prv_is_x_minor_tick_index(data, hour)) {
+  for (int hour = 0; hour < (int)view->hour_count; hour++) {
+    if (!prv_is_x_minor_tick_index(data, view, hour)) {
       continue;
     }
 
-    int x = prv_plot_x(plot_left, plot_w, hour, data->hour_count);
+    int x = prv_plot_x(plot_left, plot_w, hour, view->hour_count);
     graphics_draw_line(ctx, GPoint(x, axis_y), GPoint(x, axis_y + X_MINOR_TICK_LENGTH));
   }
 }
 
-static void prv_draw_x_axis(GContext *ctx, const WeatherData *data, GFont font, int plot_left, int plot_w, int axis_y,
-                            int max_label_right) {
+static void prv_draw_x_axis(GContext *ctx, const WeatherData *data, const WeatherView *view, GFont font, int plot_left,
+                            int plot_w, int axis_y, int max_label_right) {
   static char label[8];
   static const int label_w = 14;
 
-  prv_draw_x_axis_minor_ticks(ctx, data, plot_left, plot_w, axis_y);
+  prv_draw_x_axis_minor_ticks(ctx, data, view, plot_left, plot_w, axis_y);
 
   graphics_context_set_stroke_width(ctx, X_MAJOR_TICK_THICKNESS);
 
-  for (int hour = 0; hour < (int)data->hour_count; hour++) {
-    if (!prv_is_x_major_tick_index(data, hour)) {
+  for (int hour = 0; hour < (int)view->hour_count; hour++) {
+    if (!prv_is_x_major_tick_index(data, view, hour)) {
       continue;
     }
 
-    time_t when = prv_forecast_time_for_index(data, hour);
-    int x = prv_plot_x(plot_left, plot_w, hour, data->hour_count);
+    time_t when = prv_forecast_time_for_index(data, view, hour);
+    int x = prv_plot_x(plot_left, plot_w, hour, view->hour_count);
 
     graphics_context_set_stroke_color(ctx, CHART_TICK_COLOR);
     graphics_draw_line(ctx, GPoint(x, axis_y), GPoint(x, axis_y + X_MAJOR_TICK_LENGTH));
 
-    if (prv_is_x_label_index(data, hour)) {
+    if (prv_is_x_label_index(data, view, hour)) {
       prv_format_time_label(label, sizeof(label), when);
       graphics_context_set_text_color(ctx, CHART_LABEL_COLOR);
       GRect label_rect = GRect(x - label_w / 2,
@@ -579,20 +587,21 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
 
   WeatherData *data = weather_get();
   if (data->state == WEATHER_STATE_LOADING || data->state == WEATHER_STATE_ERROR ||
-      data->state == WEATHER_STATE_UNAVAILABLE || data->hour_count == 0) {
+      data->state == WEATHER_STATE_UNAVAILABLE) {
     return;
   }
 
   weather_slide_stale_hours();
   data = weather_get();
-  if (data->state == WEATHER_STATE_LOADING || data->state == WEATHER_STATE_ERROR ||
-      data->state == WEATHER_STATE_UNAVAILABLE || data->hour_count == 0) {
+  WeatherView view;
+  weather_get_view(&view);
+  if (!weather_view_has_data(&view)) {
     return;
   }
 
   GRect root_bounds = layer_get_bounds(chart->layer);
   ChartLayout layout;
-  if (!prv_compute_layout(root_bounds, data, &layout)) {
+  if (!prv_compute_layout(root_bounds, data, &view, &layout)) {
     return;
   }
 
@@ -604,14 +613,14 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
   int axis_y = plot_top + plot_h;
   int plot_w = plot_bounds.size.w;
 
-  chart->point_count = data->hour_count;
-  prv_draw_precip_bars(ctx, data, plot_left, plot_right, plot_w, axis_y, plot_h, layout.precip_max);
-  prv_draw_night_regions(ctx, data, plot_left, plot_right, plot_top, axis_y, plot_w);
-  prv_draw_wind_marks(ctx, data, plot_left, plot_w, axis_y, plot_h, layout.wind_max);
+  chart->point_count = view.hour_count;
+  prv_draw_precip_bars(ctx, data, &view, plot_left, plot_right, plot_w, axis_y, plot_h, layout.precip_max);
+  prv_draw_night_regions(ctx, data, &view, plot_left, plot_right, plot_top, axis_y, plot_w);
+  prv_draw_wind_marks(ctx, data, &view, plot_left, plot_w, axis_y, plot_h, layout.wind_max);
 
-  for (int i = 0; i < data->hour_count; i++) {
-    int8_t temp = formatting_display_temp(weather_display_temp_at(i));
-    chart->temp_points[i] = GPoint(prv_plot_x(plot_left, plot_w, i, data->hour_count),
+  for (int i = 0; i < view.hour_count; i++) {
+    int8_t temp = formatting_display_temp(weather_display_temp_at((uint8_t)prv_storage_index(&view, i)));
+    chart->temp_points[i] = GPoint(prv_plot_x(plot_left, plot_w, i, view.hour_count),
                                    prv_plot_y(plot_top, plot_h, temp, layout.axis_min, layout.axis_max));
   }
 
@@ -652,14 +661,16 @@ static void prv_decor_layer_update_proc(Layer *layer, GContext *ctx) {
     return;
   }
 
-  if (data->state == WEATHER_STATE_ERROR || data->hour_count == 0) {
+  WeatherView view;
+  weather_get_view(&view);
+  if (data->state == WEATHER_STATE_ERROR || !weather_view_has_data(&view)) {
     graphics_draw_text(ctx, "No weather data", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }
 
   ChartLayout layout;
-  if (!prv_compute_layout(bounds, data, &layout)) {
+  if (!prv_compute_layout(bounds, data, &view, &layout)) {
     return;
   }
   prv_sync_plot_layer_frame(chart, bounds);
@@ -668,7 +679,7 @@ static void prv_decor_layer_update_proc(Layer *layer, GContext *ctx) {
 
   prv_draw_y_axis_ticks(ctx, axis_font, layout.plot_left, layout.plot_top, layout.plot_h, layout.axis_min,
                         layout.axis_max);
-  prv_draw_x_axis(ctx, data, axis_font, layout.plot_left, layout.plot_w, layout.axis_y,
+  prv_draw_x_axis(ctx, data, &view, axis_font, layout.plot_left, layout.plot_w, layout.axis_y,
                   bounds.size.w - CHART_MARGIN_RIGHT);
 
   graphics_context_set_stroke_color(ctx, CHART_AXIS_COLOR);

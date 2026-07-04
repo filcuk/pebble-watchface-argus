@@ -1,6 +1,6 @@
 # Argus
 
-rePebble watch face for Pebble Time 2 (Emery) with a calendar-focused layout: two-week date grid, centered time, and an hourly weather chart.
+Argus guides you through the days ahead with hourly weather forecast, a two-week calendar view and a configurable header to focus on what is important.
 
 ## Features
 
@@ -94,6 +94,8 @@ bash scripts/capture-screenshots.sh --simulate -d 14d -i 1h --start "2026-07-06 
 Frames are saved to `captures/run-.../` (real time) or `captures/sim-.../` (simulated) as `frame-NNNN-YYYYMMDD-HHMMSS.png`. Press **Ctrl+C** to stop early.
 
 **Duration formats:** `3h`, `90m`, `14d`, `3600s`, or a bare number (minutes). Default interval is 60 seconds. Simulated mode accepts `--start "2026-07-06 09:00"` (default is Monday 09:00), `--warmup 8` (wait before first frame), and `--settle 1.5` (pause after each time jump).
+
+With `--no-demo-weather`, each simulated time jump refetches live forecast data — use at least `--settle 15` (default) and `--warmup 15`. The script retries screenshots up to 3 times if the emulator is busy.
 
 Single screenshots without the script:
 

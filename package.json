@@ -53,7 +53,8 @@
       "WeatherIsDayHourly",
       "WindMax",
       "HeaderDisplay",
-      "CaptureTimeOffset"
+      "CaptureTimeOffset",
+      "WeatherForEpoch"
     ],
     "resources": {
       "media": []

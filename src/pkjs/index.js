@@ -148,19 +148,45 @@ function parseOpenMeteoTime(iso) {
   return Math.floor(date.getTime() / 1000);
 }
 
-function packWeatherPayload(json, hours) {
+function formatDateYYYYMMDD(epochSeconds) {
+  var d = new Date(epochSeconds * 1000);
+  var y = d.getFullYear();
+  var m = ('0' + (d.getMonth() + 1)).slice(-2);
+  var day = ('0' + d.getDate()).slice(-2);
+  return y + '-' + m + '-' + day;
+}
+
+function hourStartEpoch(epochSeconds) {
+  var d = new Date(epochSeconds * 1000);
+  d.setMinutes(0, 0, 0);
+  return Math.floor(d.getTime() / 1000);
+}
+
+function packWeatherPayload(json, hours, startEpoch) {
   var times = json.hourly.time || [];
   var temps = json.hourly.temperature_2m;
   var feelsTemps = json.hourly.apparent_temperature || [];
   var precips = json.hourly.precipitation;
   var winds = json.hourly.wind_speed_10m || [];
   var isDay = json.hourly.is_day || [];
-  var count = Math.min(hours, temps.length, precips.length);
+
+  var startIndex = 0;
+  if (startEpoch) {
+    for (var i = 0; i < times.length; i++) {
+      if (parseOpenMeteoTime(times[i]) >= startEpoch) {
+        startIndex = i;
+        break;
+      }
+    }
+  }
+
+  var available = temps.length - startIndex;
+  var count = Math.min(hours, available, precips.length - startIndex);
   if (winds.length > 0) {
-    count = Math.min(count, winds.length);
+    count = Math.min(count, winds.length - startIndex);
   }
   if (feelsTemps.length > 0) {
-    count = Math.min(count, feelsTemps.length);
+    count = Math.min(count, feelsTemps.length - startIndex);
   }
 
   var tempMin = 127;
@@ -172,10 +198,11 @@ function packWeatherPayload(json, hours) {
   var hasFeels = feelsTemps.length > 0;
 
   for (var i = 0; i < count; i++) {
-    var temp = Math.round(temps[i]);
-    var feelsTemp = hasFeels ? Math.round(feelsTemps[i]) : temp;
-    var precip = Math.round(precips[i] * 10);
-    var wind = Math.round(winds[i] || 0);
+    var src = startIndex + i;
+    var temp = Math.round(temps[src]);
+    var feelsTemp = hasFeels ? Math.round(feelsTemps[src]) : temp;
+    var precip = Math.round(precips[src] * 10);
+    var wind = Math.round(winds[src] || 0);
     if (precip > 255) {
       precip = 255;
     }
@@ -229,17 +256,22 @@ function packWeatherPayload(json, hours) {
     feelsTempMax: feelsTempMax,
     precipMax: precipMax,
     windMax: windMax,
-    tempBytes: packInt8Array(temps, count),
-    feelsTempBytes: hasFeels ? packInt8Array(feelsTemps, count) : null,
+    tempBytes: packInt8Array(
+      temps.slice(startIndex, startIndex + count),
+      count
+    ),
+    feelsTempBytes: hasFeels
+      ? packInt8Array(feelsTemps.slice(startIndex, startIndex + count), count)
+      : null,
     precipBytes: packUint8Array(
-      precips.map(function (p) {
+      precips.slice(startIndex, startIndex + count).map(function (p) {
         return Math.round(p * 10);
       }),
       count
     ),
-    windBytes: packUint8Array(winds, count),
-    isDayBytes: packUint8Array(isDay, count),
-    fetchTime: parseOpenMeteoTime(times[0]),
+    windBytes: packUint8Array(winds.slice(startIndex, startIndex + count), count),
+    isDayBytes: packUint8Array(isDay.slice(startIndex, startIndex + count), count),
+    fetchTime: parseOpenMeteoTime(times[startIndex]),
   };
 }
 
@@ -279,17 +311,24 @@ function sendWeatherPayload(payload) {
   );
 }
 
-function fetchForecast(latitude, longitude) {
+function fetchForecast(latitude, longitude, forEpoch) {
   var hours = getForecastHours();
+  var startEpoch = forEpoch ? hourStartEpoch(forEpoch) : null;
   var url =
     'https://api.open-meteo.com/v1/forecast?' +
     'latitude=' +
     latitude +
     '&longitude=' +
     longitude +
-    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day&forecast_hours=' +
-    hours +
-    '&timezone=auto';
+    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day&timezone=auto';
+
+  if (startEpoch) {
+    var endEpoch = startEpoch + hours * 3600;
+    url += '&start_date=' + formatDateYYYYMMDD(startEpoch);
+    url += '&end_date=' + formatDateYYYYMMDD(endEpoch);
+  } else {
+    url += '&forecast_hours=' + hours;
+  }
 
   xhrRequest(url, function (responseText) {
     if (!responseText) {
@@ -299,7 +338,7 @@ function fetchForecast(latitude, longitude) {
     }
     try {
       var json = JSON.parse(responseText);
-      var payload = packWeatherPayload(json, hours);
+      var payload = packWeatherPayload(json, hours, startEpoch);
       sendWeatherPayload(payload);
     } catch (e) {
       console.log('Weather parse error: ' + e);
@@ -362,7 +401,7 @@ function geocodeCity(city, callback) {
   });
 }
 
-function getWeather() {
+function getWeather(forEpoch) {
   if (weatherFetchInFlight && !weatherFetchIsStale()) {
     return;
   }
@@ -377,39 +416,39 @@ function getWeather() {
     var city = getManualLocation();
     if (!city) {
       console.log('Manual location empty, using default');
-      fetchForecast(DEFAULT_LAT, DEFAULT_LON);
+      fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch);
       return;
     }
     geocodeCity(city, function (result) {
       if (!result) {
         console.log('Geocode failed, using default');
-        fetchForecast(DEFAULT_LAT, DEFAULT_LON);
+        fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch);
         return;
       }
-      fetchForecast(result.latitude, result.longitude);
+      fetchForecast(result.latitude, result.longitude, forEpoch);
     });
     return;
   }
 
   navigator.geolocation.getCurrentPosition(
     function (pos) {
-      fetchForecast(pos.coords.latitude, pos.coords.longitude);
+      fetchForecast(pos.coords.latitude, pos.coords.longitude, forEpoch);
     },
     function (err) {
       console.log('Location error: ' + (err && err.message ? err.message : 'unknown'));
-      fetchForecast(DEFAULT_LAT, DEFAULT_LON);
+      fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch);
     },
     { timeout: 15000, maximumAge: 60000 }
   );
 }
 
-function scheduleWeatherRequest() {
+function scheduleWeatherRequest(forEpoch) {
   if (weatherRequestTimer) {
     clearTimeout(weatherRequestTimer);
   }
   weatherRequestTimer = setTimeout(function () {
     weatherRequestTimer = null;
-    getWeather();
+    getWeather(forEpoch);
   }, 500);
 }
 
@@ -424,7 +463,8 @@ Pebble.addEventListener('ready', function () {
 
 Pebble.addEventListener('appmessage', function (e) {
   if (e.payload && e.payload[keys.REQUEST_WEATHER]) {
-    scheduleWeatherRequest();
+    var forEpoch = e.payload[keys.WeatherForEpoch];
+    scheduleWeatherRequest(forEpoch || null);
   }
 });
 

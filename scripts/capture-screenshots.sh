@@ -35,6 +35,9 @@ START_TIME="2026-07-06 09:00:00"
 SETTLE_DELAY=""
 WARMUP_SEC=""
 DEMO_WEATHER=-1
+SCREENSHOT_RETRIES=3
+SCREENSHOT_RETRY_DELAY=5
+LIVE_WEATHER_MIN_SETTLE=15
 
 MSG_DEBUG_MODE=10010
 MSG_DEMO_WEATHER=10011
@@ -54,7 +57,7 @@ Options:
   -o, --output DIR          Output directory (default: captures/run-... or captures/sim-...)
       --simulate            Shift watchface time via CaptureTimeOffset (requires pebble build)
       --start DATETIME      Simulated start time (default: 2026-07-06 09:00:00, a Monday)
-      --settle SECONDS      Pause after each time shift before screenshot (default: 1.5 simulate)
+      --settle SECONDS      Pause after each time shift before screenshot (default: 1.5 demo / 15 live)
       --warmup SECONDS      Wait before the first capture (default: 0 real / 5 simulate)
       --demo-weather        Enable demo weather via app message (default: on in simulate mode)
       --no-demo-weather     Use live weather instead of demo data
@@ -169,7 +172,18 @@ pebble_cmd() {
 
 take_screenshot() {
   local filename="$1"
-  pebble_cmd screenshot --no-open "$filename"
+  local attempt=1
+  while (( attempt <= SCREENSHOT_RETRIES && !STOP )); do
+    if pebble_cmd screenshot --no-open "$filename" 2>/dev/null; then
+      return 0
+    fi
+    if (( attempt < SCREENSHOT_RETRIES )); then
+      echo "  Screenshot timed out (attempt ${attempt}/${SCREENSHOT_RETRIES}), retrying in ${SCREENSHOT_RETRY_DELAY}s..." >&2
+      sleep_interruptible "$SCREENSHOT_RETRY_DELAY"
+    fi
+    attempt=$(( attempt + 1 ))
+  done
+  return 1
 }
 
 send_app_message_int() {
@@ -289,16 +303,26 @@ if [[ -z "$SETTLE_DELAY" ]]; then
     if (( DEMO_WEATHER )); then
       SETTLE_DELAY="1.5"
     else
-      SETTLE_DELAY="10"
+      SETTLE_DELAY="$LIVE_WEATHER_MIN_SETTLE"
     fi
   else
     SETTLE_DELAY="0"
   fi
 fi
 
+if (( SIMULATE && !DEMO_WEATHER )) && awk "BEGIN { exit !($SETTLE_DELAY < $LIVE_WEATHER_MIN_SETTLE) }"; then
+  echo "Warning: settle ${SETTLE_DELAY}s is too short for live weather fetches; using ${LIVE_WEATHER_MIN_SETTLE}s." >&2
+  echo "  Each simulated time jump refetches forecast data from Open-Meteo." >&2
+  SETTLE_DELAY="$LIVE_WEATHER_MIN_SETTLE"
+fi
+
 if [[ -z "$WARMUP_SEC" ]]; then
   if (( SIMULATE )); then
-    WARMUP_SEC="5"
+    if (( DEMO_WEATHER )); then
+      WARMUP_SEC="5"
+    else
+      WARMUP_SEC="15"
+    fi
   else
     WARMUP_SEC="0"
   fi
