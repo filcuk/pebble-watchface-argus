@@ -143,7 +143,7 @@ static void prv_draw_up_arrow(GContext *ctx, int cx, int cy) {
     return;
   }
   gpath_move_to(s_up_arrow_path, GPoint(cx, cy));
-  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_context_set_fill_color(ctx, GColorRed);
   gpath_draw_filled(ctx, s_up_arrow_path);
 }
 
@@ -153,7 +153,7 @@ static void prv_draw_down_arrow(GContext *ctx, int cx, int cy) {
     return;
   }
   gpath_move_to(s_down_arrow_path, GPoint(cx, cy));
-  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_context_set_fill_color(ctx, GColorBlue);
   gpath_draw_filled(ctx, s_down_arrow_path);
 }
 
