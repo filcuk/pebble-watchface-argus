@@ -3,6 +3,7 @@
 #include "settings.h"
 
 #include <stdio.h>
+#include <string.h>
 
 int8_t formatting_display_temp(int8_t celsius) {
   const ArgusSettings *settings = settings_get();
@@ -42,4 +43,40 @@ void formatting_clock_hour_label(char *buf, size_t len, struct tm *tm) {
     }
     snprintf(buf, len, "%d", hour);
   }
+}
+
+void formatting_format_grouped_int(char *buf, size_t len, int value) {
+  if (!buf || len == 0) {
+    return;
+  }
+  if (value < 0) {
+    snprintf(buf, len, "%d", value);
+    return;
+  }
+
+  char raw[12];
+  snprintf(raw, sizeof(raw), "%d", value);
+  size_t raw_len = strlen(raw);
+  size_t spaces = raw_len > 0 ? (raw_len - 1) / 3 : 0;
+  if (spaces + raw_len + 1 > len) {
+    snprintf(buf, len, "%d", value);
+    return;
+  }
+
+  size_t out = 0;
+  size_t first_group = raw_len % 3;
+  if (first_group == 0 && raw_len > 0) {
+    first_group = 3;
+  }
+
+  for (size_t i = 0; i < raw_len;) {
+    if (i > 0) {
+      buf[out++] = ' ';
+    }
+    size_t group_len = (i == 0) ? first_group : 3;
+    memcpy(buf + out, raw + i, group_len);
+    out += group_len;
+    i += group_len;
+  }
+  buf[out] = '\0';
 }

@@ -96,7 +96,7 @@ static void prv_format_steps(char *buffer, size_t len, int *steps_out) {
     *steps_out = steps;
   }
   if (steps >= 0) {
-    snprintf(buffer, len, "%d", steps);
+    formatting_format_grouped_int(buffer, len, steps);
     return;
   }
 #endif
