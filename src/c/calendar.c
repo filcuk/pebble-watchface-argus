@@ -180,11 +180,12 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
 
   if (show_month_label) {
     static char month_buf[8];
+    GFont month_font = fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
     strftime(month_buf, sizeof(month_buf), "%b", &now);
     GRect month_cell =
         GRect(0, 0, CALENDAR_WEEK_LABEL_WIDTH - CALENDAR_SIDE_LABEL_INSET, CALENDAR_HEADER_HEIGHT);
     GRect month_text_rect = prv_row_text_rect(month_cell, CALENDAR_HEADER_LINE_HEIGHT);
-    prv_draw_text(ctx, month_buf, header_font, month_text_rect, GTextAlignmentRight, GColorWhite);
+    prv_draw_text(ctx, month_buf, month_font, month_text_rect, GTextAlignmentRight, GColorWhite);
   }
 
   for (int col = 0; col < 7; col++) {
@@ -201,7 +202,7 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
     GRect week_cell = GRect(0, row_y[row], CALENDAR_WEEK_LABEL_WIDTH - CALENDAR_SIDE_LABEL_INSET,
                             CALENDAR_ROW_HEIGHT);
     GRect text_rect = prv_row_text_rect(week_cell, CALENDAR_DAY_LINE_HEIGHT);
-    prv_draw_text(ctx, week_buf, day_font, text_rect, GTextAlignmentRight, GColorWhite);
+    prv_draw_text(ctx, week_buf, day_font, text_rect, GTextAlignmentRight, CALENDAR_WEEK_NUMBER_COLOR);
   }
 
   for (int i = 0; i < 14; i++) {
