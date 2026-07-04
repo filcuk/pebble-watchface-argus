@@ -1,0 +1,51 @@
+---
+description: Use named constants for tunable layout, color, and stroke values
+globs: src/c/**/*.{c,h}
+alwaysApply: false
+---
+
+# Tunable values as named constants
+
+When changing visual or layout parameters that we may tweak again later, define them as named constants at the top of the module instead of inlining literals in draw/layout code.
+
+Applies to: margins, padding, gaps, sizes, stroke widths, tick lengths, colors, font choices, spacing, and other design knobs.
+
+## Do
+
+- Add a `#define` or `static const` near the other constants for the module.
+- Name constants after what they control (`CHART_MARGIN_RIGHT`, `X_TICK_STROKE_WIDTH`, `TEMP_LINE_COLOR`).
+- Compose derived layout from base constants when helpful:
+
+```c
+#define X_TICK_HEIGHT 2
+#define X_LABEL_GAP 2
+#define X_AXIS_HEIGHT (X_TICK_HEIGHT + X_LABEL_GAP + X_LABEL_HEIGHT)
+```
+
+- Use the constant everywhere that value is needed (drawing, bounds math, inset calculations).
+
+## Don't
+
+- Inline tweakable values in `graphics_*` calls or layout math:
+
+```c
+// ❌ hard to find and adjust later
+graphics_context_set_stroke_width(ctx, 2);
+int plot_right = bounds.size.w - 6;
+graphics_context_set_stroke_color(ctx, GColorOrange);
+```
+
+```c
+// ✅
+#define TEMP_LINE_STROKE_WIDTH 2
+#define CHART_MARGIN_RIGHT 6
+
+graphics_context_set_stroke_width(ctx, TEMP_LINE_STROKE_WIDTH);
+int plot_right = bounds.size.w - CHART_MARGIN_RIGHT;
+graphics_context_set_stroke_color(ctx, TEMP_LINE_COLOR);
+```
+
+## Exceptions
+
+- One-off algorithmic values (loop indices, array lengths, unit conversions) do not need constants.
+- Values that are inherently structural and unlikely to be tuned individually (e.g. `hour_count - 1` in interpolation) can stay inline.

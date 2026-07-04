@@ -1,3 +1,9 @@
+# Build outputs
+build/
+captures/
+node_modules/
+package-lock.json
+
 # Prerequisites
 *.d
 
@@ -50,3 +56,4 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+.lock-waf_linux_build
