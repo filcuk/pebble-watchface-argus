@@ -20,7 +20,7 @@ module.exports = [
         label: 'Time Format',
         defaultValue: '0',
         options: [
-          { label: 'System default', value: '0' },
+          { label: 'System', value: '0' },
           { label: '12-hour', value: '1' },
           { label: '24-hour', value: '2' },
         ],
@@ -57,6 +57,26 @@ module.exports = [
           { label: 'Gregorian', value: '1' },
         ],
       },
+    ],
+  },
+  {
+    type: 'section',
+    items: [
+      {
+        type: 'heading',
+        defaultValue: 'General',
+      },
+      {
+        type: 'select',
+        messageKey: 'HeaderDisplay',
+        label: 'Header',
+        defaultValue: '0',
+        options: [
+          { label: 'Full date', value: '0' },
+          { label: 'Step count', value: '1' },
+          { label: 'Min/max temp', value: '2' },
+        ],
+      },
       {
         type: 'select',
         messageKey: 'BluetoothDisplay',
@@ -64,18 +84,7 @@ module.exports = [
         defaultValue: '1',
         options: [
           { label: 'Always visible', value: '0' },
-          { label: 'Only when disconnected', value: '1' },
-        ],
-      },
-      {
-        type: 'select',
-        messageKey: 'HeaderDisplay',
-        label: 'Top Center',
-        defaultValue: '0',
-        options: [
-          { label: 'Full date', value: '0' },
-          { label: 'Step count', value: '1' },
-          { label: 'Min/max temp', value: '2' },
+          { label: 'When disconnected', value: '1' },
         ],
       },
     ],
@@ -93,8 +102,8 @@ module.exports = [
         label: 'Location',
         defaultValue: '0',
         options: [
-          { label: 'GPS', value: '0' },
-          { label: 'Manual city', value: '1' },
+          { label: 'Automatic', value: '0' },
+          { label: 'Manual', value: '1' },
         ],
       },
       {
@@ -110,7 +119,7 @@ module.exports = [
       {
         type: 'select',
         messageKey: 'ForecastHours',
-        label: 'Forecast Length',
+        label: 'Forecast',
         defaultValue: '24',
         options: [
           { label: '12 hours', value: '12' },
@@ -129,10 +138,14 @@ module.exports = [
         ],
       },
       {
-        type: 'toggle',
+        type: 'select',
         messageKey: 'TemperatureUnit',
-        label: 'Use Fahrenheit',
-        defaultValue: false,
+        label: 'Temperature Scale',
+        defaultValue: '0',
+        options: [
+          { label: 'C', value: '0' },
+          { label: 'F', value: '1' },
+        ],
       },
     ],
   },
