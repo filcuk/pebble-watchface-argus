@@ -66,6 +66,50 @@ pebble emu-battery --percent 30
 pebble emu-bt-connection --connected no
 ```
 
+### Capturing screenshots
+
+Use `scripts/capture-screenshots.sh` to grab emulator frames on a timer — useful for Rebble store assets (PNG or animated GIF) or timelapse demos.
+
+1. Start the emulator with the watchface installed (terminal 1):
+
+```bash
+pebble install --emulator emery
+```
+
+2. Run the capture script (terminal 2, from the project root):
+
+```bash
+# One screenshot per minute for 3 hours (~180 frames)
+bash scripts/capture-screenshots.sh --duration 3h
+
+# Custom interval and output folder
+bash scripts/capture-screenshots.sh --duration 45m --interval 30s --output captures/demo
+```
+
+Frames are saved to `captures/run-YYYYMMDD-HHMMSS/frame-NNNN-HHMMSS.png`. Press **Ctrl+C** to stop early.
+
+**Duration formats:** `3h`, `90m`, `3600s`, or a bare number (minutes). Default interval is 60 seconds.
+
+Single screenshots without the script:
+
+```bash
+pebble screenshot --no-open argus-default.png
+```
+
+Upscale for store listings (this SDK’s `pebble screenshot` has no `--scale` flag):
+
+```bash
+ffmpeg -i argus-default.png -vf "scale=600:684:flags=neighbor" argus-default-3x.png
+```
+
+Stitch captured frames into an animated GIF:
+
+```bash
+ffmpeg -framerate 1 -i captures/run-*/frame-%04d-*.png -loop 0 argus-timelapse.gif
+```
+
+Enable **Demo weather** in Clay settings for consistent weather chart data during capture.
+
 ### Opening settings
 
 Clay settings open in **Firefox** (via WSL). The one-time `browser.py` patch in [Environment setup](#environment-setup) must be applied first.
@@ -132,6 +176,7 @@ Then repeat the environment setup inside the new distro. Alternatively use [Clou
 ```
 src/c/           Watch face (C)
 src/pkjs/        Phone-side JS (weather + Clay settings)
+scripts/         Helper scripts (emulator reset, screenshot capture)
 package.json     App manifest and message keys
 wscript          Build configuration
 ```
