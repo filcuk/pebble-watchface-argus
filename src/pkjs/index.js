@@ -21,24 +21,61 @@ function weatherFetchIsStale() {
   return weatherFetchInFlight && Date.now() - weatherFetchStartedAt >= WEATHER_FETCH_STALE_MS;
 }
 
-function getClaySetting(key, defaultValue) {
+function getStoredClaySettings() {
   try {
     var raw = localStorage.getItem('clay-settings');
     if (!raw) {
-      return defaultValue;
+      return null;
     }
     var settings = JSON.parse(raw);
-    if (settings[key] === undefined || settings[key] === null) {
-      return defaultValue;
+    if (!settings || Object.keys(settings).length === 0) {
+      return null;
     }
-    var value = settings[key];
-    if (value && typeof value === 'object' && 'value' in value) {
-      value = value.value;
-    }
-    return value;
+    return settings;
   } catch (e) {
+    return null;
+  }
+}
+
+function getClaySetting(key, defaultValue) {
+  var settings = getStoredClaySettings();
+  if (!settings) {
     return defaultValue;
   }
+  if (settings[key] === undefined || settings[key] === null) {
+    return defaultValue;
+  }
+  var value = settings[key];
+  if (value && typeof value === 'object' && 'value' in value) {
+    value = value.value;
+  }
+  return value;
+}
+
+function sendStoredSettings(onComplete) {
+  var settings = getStoredClaySettings();
+  if (!settings) {
+    if (onComplete) {
+      onComplete();
+    }
+    return;
+  }
+
+  Pebble.sendAppMessage(
+    Clay.prepareSettingsForAppMessage(settings),
+    function () {
+      console.log('Stored settings synced to watch');
+      if (onComplete) {
+        onComplete();
+      }
+    },
+    function (err) {
+      console.log('Stored settings sync failed: ' + JSON.stringify(err));
+      if (onComplete) {
+        onComplete();
+      }
+    }
+  );
 }
 
 function xhrRequest(url, callback) {
@@ -378,8 +415,11 @@ function scheduleWeatherRequest() {
 
 Pebble.addEventListener('ready', function () {
   console.log('Argus PKJS ready');
-  // Fallback fetch when the watch requested weather before PKJS finished loading.
-  scheduleWeatherRequest();
+  // Push saved Clay settings on launch so the watch does not stay on defaults.
+  sendStoredSettings(function () {
+    // Fallback fetch when the watch requested weather before PKJS finished loading.
+    scheduleWeatherRequest();
+  });
 });
 
 Pebble.addEventListener('appmessage', function (e) {
