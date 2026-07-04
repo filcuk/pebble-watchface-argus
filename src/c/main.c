@@ -92,6 +92,9 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   time_display_update(s_time_display, &tick_copy);
 
   if (units_changed & DAY_UNIT) {
+    if (settings_get()->header_display_mode == HEADER_DISPLAY_STEPS) {
+      header_invalidate(s_header);
+    }
     header_update(s_header, &tick_copy);
     calendar_update(s_calendar, &tick_copy);
   }
