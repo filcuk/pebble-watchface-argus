@@ -183,6 +183,35 @@ static bool prv_is_interior_hour_index(int hour, int hour_count) {
   return hour > 0 && hour < hour_count - 1;
 }
 
+static int prv_interior_even_hour_count(const WeatherData *data) {
+  int hour_count = (int)data->hour_count;
+  int count = 0;
+
+  for (int h = 1; h < hour_count - 1; h++) {
+    time_t when = prv_forecast_time_for_index(data, h);
+    if (prv_is_even_clock_hour(when)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+static int prv_nth_interior_even_hour_index(const WeatherData *data, int n) {
+  int hour_count = (int)data->hour_count;
+  int seen = 0;
+
+  for (int h = 1; h < hour_count - 1; h++) {
+    time_t when = prv_forecast_time_for_index(data, h);
+    if (prv_is_even_clock_hour(when)) {
+      if (seen == n) {
+        return h;
+      }
+      seen++;
+    }
+  }
+  return -1;
+}
+
 static int prv_x_label_target_count(const WeatherData *data) {
   int count = 0;
   for (int hour = 1; hour < X_LABEL_REFERENCE_HOURS - 1; hour++) {
@@ -199,35 +228,36 @@ static bool prv_is_x_label_index(const WeatherData *data, int hour) {
   if (hour < 0 || hour >= hour_count) {
     return false;
   }
+  if (!prv_is_interior_hour_index(hour, hour_count)) {
+    return false;
+  }
+
+  time_t when = prv_forecast_time_for_index(data, hour);
+  if (!prv_is_even_clock_hour(when)) {
+    return false;
+  }
 
   int target = prv_x_label_target_count(data);
   if (target <= 0 || hour_count <= 0) {
     return false;
   }
 
-  if (target >= hour_count) {
-    if (!prv_is_interior_hour_index(hour, hour_count)) {
-      return false;
-    }
-    time_t when = prv_forecast_time_for_index(data, hour);
-    return prv_is_even_clock_hour(when);
+  int even_count = prv_interior_even_hour_count(data);
+  if (even_count <= 0) {
+    return false;
   }
 
-  if (hour_count == X_LABEL_REFERENCE_HOURS) {
-    if (!prv_is_interior_hour_index(hour, hour_count)) {
-      return false;
-    }
-    time_t when = prv_forecast_time_for_index(data, hour);
-    return prv_is_even_clock_hour(when);
+  if (even_count <= target || target >= hour_count || hour_count == X_LABEL_REFERENCE_HOURS) {
+    return true;
   }
 
   if (target == 1) {
-    return hour == hour_count / 2;
+    return hour == prv_nth_interior_even_hour_index(data, even_count / 2);
   }
 
   for (int i = 0; i < target; i++) {
-    int label_hour = (i * (hour_count - 1) + (target - 1) / 2) / (target - 1);
-    if (hour == label_hour) {
+    int pick = (i * (even_count - 1) + (target - 1) / 2) / (target - 1);
+    if (hour == prv_nth_interior_even_hour_index(data, pick)) {
       return true;
     }
   }
@@ -243,17 +273,7 @@ static bool prv_is_x_minor_tick_index(const WeatherData *data, int hour) {
   if (!prv_is_interior_hour_index(hour, hour_count)) {
     return false;
   }
-  if (prv_is_x_major_tick_index(data, hour)) {
-    return false;
-  }
-
-  int target = prv_x_label_target_count(data);
-  if (target >= hour_count || hour_count == X_LABEL_REFERENCE_HOURS) {
-    time_t when = prv_forecast_time_for_index(data, hour);
-    return !prv_is_even_clock_hour(when);
-  }
-
-  return false;
+  return !prv_is_x_major_tick_index(data, hour);
 }
 
 static void prv_format_temp_label(char *buf, size_t len, int8_t temp) {
