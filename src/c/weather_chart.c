@@ -1,5 +1,6 @@
 #include "weather_chart.h"
 
+#include "argus_time.h"
 #include "formatting.h"
 #include "weather.h"
 
@@ -153,7 +154,7 @@ static void prv_sync_plot_layer_frame(WeatherChart *chart, GRect decor_bounds) {
 }
 
 static time_t prv_forecast_time_for_index(const WeatherData *data, int index) {
-  time_t base = data->fetch_time > 0 ? data->fetch_time : time(NULL);
+  time_t base = data->fetch_time > 0 ? data->fetch_time : argus_time_now();
   return base + (time_t)index * 3600;
 }
 

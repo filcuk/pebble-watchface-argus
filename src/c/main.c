@@ -1,5 +1,6 @@
 #include <pebble.h>
 
+#include "argus_time.h"
 #include "calendar.h"
 #include "header.h"
 #include "settings.h"
@@ -86,7 +87,13 @@ static void prv_refresh_all_modules(struct tm *now) {
 }
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  struct tm tick_copy = *tick_time;
+  (void)tick_time;
+  time_t now = argus_time_now();
+  struct tm *tm_now = localtime(&now);
+  if (!tm_now) {
+    return;
+  }
+  struct tm tick_copy = *tm_now;
 
   weather_slide_stale_hours();
   time_display_update(s_time_display, &tick_copy);
@@ -99,7 +106,7 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     calendar_update(s_calendar, &tick_copy);
   }
 
-  if (tick_time->tm_min == 0 || tick_time->tm_min % 30 == 0) {
+  if (tick_copy.tm_min == 0 || tick_copy.tm_min % 30 == 0) {
     weather_request();
   }
 }
@@ -139,7 +146,23 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     time_display_apply_settings(s_time_display);
   }
 
-  time_t now = time(NULL);
+  Tuple *offset_tuple = dict_find(iter, MESSAGE_KEY_CaptureTimeOffset);
+  if (offset_tuple && settings_get()->debug_mode) {
+    int32_t offset = 0;
+    if (offset_tuple->type == TUPLE_INT) {
+      offset = offset_tuple->value->int32;
+    }
+    argus_time_set_offset(offset);
+    weather_slide_stale_hours();
+    time_t now = argus_time_now();
+    struct tm *tm_now = localtime(&now);
+    if (tm_now) {
+      prv_refresh_all_modules(tm_now);
+    }
+    return;
+  }
+
+  time_t now = argus_time_now();
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
     prv_refresh_all_modules(tm_now);
@@ -187,7 +210,7 @@ static void prv_window_load(Window *window) {
     return;
   }
 
-  time_t now = time(NULL);
+  time_t now = argus_time_now();
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
     prv_refresh_all_modules(tm_now);
@@ -218,7 +241,7 @@ static void prv_weather_updated(void) {
   weather_chart_refresh(s_weather_chart);
   if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
     header_invalidate(s_header);
-    time_t now = time(NULL);
+    time_t now = argus_time_now();
     struct tm *tm_now = localtime(&now);
     if (tm_now) {
       header_update(s_header, tm_now);
@@ -235,7 +258,7 @@ static void prv_health_handler(HealthEventType event, void *context) {
   if (settings_get()->header_display_mode != HEADER_DISPLAY_STEPS) {
     return;
   }
-  time_t now = time(NULL);
+  time_t now = argus_time_now();
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
     header_invalidate(s_header);

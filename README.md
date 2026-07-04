@@ -76,20 +76,20 @@ Use `scripts/capture-screenshots.sh` to grab emulator frames on a timer — usef
 pebble install --emulator emery
 ```
 
-2. Run the capture script (terminal 2, from the project root):
+2. Run the capture script (terminal 2, from the project root). The script auto-copies itself to `/tmp` when run from `/mnt/c/...` (avoids a WSL long-run bug on Windows mounts):
 
 ```bash
-# Real time: one screenshot per minute for 3 hours (~180 frames)
-bash scripts/capture-screenshots.sh --duration 3h
+pebble build
+pebble install --emulator emery
 
-# Simulated: 3 hours of watch time in ~1 minute (~180 frames, demo weather on by default)
-bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m -e emery
+# Simulated: 3 hours of watch time (~180 frames, demo weather on by default)
+bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m
 
 # Simulated: two-week calendar demo, one frame per hour
-bash scripts/capture-screenshots.sh --simulate -d 14d -i 1h --start "2026-07-06 09:00" -e emery
+bash scripts/capture-screenshots.sh --simulate -d 14d -i 1h --start "2026-07-06 09:00"
 ```
 
-**Simulated mode** uses `pebble emu-set-time` to jump the emulator clock between captures. Demo weather is **enabled automatically** (instant chart data, no network fetch). Use `--no-demo-weather` for live weather — you'll need longer `--warmup` and `--settle` times.
+**Simulated mode** shifts the watchface display time via `CaptureTimeOffset` app messages. Debug mode is enabled automatically (required for the offset). On Emery/QEMU 10, `pebble emu-set-time` is ignored — the script uses this in-app offset instead. Run `pebble build` and reinstall before simulated capture so the message key exists. Connect to an already-running emulator (do not pass `--emulator` to the script).
 
 Frames are saved to `captures/run-.../` (real time) or `captures/sim-.../` (simulated) as `frame-NNNN-YYYYMMDD-HHMMSS.png`. Press **Ctrl+C** to stop early.
 

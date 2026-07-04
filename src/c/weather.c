@@ -1,5 +1,6 @@
 #include "weather.h"
 
+#include "argus_time.h"
 #include "settings.h"
 
 #include <string.h>
@@ -17,7 +18,7 @@ static void prv_notify_updated(void) {
 }
 
 static time_t prv_current_hour_start(void) {
-  time_t now = time(NULL);
+  time_t now = argus_time_now();
   struct tm *tm = localtime(&now);
   if (!tm) {
     return now;
@@ -126,7 +127,7 @@ static bool weather_cache_is_valid(void) {
     return false;
   }
 
-  time_t now = time(NULL);
+  time_t now = argus_time_now();
   time_t cache_time = prv_cache_timestamp();
   if (cache_time <= 0 || now < cache_time) {
     return false;
@@ -252,7 +253,7 @@ void weather_init(void) {
         }
         weather_slide_stale_hours();
         if (s_weather.cached_at == 0 && s_weather.hour_count > 0 && s_weather.state == WEATHER_STATE_READY) {
-          s_weather.cached_at = time(NULL);
+          s_weather.cached_at = argus_time_now();
           persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
         }
       }
@@ -301,7 +302,7 @@ void weather_apply_demo_data(void) {
   s_weather.has_feels_temps = true;
 
   s_weather.version = WEATHER_PERSIST_VERSION;
-  s_weather.cached_at = time(NULL);
+  s_weather.cached_at = argus_time_now();
   s_weather.state = WEATHER_STATE_READY;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
   prv_cancel_timers();
@@ -421,7 +422,7 @@ void weather_apply_from_message(DictionaryIterator *iter) {
 
   s_weather.hour_count = count;
   s_weather.version = WEATHER_PERSIST_VERSION;
-  s_weather.cached_at = time(NULL);
+  s_weather.cached_at = argus_time_now();
   s_weather.state = WEATHER_STATE_READY;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
   prv_cancel_timers();
@@ -446,7 +447,7 @@ void weather_slide_stale_hours(void) {
     return;
   }
 
-  time_t now = time(NULL);
+  time_t now = argus_time_now();
   int hours_elapsed = (int)((now - s_weather.fetch_time) / 3600);
   if (hours_elapsed <= 0) {
     return;

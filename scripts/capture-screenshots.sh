@@ -2,37 +2,44 @@
 # Capture pebble emulator screenshots on an interval for a set duration.
 #
 # Real-time mode (default): wait between captures while the emulator clock runs normally.
-# Simulate mode (--simulate): advance emulator time with pebble emu-set-time between captures.
+# Simulate mode (--simulate): shift the watchface display time via CaptureTimeOffset app
+# messages. Required on Emery/QEMU 10, where pebble emu-set-time is ignored.
 #
 # Usage:
-#   bash scripts/capture-screenshots.sh --duration 3h
+#   pebble build && pebble install --emulator emery
 #   bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m
-#   bash scripts/capture-screenshots.sh --simulate -d 14d -i 1h --start "2026-07-06 09:00"
-#
-# Requires a running emulator with the watchface installed:
-#   pebble install --emulator emery
-#
-# Simulated capture enables demo weather by default so the chart stays populated.
 #
 # Stitch frames into a GIF (optional):
 #   ffmpeg -framerate 1 -i captures/sim-*/frame-%04d-*.png -loop 0 argus-timelapse.gif
 set -eu
 
+# WSL DrvFS: bash reads scripts incrementally from /mnt/c; after sleep or heavy I/O
+# the next chunk can fail with "error reading input file: No data available".
+# Re-exec from a native Linux temp copy when launched from a Windows mount.
+if [[ "${BASH_SOURCE[0]:-}" == /mnt/* ]] && [[ -z "${ARGUS_CAPTURE_REEXEC:-}" ]]; then
+  export ARGUS_CAPTURE_REEXEC=1
+  tmp=$(mktemp /tmp/argus-capture.XXXXXX.sh)
+  cp "${BASH_SOURCE[0]}" "$tmp"
+  chmod +x "$tmp"
+  exec bash "$tmp" "$@"
+fi
+
+STOP=0
+CLEANUP_DONE=0
+
 DURATION_SEC=0
 INTERVAL_SEC=60
 OUTPUT_DIR=""
-EMULATOR=""
 SIMULATE=0
 START_TIME="2026-07-06 09:00:00"
-STEP_DELAY="0.3"
 SETTLE_DELAY=""
 WARMUP_SEC=""
 DEMO_WEATHER=-1
-POKE_REFRESH=1
 
-MSG_HOUR_FORMAT=10000
 MSG_DEBUG_MODE=10010
 MSG_DEMO_WEATHER=10011
+MSG_CAPTURE_TIME_OFFSET=10027
+APP_UUID="f8c3a2b1-4d5e-6f70-8a9b-0c1d2e3f4a5b"
 
 usage() {
   cat <<'EOF'
@@ -45,34 +52,23 @@ Options:
   -d, --duration DURATION   Total span to capture (required). Examples: 3h, 90m, 14d
   -i, --interval INTERVAL   Simulated/real seconds between captures (default: 60s)
   -o, --output DIR          Output directory (default: captures/run-... or captures/sim-...)
-  -e, --emulator PLATFORM   Pass --emulator to pebble commands (e.g. emery)
-      --simulate            Advance emulator time instead of waiting in real time
+      --simulate            Shift watchface time via CaptureTimeOffset (requires pebble build)
       --start DATETIME      Simulated start time (default: 2026-07-06 09:00:00, a Monday)
-      --step-delay SECONDS  Pause after emu-set-time before screenshot (default: 0.3 real / 1.5 simulate)
-      --settle SECONDS      Alias for --step-delay in simulate mode
-      --warmup SECONDS      Wait before the first capture (default: 0 real / 8 simulate)
+      --settle SECONDS      Pause after each time shift before screenshot (default: 1.5 simulate)
+      --warmup SECONDS      Wait before the first capture (default: 0 real / 5 simulate)
       --demo-weather        Enable demo weather via app message (default: on in simulate mode)
       --no-demo-weather     Use live weather instead of demo data
-      --no-poke-refresh     Skip app-message refresh after each simulated time jump
   -h, --help                Show this help
 
-Duration and interval accept an optional suffix:
-  h = hours, m = minutes, s = seconds, d = days
-  A bare number is treated as minutes for --duration, seconds for --interval.
+Simulated mode uses an in-app time offset (DebugMode must be on). Emery/QEMU 10 ignores
+pebble emu-set-time, so the script sends CaptureTimeOffset instead.
 
 Examples:
-  # Real time: one frame per minute for 3 hours
-  bash scripts/capture-screenshots.sh --duration 3h
-
-  # Simulated: 3 hours of watch time (~180 frames, demo weather on by default)
-  bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m -e emery
-
-  # Simulated with live weather (slower — waits longer for fetches)
-  bash scripts/capture-screenshots.sh --simulate -d 3h -i 1m --no-demo-weather --warmup 30 --settle 10
+  pebble build && pebble install --emulator emery
+  bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m
 EOF
 }
 
-# Parse values like 3h, 90m, 45s, 14d, or bare numbers (default_unit: m or s).
 parse_time() {
   local value="$1"
   local default_unit="$2"
@@ -132,33 +128,48 @@ format_sim_time() {
   date -d "@$1" +"%Y-%m-%d %H:%M"
 }
 
-pebble_supports_emulator_flag() {
-  local subcommand="$1"
-  pebble "$subcommand" --help 2>&1 | grep -q '\--emulator'
-}
-
-pebble_with_emulator_args() {
-  local subcommand="$1"
-  shift
-  local -a args=("$subcommand" "$@")
-  if [[ -n "$EMULATOR" ]]; then
-    if pebble_supports_emulator_flag "$subcommand"; then
-      args+=(--emulator "$EMULATOR")
-    else
-      echo "Warning: pebble $subcommand has no --emulator flag; using the running emulator" >&2
-    fi
+resolve_message_key() {
+  local name="$1"
+  local fallback="$2"
+  local keys_file="build/js/message_keys.json"
+  if [[ -f "$keys_file" ]]; then
+    python3 - "$name" "$fallback" "$keys_file" <<'PY'
+import json, sys
+name, fallback, path = sys.argv[1:4]
+with open(path, encoding="utf-8") as f:
+    keys = json.load(f)
+print(keys.get(name, fallback))
+PY
+  else
+    echo "$fallback"
   fi
-  pebble "${args[@]}"
 }
 
-set_emulator_time() {
-  local epoch="$1"
-  pebble_with_emulator_args emu-set-time "$epoch"
+on_interrupt() {
+  if (( STOP )); then
+    echo "Force quit."
+    exit 130
+  fi
+  STOP=1
+  echo ""
+  echo "Stopping (Ctrl+C again to force quit)..."
+}
+
+sleep_interruptible() {
+  local secs="$1"
+  local end=$(( SECONDS + secs ))
+  while (( SECONDS < end && !STOP )); do
+    sleep 0.2 || break
+  done
+}
+
+pebble_cmd() {
+  pebble "$@" </dev/null
 }
 
 take_screenshot() {
   local filename="$1"
-  pebble_with_emulator_args screenshot --no-open "$filename"
+  pebble_cmd screenshot --no-open "$filename"
 }
 
 send_app_message_int() {
@@ -167,21 +178,32 @@ send_app_message_int() {
     pairs+=(--int "$1=$2")
     shift 2
   done
-  pebble_with_emulator_args send-app-message "${pairs[@]}"
+  pebble_cmd send-app-message --app-uuid "$APP_UUID" "${pairs[@]}"
+}
+
+enable_debug_mode() {
+  echo "Enabling debug mode (required for simulated time)..."
+  send_app_message_int "$MSG_DEBUG_MODE" 1
 }
 
 enable_demo_weather() {
-  echo "Enabling demo weather (DebugMode + DemoWeather)..."
-  send_app_message_int "$MSG_DEBUG_MODE" 1 "$MSG_DEMO_WEATHER" 1
+  echo "Enabling demo weather..."
+  send_app_message_int "$MSG_DEMO_WEATHER" 1
 }
 
-refresh_watchface() {
-  # Any inbound settings message triggers prv_refresh_all_modules() on the watch.
-  send_app_message_int "$MSG_HOUR_FORMAT" 0
+apply_capture_offset() {
+  local elapsed="$1"
+  local offset=$(( START_EPOCH + elapsed - $(date +%s) ))
+  echo "  Setting time offset to $(format_sim_time $(( START_EPOCH + elapsed )))..."
+  send_app_message_int "$MSG_CAPTURE_TIME_OFFSET" "$offset"
+}
+
+reset_capture_offset() {
+  send_app_message_int "$MSG_CAPTURE_TIME_OFFSET" 0 2>/dev/null || true
 }
 
 wait_for_settle() {
-  sleep "$SETTLE_DELAY"
+  sleep_interruptible "$SETTLE_DELAY"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -198,8 +220,9 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_DIR="$2"
       shift 2
       ;;
-    -e|--emulator)
-      EMULATOR="$2"
+    --emulator|-e)
+      echo "Warning: --emulator is ignored; connect to the already-running emulator instead." >&2
+      echo "  Start with: pebble install --emulator emery" >&2
       shift 2
       ;;
     --simulate)
@@ -227,7 +250,6 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --no-poke-refresh)
-      POKE_REFRESH=0
       shift
       ;;
     -h|--help)
@@ -270,21 +292,19 @@ if [[ -z "$SETTLE_DELAY" ]]; then
       SETTLE_DELAY="10"
     fi
   else
-    SETTLE_DELAY="$STEP_DELAY"
+    SETTLE_DELAY="0"
   fi
 fi
 
 if [[ -z "$WARMUP_SEC" ]]; then
   if (( SIMULATE )); then
-    if (( DEMO_WEATHER )); then
-      WARMUP_SEC="8"
-    else
-      WARMUP_SEC="30"
-    fi
+    WARMUP_SEC="5"
   else
     WARMUP_SEC="0"
   fi
 fi
+
+MSG_CAPTURE_TIME_OFFSET=$(resolve_message_key CaptureTimeOffset "$MSG_CAPTURE_TIME_OFFSET")
 
 if [[ -z "$OUTPUT_DIR" ]]; then
   if (( SIMULATE )); then
@@ -304,16 +324,19 @@ fi
 START_EPOCH=0
 if (( SIMULATE )); then
   START_EPOCH=$(parse_start_epoch "$START_TIME")
+  if [[ ! -f build/js/message_keys.json ]]; then
+    echo "Error: run 'pebble build' first (needed for CaptureTimeOffset message key)" >&2
+    exit 1
+  fi
 fi
 
 echo "Capturing screenshots"
 if (( SIMULATE )); then
-  echo "  Mode:       simulated (pebble emu-set-time)"
+  echo "  Mode:       simulated (CaptureTimeOffset)"
   echo "  Start:      $(format_sim_time "$START_EPOCH")"
-  echo "  Demo wx:    $(( DEMO_WEATHER )) (instant chart data)"
-  echo "  Warmup:     ${WARMUP_SEC}s (before first capture)"
-  echo "  Settle:     ${SETTLE_DELAY}s (after each time jump)"
-  echo "  Refresh:    $(( POKE_REFRESH )) (app message after each jump)"
+  echo "  Demo wx:    $(( DEMO_WEATHER ))"
+  echo "  Warmup:     ${WARMUP_SEC}s"
+  echo "  Settle:     ${SETTLE_DELAY}s"
 else
   echo "  Mode:       real time"
   if (( WARMUP_SEC > 0 )); then
@@ -325,7 +348,7 @@ echo "  Interval:   ${INTERVAL_SEC}s"
 echo "  Output:     ${OUTPUT_DIR}/"
 echo "  Expected:   ~${expected} frame(s)"
 echo ""
-echo "Press Ctrl+C to stop early."
+echo "Press Ctrl+C to stop early (Ctrl+C twice to force quit)."
 echo ""
 
 elapsed=0
@@ -333,50 +356,68 @@ frame=0
 failures=0
 
 cleanup() {
+  if (( CLEANUP_DONE )); then
+    return 0
+  fi
+  CLEANUP_DONE=1
+  if (( SIMULATE )); then
+    if (( STOP )); then
+      echo "Skipping time reset (interrupted). Reinstall the watchface to restore real time."
+    else
+      reset_capture_offset
+    fi
+  fi
   echo ""
   echo "Stopped. Saved ${frame} frame(s) to ${OUTPUT_DIR}/"
   if (( failures > 0 )); then
     echo "Warning: ${failures} capture(s) failed" >&2
   fi
 }
-trap cleanup EXIT INT TERM
+
+trap on_interrupt INT TERM
+trap cleanup EXIT
 
 if (( SIMULATE )); then
+  enable_debug_mode
+  sleep_interruptible 1
   if (( DEMO_WEATHER )); then
     enable_demo_weather
-    sleep 1
+    sleep_interruptible 1
   fi
-  if ! set_emulator_time "$START_EPOCH"; then
-    echo "Error: failed to set initial emulator time" >&2
+  if (( STOP )); then
+    exit 130
+  fi
+  if ! apply_capture_offset 0; then
+    echo "Error: failed to set CaptureTimeOffset. Is the emulator running with Argus installed?" >&2
     exit 1
-  fi
-  if (( POKE_REFRESH )); then
-    refresh_watchface
   fi
   if (( WARMUP_SEC > 0 )); then
     echo "Warming up for ${WARMUP_SEC}s..."
-    sleep "$WARMUP_SEC"
+    sleep_interruptible "$WARMUP_SEC"
   fi
 elif (( WARMUP_SEC > 0 )); then
   echo "Warming up for ${WARMUP_SEC}s..."
-  sleep "$WARMUP_SEC"
+  sleep_interruptible "$WARMUP_SEC"
 fi
 
-while (( elapsed < DURATION_SEC )); do
+while (( !STOP && elapsed < DURATION_SEC )); do
   frame=$(( frame + 1 ))
   sim_epoch=$(( START_EPOCH + elapsed ))
   sim_label=$(date -d "@$sim_epoch" +%Y%m%d-%H%M%S)
   filename=$(printf '%s/frame-%04d-%s.png' "$OUTPUT_DIR" "$frame" "$sim_label")
 
   if (( SIMULATE )); then
-    if ! set_emulator_time "$sim_epoch"; then
+    if ! apply_capture_offset "$elapsed"; then
       failures=$(( failures + 1 ))
-      printf '[frame %04d] emu-set-time FAILED (%s)\n' "$frame" "$(format_sim_time "$sim_epoch")" >&2
-    else
-      if (( POKE_REFRESH )); then
-        refresh_watchface || true
+      printf '[frame %04d] CaptureTimeOffset FAILED (%s)\n' "$frame" "$(format_sim_time "$sim_epoch")" >&2
+      if (( STOP )); then
+        break
       fi
+    else
       wait_for_settle
+      if (( STOP )); then
+        break
+      fi
       if take_screenshot "$filename"; then
         printf '[frame %04d] %s -> %s\n' "$frame" "$(format_sim_time "$sim_epoch")" "$(basename "$filename")"
       else
@@ -397,8 +438,14 @@ while (( elapsed < DURATION_SEC )); do
     break
   fi
 
-  if (( ! SIMULATE )); then
-    sleep "$INTERVAL_SEC"
+  if (( STOP )); then
+    break
+  fi
+
+  if (( !SIMULATE )); then
+    sleep_interruptible "$INTERVAL_SEC"
   fi
   elapsed=$(( elapsed + INTERVAL_SEC ))
 done
+
+exit 0

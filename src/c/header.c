@@ -1,5 +1,6 @@
 #include "header.h"
 
+#include "argus_time.h"
 #include "formatting.h"
 #include "settings.h"
 #include "weather.h"
@@ -74,7 +75,7 @@ static void prv_destroy_arrow_paths(void) {
 static int prv_today_steps(void) {
   HealthMetric metric = HealthMetricStepCount;
   time_t start = time_start_of_today();
-  time_t end = time(NULL);
+  time_t end = argus_time_now();
   HealthServiceAccessibilityMask mask = health_service_metric_accessible(metric, start, end);
   if (mask & HealthServiceAccessibilityMaskAvailable) {
     return (int)health_service_sum(metric, start, end);

@@ -52,7 +52,8 @@
       "WeatherFetchTime",
       "WeatherIsDayHourly",
       "WindMax",
-      "HeaderDisplay"
+      "HeaderDisplay",
+      "CaptureTimeOffset"
     ],
     "resources": {
       "media": []

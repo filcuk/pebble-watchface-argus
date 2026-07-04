@@ -1,5 +1,6 @@
 #include "calendar.h"
 
+#include "argus_time.h"
 #include "settings.h"
 
 #include <stdio.h>
@@ -303,7 +304,7 @@ Calendar *calendar_create(Layer *parent) {
 
   layer_add_child(parent, calendar->layer);
 
-  time_t now = time(NULL);
+  time_t now = argus_time_now();
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
     calendar->year = tm_now->tm_year;
