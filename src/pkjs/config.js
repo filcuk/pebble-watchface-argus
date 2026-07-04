@@ -79,6 +79,18 @@ module.exports = [
       },
       {
         type: 'select',
+        messageKey: 'RealtimeSteps',
+        label: 'Step updates',
+        defaultValue: '0',
+        capabilities: ['HEALTH'],
+        options: [
+          { label: 'Optimised', value: '0' },
+          { label: 'Every minute', value: '1' },
+          { label: 'Real-time', value: '2' },
+        ],
+      },
+      {
+        type: 'select',
         messageKey: 'BluetoothDisplay',
         label: 'Bluetooth Icon',
         defaultValue: '1',

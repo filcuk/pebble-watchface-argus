@@ -3,7 +3,7 @@
 #include <pebble.h>
 
 #define SETTINGS_PERSIST_KEY 2
-#define SETTINGS_PERSIST_VERSION 3
+#define SETTINGS_PERSIST_VERSION 5
 
 typedef enum {
   HOUR_FORMAT_SYSTEM = 0,
@@ -49,6 +49,12 @@ typedef enum {
   CLOCK_FONT_BITHAM_MEDIUM = 3,
 } ClockFont;
 
+typedef enum {
+  STEPS_UPDATE_OPTIMISED = 0,
+  STEPS_UPDATE_EVERY_MINUTE = 1,
+  STEPS_UPDATE_REALTIME = 2,
+} StepsUpdateMode;
+
 typedef struct {
   uint8_t version;
   HourFormat hour_format;
@@ -65,6 +71,7 @@ typedef struct {
   bool show_event_indicators;
   bool debug_mode;
   bool demo_weather;
+  StepsUpdateMode steps_update_mode;
 } ArgusSettings;
 
 void settings_init(void);

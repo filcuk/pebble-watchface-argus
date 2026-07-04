@@ -106,6 +106,14 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     calendar_update(s_calendar, &tick_copy);
   }
 
+#if defined(PBL_HEALTH)
+  if (settings_get()->steps_update_mode == STEPS_UPDATE_EVERY_MINUTE &&
+      settings_get()->header_display_mode == HEADER_DISPLAY_STEPS) {
+    header_invalidate(s_header);
+    header_update(s_header, &tick_copy);
+  }
+#endif
+
   if (tick_copy.tm_min == 0 || tick_copy.tm_min % 30 == 0) {
     weather_request();
   }
@@ -122,7 +130,8 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 
   bool calendar_settings = dict_find(iter, MESSAGE_KEY_WeekStart) || dict_find(iter, MESSAGE_KEY_WeekNumberMode) ||
                            dict_find(iter, MESSAGE_KEY_HeaderDisplay);
-  bool header_settings = dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
+  bool header_settings = dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_RealtimeSteps) ||
+                         dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
                          dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
                          dict_find(iter, MESSAGE_KEY_BluetoothDisplay);
 
@@ -250,11 +259,7 @@ static void prv_weather_updated(void) {
 }
 
 #if defined(PBL_HEALTH)
-static void prv_health_handler(HealthEventType event, void *context) {
-  (void)context;
-  if (event != HealthEventSignificantUpdate) {
-    return;
-  }
+static void prv_refresh_steps_header(void) {
   if (settings_get()->header_display_mode != HEADER_DISPLAY_STEPS) {
     return;
   }
@@ -264,6 +269,31 @@ static void prv_health_handler(HealthEventType event, void *context) {
     header_invalidate(s_header);
     header_update(s_header, tm_now);
   }
+}
+
+static void prv_health_handler(HealthEventType event, void *context) {
+  (void)context;
+  const ArgusSettings *settings = settings_get();
+  if (settings->header_display_mode != HEADER_DISPLAY_STEPS) {
+    return;
+  }
+
+  switch (settings->steps_update_mode) {
+    case STEPS_UPDATE_REALTIME:
+      if (event != HealthEventSignificantUpdate && event != HealthEventMovementUpdate) {
+        return;
+      }
+      break;
+    case STEPS_UPDATE_OPTIMISED:
+    case STEPS_UPDATE_EVERY_MINUTE:
+    default:
+      if (event != HealthEventSignificantUpdate) {
+        return;
+      }
+      break;
+  }
+
+  prv_refresh_steps_header();
 }
 #endif
 

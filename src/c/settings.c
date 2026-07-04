@@ -22,6 +22,43 @@ typedef struct {
   bool demo_weather;
 } ArgusSettingsV2;
 
+typedef struct {
+  uint8_t version;
+  HourFormat hour_format;
+  ClockFont clock_font;
+  WeekStart week_start;
+  WeekNumberMode week_number_mode;
+  BluetoothDisplay bluetooth_display;
+  LocationMode location_mode;
+  HeaderDisplayMode header_display_mode;
+  char manual_location[48];
+  uint8_t forecast_hours;
+  bool temperature_fahrenheit;
+  TemperatureDisplay temperature_display;
+  bool show_event_indicators;
+  bool debug_mode;
+  bool demo_weather;
+} ArgusSettingsV3;
+
+typedef struct {
+  uint8_t version;
+  HourFormat hour_format;
+  ClockFont clock_font;
+  WeekStart week_start;
+  WeekNumberMode week_number_mode;
+  BluetoothDisplay bluetooth_display;
+  LocationMode location_mode;
+  HeaderDisplayMode header_display_mode;
+  char manual_location[48];
+  uint8_t forecast_hours;
+  bool temperature_fahrenheit;
+  TemperatureDisplay temperature_display;
+  bool show_event_indicators;
+  bool debug_mode;
+  bool demo_weather;
+  bool realtime_steps;
+} ArgusSettingsV4;
+
 static void settings_set_defaults(void) {
   s_settings.version = SETTINGS_PERSIST_VERSION;
   s_settings.hour_format = HOUR_FORMAT_SYSTEM;
@@ -38,6 +75,7 @@ static void settings_set_defaults(void) {
   s_settings.show_event_indicators = false;
   s_settings.debug_mode = false;
   s_settings.demo_weather = false;
+  s_settings.steps_update_mode = STEPS_UPDATE_OPTIMISED;
 }
 
 static void settings_validate(void) {
@@ -52,6 +90,9 @@ static void settings_validate(void) {
   }
   if (s_settings.clock_font > CLOCK_FONT_BITHAM_MEDIUM) {
     s_settings.clock_font = CLOCK_FONT_LECO;
+  }
+  if (s_settings.steps_update_mode > STEPS_UPDATE_REALTIME) {
+    s_settings.steps_update_mode = STEPS_UPDATE_OPTIMISED;
   }
 }
 
@@ -71,6 +112,48 @@ static void settings_migrate_from_v2(const ArgusSettingsV2 *legacy) {
   s_settings.show_event_indicators = legacy->show_event_indicators;
   s_settings.debug_mode = legacy->debug_mode;
   s_settings.demo_weather = legacy->demo_weather;
+  s_settings.version = SETTINGS_PERSIST_VERSION;
+}
+
+static void settings_migrate_from_v3(const ArgusSettingsV3 *legacy) {
+  settings_set_defaults();
+  s_settings.hour_format = legacy->hour_format;
+  s_settings.clock_font = legacy->clock_font;
+  s_settings.week_start = legacy->week_start;
+  s_settings.week_number_mode = legacy->week_number_mode;
+  s_settings.bluetooth_display = legacy->bluetooth_display;
+  s_settings.location_mode = legacy->location_mode;
+  s_settings.header_display_mode = legacy->header_display_mode;
+  strncpy(s_settings.manual_location, legacy->manual_location, sizeof(s_settings.manual_location) - 1);
+  s_settings.manual_location[sizeof(s_settings.manual_location) - 1] = '\0';
+  s_settings.forecast_hours = legacy->forecast_hours;
+  s_settings.temperature_fahrenheit = legacy->temperature_fahrenheit;
+  s_settings.temperature_display = legacy->temperature_display;
+  s_settings.show_event_indicators = legacy->show_event_indicators;
+  s_settings.debug_mode = legacy->debug_mode;
+  s_settings.demo_weather = legacy->demo_weather;
+  s_settings.version = SETTINGS_PERSIST_VERSION;
+}
+
+static void settings_migrate_from_v4(const ArgusSettingsV4 *legacy) {
+  settings_set_defaults();
+  s_settings.hour_format = legacy->hour_format;
+  s_settings.clock_font = legacy->clock_font;
+  s_settings.week_start = legacy->week_start;
+  s_settings.week_number_mode = legacy->week_number_mode;
+  s_settings.bluetooth_display = legacy->bluetooth_display;
+  s_settings.location_mode = legacy->location_mode;
+  s_settings.header_display_mode = legacy->header_display_mode;
+  strncpy(s_settings.manual_location, legacy->manual_location, sizeof(s_settings.manual_location) - 1);
+  s_settings.manual_location[sizeof(s_settings.manual_location) - 1] = '\0';
+  s_settings.forecast_hours = legacy->forecast_hours;
+  s_settings.temperature_fahrenheit = legacy->temperature_fahrenheit;
+  s_settings.temperature_display = legacy->temperature_display;
+  s_settings.show_event_indicators = legacy->show_event_indicators;
+  s_settings.debug_mode = legacy->debug_mode;
+  s_settings.demo_weather = legacy->demo_weather;
+  s_settings.steps_update_mode =
+      legacy->realtime_steps ? STEPS_UPDATE_EVERY_MINUTE : STEPS_UPDATE_OPTIMISED;
   s_settings.version = SETTINGS_PERSIST_VERSION;
 }
 
@@ -99,6 +182,30 @@ void settings_init(void) {
     if (legacy.version == 2) {
       APP_LOG(APP_LOG_LEVEL_INFO, "Migrating settings from version 2");
       settings_migrate_from_v2(&legacy);
+      settings_validate();
+      settings_save();
+      return;
+    }
+  }
+
+  if (persist_size == sizeof(ArgusSettingsV3)) {
+    ArgusSettingsV3 legacy;
+    persist_read_data(SETTINGS_PERSIST_KEY, &legacy, sizeof(legacy));
+    if (legacy.version == 3) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Migrating settings from version 3");
+      settings_migrate_from_v3(&legacy);
+      settings_validate();
+      settings_save();
+      return;
+    }
+  }
+
+  if (persist_size == sizeof(ArgusSettingsV4)) {
+    ArgusSettingsV4 legacy;
+    persist_read_data(SETTINGS_PERSIST_KEY, &legacy, sizeof(legacy));
+    if (legacy.version == 4) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Migrating settings from version 4");
+      settings_migrate_from_v4(&legacy);
       settings_validate();
       settings_save();
       return;
@@ -230,6 +337,15 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   if (t) {
     s_settings.demo_weather = settings_tuple_to_int32(t) != 0;
     changed = true;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_RealtimeSteps);
+  if (t) {
+    int32_t mode = settings_tuple_to_int32(t);
+    if (mode >= STEPS_UPDATE_OPTIMISED && mode <= STEPS_UPDATE_REALTIME) {
+      s_settings.steps_update_mode = (StepsUpdateMode)mode;
+      changed = true;
+    }
   }
 
   if (changed) {
