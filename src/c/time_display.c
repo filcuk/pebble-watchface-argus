@@ -20,6 +20,8 @@ struct TimeDisplay {
   bool char_widths_ready;
   ClockFont cached_clock_font;
   int text_height;
+  int max_digit_width;
+  int colon_width;
 };
 
 static TimeDisplay *s_time_display;
@@ -57,12 +59,16 @@ static void prv_cache_char_widths(TimeDisplay *display) {
 
   char text[2] = {'\0', '\0'};
   int max_h = 0;
+  int max_digit_w = 0;
   for (char ch = '0'; ch <= '9'; ch++) {
     text[0] = ch;
     GSize size = graphics_text_layout_get_content_size(text, prv_font_for_char(ch, clock_font),
                                                        GRect(0, 0, 200, TIME_BLOCK_HEIGHT),
                                                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
     display->char_widths[(unsigned char)ch] = size.w;
+    if (size.w > max_digit_w) {
+      max_digit_w = size.w;
+    }
     if (size.h > max_h) {
       max_h = size.h;
     }
@@ -76,6 +82,8 @@ static void prv_cache_char_widths(TimeDisplay *display) {
     max_h = colon_size.h;
   }
 
+  display->max_digit_width = max_digit_w;
+  display->colon_width = colon_size.w;
   display->text_height = max_h;
   display->cached_clock_font = clock_font;
   display->char_widths_ready = true;
@@ -89,37 +97,70 @@ static int prv_char_width(TimeDisplay *display, char ch) {
   return prv_font_for_char(ch, settings_get()->clock_font) ? 8 : 0;
 }
 
-static int prv_measure_spaced_time(TimeDisplay *display, const char *text, int spacing) {
-  int len = strlen(text);
-  if (len == 0) {
-    return 0;
-  }
-
-  int total_w = 0;
-  for (int i = 0; i < len; i++) {
-    total_w += prv_char_width(display, text[i]);
-    if (i < len - 1) {
-      total_w += spacing;
-    }
-  }
-  return total_w;
+static void prv_draw_char(GContext *ctx, TimeDisplay *display, char ch, int x, int y) {
+  char text[2] = {ch, '\0'};
+  GFont font = prv_font_for_char(ch, settings_get()->clock_font);
+  int width = prv_char_width(display, ch);
+  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_draw_text(ctx, text, font, GRect(x, y, width + 2, display->text_height),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
-static void prv_draw_spaced_time(GContext *ctx, TimeDisplay *display, const char *text, int spacing, int x, int y) {
-  int len = strlen(text);
-  if (len == 0) {
+static void prv_draw_digit_in_cell(GContext *ctx, TimeDisplay *display, char ch, int cell_x, int cell_w, int y,
+                                   bool right_align) {
+  int width = prv_char_width(display, ch);
+  int x = right_align ? cell_x + cell_w - width : cell_x;
+  prv_draw_char(ctx, display, ch, x, y);
+}
+
+typedef struct {
+  int colon_x;
+  int hour_tens_x;
+  int hour_ones_x;
+  int min_tens_x;
+  int min_ones_x;
+} TimeLayout;
+
+static TimeLayout prv_time_layout(TimeDisplay *display, GRect bounds, int spacing) {
+  int center_x = bounds.origin.x + bounds.size.w / 2;
+  int cell_w = display->max_digit_width;
+  int colon_w = display->colon_width;
+  int colon_x = center_x - colon_w / 2;
+  int hour_ones_x = colon_x - spacing - cell_w;
+  TimeLayout layout = {
+      .colon_x = colon_x,
+      .hour_tens_x = hour_ones_x - spacing - cell_w,
+      .hour_ones_x = hour_ones_x,
+      .min_tens_x = colon_x + colon_w + spacing,
+      .min_ones_x = colon_x + colon_w + spacing + cell_w + spacing,
+  };
+  return layout;
+}
+
+static void prv_draw_colon_fixed_time(GContext *ctx, TimeDisplay *display, const char *time_text, TimeLayout layout,
+                                      int text_y) {
+  const char *colon = strchr(time_text, ':');
+  if (!colon) {
     return;
   }
 
-  char ch[2] = {'\0', '\0'};
-  for (int i = 0; i < len; i++) {
-    ch[0] = text[i];
-    GFont font = prv_font_for_char(ch[0], settings_get()->clock_font);
-    int width = prv_char_width(display, ch[0]);
-    graphics_context_set_text_color(ctx, GColorWhite);
-    graphics_draw_text(ctx, ch, font, GRect(x, y, width + 2, display->text_height),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-    x += width + spacing;
+  int cell_w = display->max_digit_width;
+
+  prv_draw_char(ctx, display, ':', layout.colon_x, text_y);
+
+  int hour_len = (int)(colon - time_text);
+  if (hour_len == 1) {
+    prv_draw_digit_in_cell(ctx, display, time_text[0], layout.hour_ones_x, cell_w, text_y, true);
+  } else if (hour_len >= 2) {
+    prv_draw_digit_in_cell(ctx, display, time_text[0], layout.hour_tens_x, cell_w, text_y, true);
+    prv_draw_digit_in_cell(ctx, display, time_text[1], layout.hour_ones_x, cell_w, text_y, true);
+  }
+
+  if (colon[1] != '\0') {
+    prv_draw_digit_in_cell(ctx, display, colon[1], layout.min_tens_x, cell_w, text_y, false);
+  }
+  if (colon[2] != '\0') {
+    prv_draw_digit_in_cell(ctx, display, colon[2], layout.min_ones_x, cell_w, text_y, false);
   }
 }
 
@@ -149,19 +190,14 @@ static void prv_time_layer_update_proc(Layer *layer, GContext *ctx) {
 
   GRect bounds = layer_get_bounds(layer);
   int spacing = display->show_ampm ? TIME_CHAR_SPACING_12H : TIME_CHAR_SPACING_24H;
-  int time_w = prv_measure_spaced_time(display, display->time_text, spacing);
   int text_y = bounds.origin.y + (bounds.size.h - display->text_height) / 2;
-  int start_x = bounds.origin.x;
+  TimeLayout layout = prv_time_layout(display, bounds, spacing);
+
+  prv_draw_colon_fixed_time(ctx, display, display->time_text, layout, text_y);
 
   if (display->show_ampm && display->ampm_text[0] != '\0') {
-    GSize ampm_size = prv_ampm_size(display->ampm_text);
-    int total_w = time_w + AM_PM_GAP + ampm_size.w;
-    start_x = bounds.origin.x + (bounds.size.w - total_w) / 2;
-    prv_draw_spaced_time(ctx, display, display->time_text, spacing, start_x, text_y);
-    prv_draw_ampm(ctx, display->ampm_text, start_x + time_w + AM_PM_GAP, text_y, display->text_height);
-  } else {
-    start_x = bounds.origin.x + (bounds.size.w - time_w) / 2;
-    prv_draw_spaced_time(ctx, display, display->time_text, spacing, start_x, text_y);
+    prv_draw_ampm(ctx, display->ampm_text, layout.min_ones_x + display->max_digit_width + AM_PM_GAP, text_y,
+                  display->text_height);
   }
 }
 
