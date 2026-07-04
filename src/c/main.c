@@ -132,6 +132,9 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     header_invalidate(s_header);
     header_apply_settings(s_header);
   }
+  if (dict_find(iter, MESSAGE_KEY_ClockFont) && s_time_display) {
+    time_display_apply_settings(s_time_display);
+  }
 
   time_t now = time(NULL);
   struct tm *tm_now = localtime(&now);

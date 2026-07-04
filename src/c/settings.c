@@ -8,6 +8,7 @@ static ArgusSettings s_settings;
 static void settings_set_defaults(void) {
   s_settings.version = SETTINGS_PERSIST_VERSION;
   s_settings.hour_format = HOUR_FORMAT_SYSTEM;
+  s_settings.clock_font = CLOCK_FONT_LECO;
   s_settings.week_start = WEEK_START_MONDAY;
   s_settings.week_number_mode = WEEK_NUMBER_ISO;
   s_settings.bluetooth_display = BT_DISPLAY_DISCONNECTED_ONLY;
@@ -31,6 +32,9 @@ static void settings_validate(void) {
   }
   if (s_settings.temperature_display > TEMPERATURE_DISPLAY_FEELS) {
     s_settings.temperature_display = TEMPERATURE_DISPLAY_ACTUAL;
+  }
+  if (s_settings.clock_font > CLOCK_FONT_BITHAM_MEDIUM) {
+    s_settings.clock_font = CLOCK_FONT_LECO;
   }
 }
 
@@ -86,6 +90,15 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   if (t) {
     s_settings.hour_format = (HourFormat)settings_tuple_to_int32(t);
     changed = true;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_ClockFont);
+  if (t) {
+    int32_t font = settings_tuple_to_int32(t);
+    if (font >= CLOCK_FONT_LECO && font <= CLOCK_FONT_BITHAM_MEDIUM) {
+      s_settings.clock_font = (ClockFont)font;
+      changed = true;
+    }
   }
 
   t = dict_find(iter, MESSAGE_KEY_WeekStart);

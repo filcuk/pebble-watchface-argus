@@ -27,6 +27,18 @@ module.exports = [
       },
       {
         type: 'select',
+        messageKey: 'ClockFont',
+        label: 'Clock Font',
+        defaultValue: '0',
+        options: [
+          { label: 'LECO', value: '0' },
+          { label: 'Roboto', value: '1' },
+          { label: 'Bitham Bold', value: '2' },
+          { label: 'Bitham Medium', value: '3' },
+        ],
+      },
+      {
+        type: 'select',
         messageKey: 'WeekStart',
         label: 'Week Starts On',
         defaultValue: '0',

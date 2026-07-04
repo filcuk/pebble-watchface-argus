@@ -27,6 +27,7 @@
     ],
     "messageKeys": [
       "HourFormat",
+      "ClockFont",
       "WeekStart",
       "WeekNumberMode",
       "BluetoothDisplay",
