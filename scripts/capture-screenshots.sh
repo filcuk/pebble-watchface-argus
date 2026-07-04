@@ -12,7 +12,7 @@
 # Requires a running emulator with the watchface installed:
 #   pebble install --emulator emery
 #
-# Enable Demo weather in Clay settings before simulated capture.
+# Simulated capture enables demo weather by default so the chart stays populated.
 #
 # Stitch frames into a GIF (optional):
 #   ffmpeg -framerate 1 -i captures/sim-*/frame-%04d-*.png -loop 0 argus-timelapse.gif
@@ -25,6 +25,14 @@ EMULATOR=""
 SIMULATE=0
 START_TIME="2026-07-06 09:00:00"
 STEP_DELAY="0.3"
+SETTLE_DELAY=""
+WARMUP_SEC=""
+DEMO_WEATHER=-1
+POKE_REFRESH=1
+
+MSG_HOUR_FORMAT=10000
+MSG_DEBUG_MODE=10010
+MSG_DEMO_WEATHER=10011
 
 usage() {
   cat <<'EOF'
@@ -40,7 +48,12 @@ Options:
   -e, --emulator PLATFORM   Pass --emulator to pebble commands (e.g. emery)
       --simulate            Advance emulator time instead of waiting in real time
       --start DATETIME      Simulated start time (default: 2026-07-06 09:00:00, a Monday)
-      --step-delay SECONDS  Pause after emu-set-time before screenshot (default: 0.3)
+      --step-delay SECONDS  Pause after emu-set-time before screenshot (default: 0.3 real / 1.5 simulate)
+      --settle SECONDS      Alias for --step-delay in simulate mode
+      --warmup SECONDS      Wait before the first capture (default: 0 real / 8 simulate)
+      --demo-weather        Enable demo weather via app message (default: on in simulate mode)
+      --no-demo-weather     Use live weather instead of demo data
+      --no-poke-refresh     Skip app-message refresh after each simulated time jump
   -h, --help                Show this help
 
 Duration and interval accept an optional suffix:
@@ -51,11 +64,11 @@ Examples:
   # Real time: one frame per minute for 3 hours
   bash scripts/capture-screenshots.sh --duration 3h
 
-  # Simulated: 3 hours of watch time in ~1 minute of script runtime
+  # Simulated: 3 hours of watch time (~180 frames, demo weather on by default)
   bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m -e emery
 
-  # Simulated: two-week calendar rollover, one frame per hour
-  bash scripts/capture-screenshots.sh --simulate -d 14d -i 1h --start "2026-07-06 09:00"
+  # Simulated with live weather (slower — waits longer for fetches)
+  bash scripts/capture-screenshots.sh --simulate -d 3h -i 1m --no-demo-weather --warmup 30 --settle 10
 EOF
 }
 
@@ -124,32 +137,51 @@ pebble_supports_emulator_flag() {
   pebble "$subcommand" --help 2>&1 | grep -q '\--emulator'
 }
 
-set_emulator_time() {
-  local epoch="$1"
-  local -a args=(emu-set-time)
+pebble_with_emulator_args() {
+  local subcommand="$1"
+  shift
+  local -a args=("$subcommand" "$@")
   if [[ -n "$EMULATOR" ]]; then
-    if pebble_supports_emulator_flag emu-set-time; then
+    if pebble_supports_emulator_flag "$subcommand"; then
       args+=(--emulator "$EMULATOR")
     else
-      echo "Warning: pebble emu-set-time has no --emulator flag; using the running emulator" >&2
+      echo "Warning: pebble $subcommand has no --emulator flag; using the running emulator" >&2
     fi
   fi
-  args+=("$epoch")
   pebble "${args[@]}"
+}
+
+set_emulator_time() {
+  local epoch="$1"
+  pebble_with_emulator_args emu-set-time "$epoch"
 }
 
 take_screenshot() {
   local filename="$1"
-  local -a args=(screenshot --no-open)
-  if [[ -n "$EMULATOR" ]]; then
-    if pebble_supports_emulator_flag screenshot; then
-      args+=(--emulator "$EMULATOR")
-    else
-      echo "Warning: pebble screenshot has no --emulator flag; using the running emulator" >&2
-    fi
-  fi
-  args+=("$filename")
-  pebble "${args[@]}"
+  pebble_with_emulator_args screenshot --no-open "$filename"
+}
+
+send_app_message_int() {
+  local -a pairs=()
+  while (( $# >= 2 )); do
+    pairs+=(--int "$1=$2")
+    shift 2
+  done
+  pebble_with_emulator_args send-app-message "${pairs[@]}"
+}
+
+enable_demo_weather() {
+  echo "Enabling demo weather (DebugMode + DemoWeather)..."
+  send_app_message_int "$MSG_DEBUG_MODE" 1 "$MSG_DEMO_WEATHER" 1
+}
+
+refresh_watchface() {
+  # Any inbound settings message triggers prv_refresh_all_modules() on the watch.
+  send_app_message_int "$MSG_HOUR_FORMAT" 0
+}
+
+wait_for_settle() {
+  sleep "$SETTLE_DELAY"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -178,9 +210,25 @@ while [[ $# -gt 0 ]]; do
       START_TIME="$2"
       shift 2
       ;;
-    --step-delay)
-      STEP_DELAY="$2"
+    --step-delay|--settle)
+      SETTLE_DELAY="$2"
       shift 2
+      ;;
+    --warmup)
+      WARMUP_SEC="$2"
+      shift 2
+      ;;
+    --demo-weather)
+      DEMO_WEATHER=1
+      shift
+      ;;
+    --no-demo-weather)
+      DEMO_WEATHER=0
+      shift
+      ;;
+    --no-poke-refresh)
+      POKE_REFRESH=0
+      shift
       ;;
     -h|--help)
       usage
@@ -210,6 +258,34 @@ if ! command -v pebble >/dev/null 2>&1; then
   exit 1
 fi
 
+if (( DEMO_WEATHER < 0 )); then
+  DEMO_WEATHER=$SIMULATE
+fi
+
+if [[ -z "$SETTLE_DELAY" ]]; then
+  if (( SIMULATE )); then
+    if (( DEMO_WEATHER )); then
+      SETTLE_DELAY="1.5"
+    else
+      SETTLE_DELAY="10"
+    fi
+  else
+    SETTLE_DELAY="$STEP_DELAY"
+  fi
+fi
+
+if [[ -z "$WARMUP_SEC" ]]; then
+  if (( SIMULATE )); then
+    if (( DEMO_WEATHER )); then
+      WARMUP_SEC="8"
+    else
+      WARMUP_SEC="30"
+    fi
+  else
+    WARMUP_SEC="0"
+  fi
+fi
+
 if [[ -z "$OUTPUT_DIR" ]]; then
   if (( SIMULATE )); then
     OUTPUT_DIR="captures/sim-$(date +%Y%m%d-%H%M%S)"
@@ -232,20 +308,22 @@ fi
 
 echo "Capturing screenshots"
 if (( SIMULATE )); then
-  echo "  Mode:     simulated (pebble emu-set-time)"
-  echo "  Start:    $(format_sim_time "$START_EPOCH")"
-  echo "  Step delay: ${STEP_DELAY}s (after each time jump)"
+  echo "  Mode:       simulated (pebble emu-set-time)"
+  echo "  Start:      $(format_sim_time "$START_EPOCH")"
+  echo "  Demo wx:    $(( DEMO_WEATHER )) (instant chart data)"
+  echo "  Warmup:     ${WARMUP_SEC}s (before first capture)"
+  echo "  Settle:     ${SETTLE_DELAY}s (after each time jump)"
+  echo "  Refresh:    $(( POKE_REFRESH )) (app message after each jump)"
 else
-  echo "  Mode:     real time"
+  echo "  Mode:       real time"
+  if (( WARMUP_SEC > 0 )); then
+    echo "  Warmup:     ${WARMUP_SEC}s"
+  fi
 fi
-echo "  Duration: $(format_duration "$DURATION_SEC") (${DURATION_SEC}s of watch time)"
-echo "  Interval: ${INTERVAL_SEC}s"
-echo "  Output:   ${OUTPUT_DIR}/"
-echo "  Expected: ~${expected} frame(s)"
-if (( SIMULATE )); then
-  echo ""
-  echo "Tip: enable Demo weather in Clay settings before starting."
-fi
+echo "  Duration:   $(format_duration "$DURATION_SEC") (${DURATION_SEC}s of watch time)"
+echo "  Interval:   ${INTERVAL_SEC}s"
+echo "  Output:     ${OUTPUT_DIR}/"
+echo "  Expected:   ~${expected} frame(s)"
 echo ""
 echo "Press Ctrl+C to stop early."
 echo ""
@@ -263,6 +341,27 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+if (( SIMULATE )); then
+  if (( DEMO_WEATHER )); then
+    enable_demo_weather
+    sleep 1
+  fi
+  if ! set_emulator_time "$START_EPOCH"; then
+    echo "Error: failed to set initial emulator time" >&2
+    exit 1
+  fi
+  if (( POKE_REFRESH )); then
+    refresh_watchface
+  fi
+  if (( WARMUP_SEC > 0 )); then
+    echo "Warming up for ${WARMUP_SEC}s..."
+    sleep "$WARMUP_SEC"
+  fi
+elif (( WARMUP_SEC > 0 )); then
+  echo "Warming up for ${WARMUP_SEC}s..."
+  sleep "$WARMUP_SEC"
+fi
+
 while (( elapsed < DURATION_SEC )); do
   frame=$(( frame + 1 ))
   sim_epoch=$(( START_EPOCH + elapsed ))
@@ -274,7 +373,10 @@ while (( elapsed < DURATION_SEC )); do
       failures=$(( failures + 1 ))
       printf '[frame %04d] emu-set-time FAILED (%s)\n' "$frame" "$(format_sim_time "$sim_epoch")" >&2
     else
-      sleep "$STEP_DELAY"
+      if (( POKE_REFRESH )); then
+        refresh_watchface || true
+      fi
+      wait_for_settle
       if take_screenshot "$filename"; then
         printf '[frame %04d] %s -> %s\n' "$frame" "$(format_sim_time "$sim_epoch")" "$(basename "$filename")"
       else

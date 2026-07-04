@@ -582,6 +582,13 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
     return;
   }
 
+  weather_slide_stale_hours();
+  data = weather_get();
+  if (data->state == WEATHER_STATE_LOADING || data->state == WEATHER_STATE_ERROR ||
+      data->state == WEATHER_STATE_UNAVAILABLE || data->hour_count == 0) {
+    return;
+  }
+
   GRect root_bounds = layer_get_bounds(chart->layer);
   ChartLayout layout;
   if (!prv_compute_layout(root_bounds, data, &layout)) {
@@ -628,6 +635,7 @@ static void prv_decor_layer_update_proc(Layer *layer, GContext *ctx) {
   }
 
   GRect bounds = layer_get_bounds(layer);
+  weather_slide_stale_hours();
   WeatherData *data = weather_get();
 
   graphics_context_set_text_color(ctx, CHART_STATUS_TEXT_COLOR);
@@ -725,6 +733,7 @@ void weather_chart_refresh(WeatherChart *chart) {
   if (!chart) {
     return;
   }
+  weather_slide_stale_hours();
   layer_mark_dirty(chart->plot_layer);
   layer_mark_dirty(chart->decor_layer);
 }

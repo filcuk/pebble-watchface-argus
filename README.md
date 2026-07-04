@@ -82,18 +82,18 @@ pebble install --emulator emery
 # Real time: one screenshot per minute for 3 hours (~180 frames)
 bash scripts/capture-screenshots.sh --duration 3h
 
-# Simulated: 3 hours of watch time in ~1 minute (~180 frames, no waiting)
+# Simulated: 3 hours of watch time in ~1 minute (~180 frames, demo weather on by default)
 bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m -e emery
 
 # Simulated: two-week calendar demo, one frame per hour
 bash scripts/capture-screenshots.sh --simulate -d 14d -i 1h --start "2026-07-06 09:00" -e emery
 ```
 
-**Simulated mode** uses `pebble emu-set-time` to jump the emulator clock between captures. Enable **Demo weather** in Clay settings first — live weather fetches will not keep up with simulated time.
+**Simulated mode** uses `pebble emu-set-time` to jump the emulator clock between captures. Demo weather is **enabled automatically** (instant chart data, no network fetch). Use `--no-demo-weather` for live weather — you'll need longer `--warmup` and `--settle` times.
 
 Frames are saved to `captures/run-.../` (real time) or `captures/sim-.../` (simulated) as `frame-NNNN-YYYYMMDD-HHMMSS.png`. Press **Ctrl+C** to stop early.
 
-**Duration formats:** `3h`, `90m`, `14d`, `3600s`, or a bare number (minutes). Default interval is 60 seconds. Simulated mode accepts `--start "2026-07-06 09:00"` (default is Monday 09:00) and `--step-delay 0.3` (pause after each time jump).
+**Duration formats:** `3h`, `90m`, `14d`, `3600s`, or a bare number (minutes). Default interval is 60 seconds. Simulated mode accepts `--start "2026-07-06 09:00"` (default is Monday 09:00), `--warmup 8` (wait before first frame), and `--settle 1.5` (pause after each time jump).
 
 Single screenshots without the script:
 
@@ -113,7 +113,7 @@ Stitch captured frames into an animated GIF:
 ffmpeg -framerate 1 -i captures/sim-*/frame-%04d-*.png -loop 0 argus-timelapse.gif
 ```
 
-Enable **Demo weather** in Clay settings for consistent weather chart data during capture (especially in simulated mode).
+**Demo weather** is enabled automatically in simulated capture mode. For manual screenshots, enable it in Clay settings.
 
 ### Opening settings
 
