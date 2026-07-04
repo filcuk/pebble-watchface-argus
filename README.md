@@ -2,12 +2,12 @@
 
 Argus guides you through the days ahead with hourly weather forecast, a two-week calendar view and a configurable header to focus on what is important.
 
-<img width="200" height="228" alt="argus-1" src="https://github.com/user-attachments/assets/afeb6f1d-05a8-473a-b67b-bf707bafd056" />
+<img width="200" height="228" alt="argus-1" src="images/argus-3.gif" />
 <br/>
-<img width="200" height="228" alt="header" src="https://github.com/user-attachments/assets/88ed9729-20b0-470b-acb9-7d332653d977" />
-<img width="200" height="228" alt="calendar" src="https://github.com/user-attachments/assets/29968bb2-9dad-4ebf-bd39-1ff382703195" />
-<img width="200" height="228" alt="time" src="https://github.com/user-attachments/assets/fd4442fe-dd2e-4b69-be29-704e9283fe64" />
-<img width="200" height="228" alt="weather" src="https://github.com/user-attachments/assets/81b879dc-5140-4167-925c-3b2b05d0a821" />
+<img width="200" height="228" alt="header" src="images/header.png" />
+<img width="200" height="228" alt="calendar" src="images/calendar.png" />
+<img width="200" height="228" alt="time" src="images/time.png" />
+<img width="200" height="228" alt="weather" src="images/weather.png" />
 
 ## Features
 
