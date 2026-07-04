@@ -2,13 +2,16 @@
 
 Argus guides you through the days ahead with hourly weather forecast, a two-week calendar view and a configurable header to focus on what is important.
 
+<div align="center">
 <img width="200" height="228" alt="argus-1" src="images/argus-3.gif" />
-<br/>
+</div>
+<div align="center">
 <img width="200" height="228" alt="header" src="images/header.png" />
 <img width="200" height="228" alt="calendar" src="images/calendar.png" />
 <img width="200" height="228" alt="time" src="images/time.png" />
 <img width="200" height="228" alt="weather" src="images/weather.png" />
-
+</div>
+  
 ## Features
 
 - **Header**: week number (ISO or Gregorian), month/year, Bluetooth status, battery level
