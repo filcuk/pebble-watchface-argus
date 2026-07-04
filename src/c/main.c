@@ -115,6 +115,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   bool calendar_settings = dict_find(iter, MESSAGE_KEY_WeekStart) || dict_find(iter, MESSAGE_KEY_WeekNumberMode) ||
                            dict_find(iter, MESSAGE_KEY_HeaderDisplay);
   bool header_settings = dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
+                         dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
                          dict_find(iter, MESSAGE_KEY_BluetoothDisplay);
 
   settings_apply_from_message(iter);

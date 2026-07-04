@@ -389,8 +389,8 @@ void header_update(Header *header, struct tm *now) {
       const WeatherData *data = weather_get();
       if (data && data->state == WEATHER_STATE_READY) {
         temp_ready = true;
-        temp_min = formatting_display_temp(data->temp_min);
-        temp_max = formatting_display_temp(data->temp_max);
+        temp_min = formatting_display_temp(weather_display_temp_min());
+        temp_max = formatting_display_temp(weather_display_temp_max());
       }
       break;
     }

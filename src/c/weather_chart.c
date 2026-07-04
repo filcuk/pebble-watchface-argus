@@ -110,8 +110,8 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, ChartLayou
   ChartGeometry geo;
   prv_chart_geometry(bounds, &geo);
 
-  int8_t min_temp = formatting_display_temp(data->temp_min);
-  int8_t max_temp = formatting_display_temp(data->temp_max);
+  int8_t min_temp = formatting_display_temp(weather_display_temp_min());
+  int8_t max_temp = formatting_display_temp(weather_display_temp_max());
   if (max_temp <= min_temp) {
     max_temp = min_temp + 1;
   }
@@ -602,7 +602,7 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
   prv_draw_wind_marks(ctx, data, plot_left, plot_w, axis_y, plot_h, layout.wind_max);
 
   for (int i = 0; i < data->hour_count; i++) {
-    int8_t temp = formatting_display_temp(data->temps[i]);
+    int8_t temp = formatting_display_temp(weather_display_temp_at(i));
     chart->temp_points[i] = GPoint(prv_plot_x(plot_left, plot_w, i, data->hour_count),
                                    prv_plot_y(plot_top, plot_h, temp, layout.axis_min, layout.axis_max));
   }

@@ -114,6 +114,7 @@ function parseOpenMeteoTime(iso) {
 function packWeatherPayload(json, hours) {
   var times = json.hourly.time || [];
   var temps = json.hourly.temperature_2m;
+  var feelsTemps = json.hourly.apparent_temperature || [];
   var precips = json.hourly.precipitation;
   var winds = json.hourly.wind_speed_10m || [];
   var isDay = json.hourly.is_day || [];
@@ -121,14 +122,21 @@ function packWeatherPayload(json, hours) {
   if (winds.length > 0) {
     count = Math.min(count, winds.length);
   }
+  if (feelsTemps.length > 0) {
+    count = Math.min(count, feelsTemps.length);
+  }
 
   var tempMin = 127;
   var tempMax = -128;
+  var feelsTempMin = 127;
+  var feelsTempMax = -128;
   var precipMax = 0;
   var windMax = 0;
+  var hasFeels = feelsTemps.length > 0;
 
   for (var i = 0; i < count; i++) {
     var temp = Math.round(temps[i]);
+    var feelsTemp = hasFeels ? Math.round(feelsTemps[i]) : temp;
     var precip = Math.round(precips[i] * 10);
     var wind = Math.round(winds[i] || 0);
     if (precip > 255) {
@@ -142,6 +150,14 @@ function packWeatherPayload(json, hours) {
     }
     if (temp > tempMax) {
       tempMax = temp;
+    }
+    if (hasFeels) {
+      if (feelsTemp < feelsTempMin) {
+        feelsTempMin = feelsTemp;
+      }
+      if (feelsTemp > feelsTempMax) {
+        feelsTempMax = feelsTemp;
+      }
     }
     if (precip > precipMax) {
       precipMax = precip;
@@ -158,6 +174,9 @@ function packWeatherPayload(json, hours) {
   if (tempMax <= tempMin) {
     tempMax = tempMin + 1;
   }
+  if (hasFeels && feelsTempMax <= feelsTempMin) {
+    feelsTempMax = feelsTempMin + 1;
+  }
   if (precipMax === 0) {
     precipMax = 1;
   }
@@ -169,9 +188,12 @@ function packWeatherPayload(json, hours) {
     count: count,
     tempMin: tempMin,
     tempMax: tempMax,
+    feelsTempMin: feelsTempMin,
+    feelsTempMax: feelsTempMax,
     precipMax: precipMax,
     windMax: windMax,
     tempBytes: packInt8Array(temps, count),
+    feelsTempBytes: hasFeels ? packInt8Array(feelsTemps, count) : null,
     precipBytes: packUint8Array(
       precips.map(function (p) {
         return Math.round(p * 10);
@@ -194,10 +216,15 @@ function sendWeatherPayload(payload) {
   dict[keys.WeatherHourCount] = payload.count;
   dict[keys.TempMin] = payload.tempMin;
   dict[keys.TempMax] = payload.tempMax;
+  dict[keys.FeelsTempMin] = payload.feelsTempMin;
+  dict[keys.FeelsTempMax] = payload.feelsTempMax;
   dict[keys.PrecipMax] = payload.precipMax;
   dict[keys.WindMax] = payload.windMax;
   dict[keys.WeatherFetchTime] = payload.fetchTime;
   dict[keys.WeatherTempHourly] = payload.tempBytes;
+  if (payload.feelsTempBytes) {
+    dict[keys.WeatherFeelsTempHourly] = payload.feelsTempBytes;
+  }
   dict[keys.WeatherPrecipHourly] = payload.precipBytes;
   dict[keys.WeatherWindHourly] = payload.windBytes;
   dict[keys.WeatherIsDayHourly] = payload.isDayBytes;
@@ -223,7 +250,7 @@ function fetchForecast(latitude, longitude) {
     latitude +
     '&longitude=' +
     longitude +
-    '&hourly=temperature_2m,precipitation,wind_speed_10m,is_day&forecast_hours=' +
+    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day&forecast_hours=' +
     hours +
     '&timezone=auto';
 

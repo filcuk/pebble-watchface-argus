@@ -3,7 +3,7 @@
 #include <pebble.h>
 
 #define SETTINGS_PERSIST_KEY 2
-#define SETTINGS_PERSIST_VERSION 1
+#define SETTINGS_PERSIST_VERSION 2
 
 typedef enum {
   HOUR_FORMAT_SYSTEM = 0,
@@ -32,6 +32,11 @@ typedef enum {
 } LocationMode;
 
 typedef enum {
+  TEMPERATURE_DISPLAY_ACTUAL = 0,
+  TEMPERATURE_DISPLAY_FEELS = 1,
+} TemperatureDisplay;
+
+typedef enum {
   HEADER_DISPLAY_FULL_DATE = 0,
   HEADER_DISPLAY_STEPS = 1,
   HEADER_DISPLAY_TEMP_RANGE = 2,
@@ -48,6 +53,7 @@ typedef struct {
   char manual_location[48];
   uint8_t forecast_hours;
   bool temperature_fahrenheit;
+  TemperatureDisplay temperature_display;
   bool show_event_indicators;
   bool debug_mode;
   bool demo_weather;

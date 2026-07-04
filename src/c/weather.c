@@ -34,6 +34,8 @@ static void prv_recompute_extremes(void) {
 
   int8_t temp_min = 127;
   int8_t temp_max = -128;
+  int8_t feels_temp_min = 127;
+  int8_t feels_temp_max = -128;
   uint8_t precip_max = 0;
   uint8_t wind_max = 0;
 
@@ -43,6 +45,14 @@ static void prv_recompute_extremes(void) {
     }
     if (s_weather.temps[i] > temp_max) {
       temp_max = s_weather.temps[i];
+    }
+    if (s_weather.has_feels_temps) {
+      if (s_weather.feels_temps[i] < feels_temp_min) {
+        feels_temp_min = s_weather.feels_temps[i];
+      }
+      if (s_weather.feels_temps[i] > feels_temp_max) {
+        feels_temp_max = s_weather.feels_temps[i];
+      }
     }
     if (s_weather.precips[i] > precip_max) {
       precip_max = s_weather.precips[i];
@@ -55,6 +65,9 @@ static void prv_recompute_extremes(void) {
   if (temp_max <= temp_min) {
     temp_max = temp_min + 1;
   }
+  if (s_weather.has_feels_temps && feels_temp_max <= feels_temp_min) {
+    feels_temp_max = feels_temp_min + 1;
+  }
   if (precip_max == 0) {
     precip_max = 1;
   }
@@ -64,8 +77,41 @@ static void prv_recompute_extremes(void) {
 
   s_weather.temp_min = temp_min;
   s_weather.temp_max = temp_max;
+  if (s_weather.has_feels_temps) {
+    s_weather.feels_temp_min = feels_temp_min;
+    s_weather.feels_temp_max = feels_temp_max;
+  }
   s_weather.precip_max = precip_max;
   s_weather.wind_max = wind_max;
+}
+
+static bool prv_use_feels(void) {
+  const ArgusSettings *settings = settings_get();
+  return settings->temperature_display == TEMPERATURE_DISPLAY_FEELS && s_weather.has_feels_temps;
+}
+
+int8_t weather_display_temp_at(uint8_t index) {
+  if (index >= s_weather.hour_count) {
+    return 0;
+  }
+  if (prv_use_feels()) {
+    return s_weather.feels_temps[index];
+  }
+  return s_weather.temps[index];
+}
+
+int8_t weather_display_temp_min(void) {
+  if (prv_use_feels()) {
+    return s_weather.feels_temp_min;
+  }
+  return s_weather.temp_min;
+}
+
+int8_t weather_display_temp_max(void) {
+  if (prv_use_feels()) {
+    return s_weather.feels_temp_max;
+  }
+  return s_weather.temp_max;
 }
 
 static time_t prv_cache_timestamp(void) {
@@ -234,12 +280,15 @@ void weather_apply_demo_data(void) {
   s_weather.hour_count = 24;
   s_weather.temp_min = 6;
   s_weather.temp_max = 16;
+  s_weather.feels_temp_min = 4;
+  s_weather.feels_temp_max = 14;
   s_weather.precip_max = 40;
   s_weather.wind_max = 30;
   s_weather.fetch_time = prv_current_hour_start();
 
   for (uint8_t i = 0; i < 24; i++) {
     s_weather.temps[i] = (int8_t)(8 + ((i * 3) % 9));
+    s_weather.feels_temps[i] = (int8_t)(s_weather.temps[i] - 2);
     s_weather.precips[i] = (uint8_t)((i % 5) * 8);
     s_weather.winds[i] = (uint8_t)(5 + ((i * 7) % 20));
     time_t hour_time = s_weather.fetch_time + (time_t)i * 3600;
@@ -249,6 +298,7 @@ void weather_apply_demo_data(void) {
   }
   s_weather.has_is_day = true;
   s_weather.has_wind = true;
+  s_weather.has_feels_temps = true;
 
   s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.cached_at = time(NULL);
@@ -288,6 +338,19 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   }
 
   memcpy(s_weather.temps, t->value->data, count);
+
+  Tuple *feels_tuple = dict_find(iter, MESSAGE_KEY_WeatherFeelsTempHourly);
+  if (feels_tuple && feels_tuple->type == TUPLE_BYTE_ARRAY) {
+    uint8_t feels_len = feels_tuple->length;
+    if (feels_len > count) {
+      feels_len = count;
+    }
+    memset(s_weather.feels_temps, 0, sizeof(s_weather.feels_temps));
+    memcpy(s_weather.feels_temps, feels_tuple->value->data, feels_len);
+    s_weather.has_feels_temps = true;
+  } else {
+    s_weather.has_feels_temps = false;
+  }
 
   Tuple *precip_tuple = dict_find(iter, MESSAGE_KEY_WeatherPrecipHourly);
   if (precip_tuple && precip_tuple->type == TUPLE_BYTE_ARRAY) {
@@ -329,6 +392,16 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   t = dict_find(iter, MESSAGE_KEY_TempMax);
   if (t) {
     s_weather.temp_max = (int8_t)t->value->int32;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_FeelsTempMin);
+  if (t) {
+    s_weather.feels_temp_min = (int8_t)t->value->int32;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_FeelsTempMax);
+  if (t) {
+    s_weather.feels_temp_max = (int8_t)t->value->int32;
   }
 
   t = dict_find(iter, MESSAGE_KEY_PrecipMax);
@@ -395,6 +468,7 @@ void weather_slide_stale_hours(void) {
 
   uint8_t remain = s_weather.hour_count - (uint8_t)hours_elapsed;
   memmove(s_weather.temps, s_weather.temps + hours_elapsed, remain);
+  memmove(s_weather.feels_temps, s_weather.feels_temps + hours_elapsed, remain);
   memmove(s_weather.precips, s_weather.precips + hours_elapsed, remain);
   memmove(s_weather.winds, s_weather.winds + hours_elapsed, remain);
   memmove(s_weather.is_day, s_weather.is_day + hours_elapsed, remain);

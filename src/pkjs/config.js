@@ -107,6 +107,16 @@ module.exports = [
         ],
       },
       {
+        type: 'select',
+        messageKey: 'TemperatureDisplay',
+        label: 'Temperature',
+        defaultValue: '0',
+        options: [
+          { label: 'Actual', value: '0' },
+          { label: 'Feels like', value: '1' },
+        ],
+      },
+      {
         type: 'toggle',
         messageKey: 'TemperatureUnit',
         label: 'Use Fahrenheit',

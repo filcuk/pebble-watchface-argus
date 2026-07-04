@@ -16,6 +16,7 @@ static void settings_set_defaults(void) {
   s_settings.manual_location[0] = '\0';
   s_settings.forecast_hours = 24;
   s_settings.temperature_fahrenheit = false;
+  s_settings.temperature_display = TEMPERATURE_DISPLAY_ACTUAL;
   s_settings.show_event_indicators = false;
   s_settings.debug_mode = false;
   s_settings.demo_weather = false;
@@ -27,6 +28,9 @@ static void settings_validate(void) {
   }
   if (s_settings.week_start != WEEK_START_MONDAY && s_settings.week_start != WEEK_START_SUNDAY) {
     s_settings.week_start = WEEK_START_MONDAY;
+  }
+  if (s_settings.temperature_display > TEMPERATURE_DISPLAY_FEELS) {
+    s_settings.temperature_display = TEMPERATURE_DISPLAY_ACTUAL;
   }
 }
 
@@ -140,6 +144,15 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   if (t) {
     s_settings.temperature_fahrenheit = settings_tuple_to_int32(t) != 0;
     changed = true;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_TemperatureDisplay);
+  if (t) {
+    int32_t mode = settings_tuple_to_int32(t);
+    if (mode >= TEMPERATURE_DISPLAY_ACTUAL && mode <= TEMPERATURE_DISPLAY_FEELS) {
+      s_settings.temperature_display = (TemperatureDisplay)mode;
+      changed = true;
+    }
   }
 
   t = dict_find(iter, MESSAGE_KEY_DebugMode);
