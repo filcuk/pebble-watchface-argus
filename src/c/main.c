@@ -15,8 +15,6 @@ static TimeDisplay *s_time_display;
 static WeatherChart *s_weather_chart;
 static UnobstructedAreaHandlers s_unobstructed_handlers;
 
-#define TIME_WEATHER_GAP 16
-
 static void prv_update_layout(void) {
   if (!s_window_layer) {
     return;
@@ -29,7 +27,7 @@ static void prv_update_layout(void) {
   int time_h = TIME_BLOCK_HEIGHT;
   int calendar_h = CALENDAR_HEIGHT;
   int header_h = HEADER_HEIGHT;
-  int time_zone_top = header_h + calendar_h;
+  int time_zone_top = header_h + calendar_h + TIME_CALENDAR_GAP;
 
   int time_y = time_zone_top;
   int weather_y = time_y + time_h + TIME_WEATHER_GAP;

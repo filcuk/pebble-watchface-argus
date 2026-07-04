@@ -3,6 +3,8 @@
 #include <pebble.h>
 
 #define TIME_BLOCK_HEIGHT 64
+#define TIME_CALENDAR_GAP 0
+#define TIME_WEATHER_GAP 16
 
 typedef struct TimeDisplay TimeDisplay;
 
