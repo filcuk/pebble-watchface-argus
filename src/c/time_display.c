@@ -8,14 +8,12 @@
 
 #define TIME_CHAR_SPACING_24H 6
 #define TIME_CHAR_SPACING_12H 4
-#define AM_PM_GAP 4
 
 struct TimeDisplay {
   Layer *container;
   Layer *time_layer;
   char time_text[8];
-  char ampm_text[4];
-  bool show_ampm;
+  bool use_12h;
   int char_widths[256];
   bool char_widths_ready;
   ClockFont cached_clock_font;
@@ -164,21 +162,6 @@ static void prv_draw_colon_fixed_time(GContext *ctx, TimeDisplay *display, const
   }
 }
 
-static GSize prv_ampm_size(const char *text) {
-  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-  return graphics_text_layout_get_content_size(text, font, GRect(0, 0, 40, TIME_BLOCK_HEIGHT),
-                                               GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
-}
-
-static void prv_draw_ampm(GContext *ctx, const char *text, int x, int text_y, int text_height) {
-  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-  GSize size = prv_ampm_size(text);
-  int y = text_y + text_height - size.h - 6;
-  graphics_context_set_text_color(ctx, GColorWhite);
-  graphics_draw_text(ctx, text, font, GRect(x, y, size.w + 2, size.h),
-                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-}
-
 static void prv_time_layer_update_proc(Layer *layer, GContext *ctx) {
   (void)layer;
   if (!s_time_display) {
@@ -189,16 +172,11 @@ static void prv_time_layer_update_proc(Layer *layer, GContext *ctx) {
   prv_cache_char_widths(display);
 
   GRect bounds = layer_get_bounds(layer);
-  int spacing = display->show_ampm ? TIME_CHAR_SPACING_12H : TIME_CHAR_SPACING_24H;
+  int spacing = display->use_12h ? TIME_CHAR_SPACING_12H : TIME_CHAR_SPACING_24H;
   int text_y = bounds.origin.y + (bounds.size.h - display->text_height) / 2;
   TimeLayout layout = prv_time_layout(display, bounds, spacing);
 
   prv_draw_colon_fixed_time(ctx, display, display->time_text, layout, text_y);
-
-  if (display->show_ampm && display->ampm_text[0] != '\0') {
-    prv_draw_ampm(ctx, display->ampm_text, layout.min_ones_x + display->max_digit_width + AM_PM_GAP, text_y,
-                  display->text_height);
-  }
 }
 
 TimeDisplay *time_display_create(Layer *parent) {
@@ -216,8 +194,7 @@ TimeDisplay *time_display_create(Layer *parent) {
   layer_add_child(display->container, display->time_layer);
 
   display->time_text[0] = '\0';
-  display->ampm_text[0] = '\0';
-  display->show_ampm = false;
+  display->use_12h = false;
   display->char_widths_ready = false;
   display->cached_clock_font = CLOCK_FONT_LECO;
   s_time_display = display;
@@ -261,30 +238,24 @@ void time_display_update(TimeDisplay *display, struct tm *now) {
   struct tm local_now = *now;
   bool use_24h = formatting_use_24h();
   char new_time[sizeof(display->time_text)];
-  char new_ampm[sizeof(display->ampm_text)];
-  bool new_show_ampm = !use_24h;
+  bool new_use_12h = !use_24h;
 
   if (use_24h) {
     snprintf(new_time, sizeof(new_time), "%02d:%02d", local_now.tm_hour, local_now.tm_min);
-    new_ampm[0] = '\0';
   } else {
     int hour = local_now.tm_hour % 12;
     if (hour == 0) {
       hour = 12;
     }
     snprintf(new_time, sizeof(new_time), "%d:%02d", hour, local_now.tm_min);
-    strftime(new_ampm, sizeof(new_ampm), "%p", &local_now);
   }
 
-  if (strcmp(display->time_text, new_time) == 0 && strcmp(display->ampm_text, new_ampm) == 0 &&
-      display->show_ampm == new_show_ampm) {
+  if (strcmp(display->time_text, new_time) == 0 && display->use_12h == new_use_12h) {
     return;
   }
 
   strncpy(display->time_text, new_time, sizeof(display->time_text) - 1);
   display->time_text[sizeof(display->time_text) - 1] = '\0';
-  strncpy(display->ampm_text, new_ampm, sizeof(display->ampm_text) - 1);
-  display->ampm_text[sizeof(display->ampm_text) - 1] = '\0';
-  display->show_ampm = new_show_ampm;
+  display->use_12h = new_use_12h;
   layer_mark_dirty(display->time_layer);
 }
