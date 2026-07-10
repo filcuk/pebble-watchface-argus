@@ -37,11 +37,28 @@ struct Header {
 
 static Header *s_header;
 
+#define HR_BPM_MIN 30
+#define HR_BPM_MAX 220
+
+static bool prv_valid_hr_bpm(uint8_t bpm) {
+  return bpm >= HR_BPM_MIN && bpm <= HR_BPM_MAX;
+}
+
 #if defined(PBL_HEALTH)
 #define HR_HISTORY_WINDOW_SEC (2 * SECONDS_PER_HOUR)
 #define DEMO_STEPS_COUNT 6000
 #define DEMO_HR_CURRENT 80
 #define DEMO_HR_MAX 120
+
+static bool prv_valid_health_hr_bpm(HealthValue bpm) {
+  return bpm >= HR_BPM_MIN && bpm <= HR_BPM_MAX;
+}
+
+static bool prv_hr_aggregate_available(time_t start, time_t end, HealthAggregation aggregation) {
+  HealthServiceAccessibilityMask mask = health_service_metric_aggregate_averaged_accessible(
+      HealthMetricHeartRateBPM, start, end, aggregation, HealthServiceTimeScopeOnce);
+  return (mask & HealthServiceAccessibilityMaskAvailable) != 0;
+}
 
 static int prv_today_steps(void) {
   if (settings_use_demo_biometrics()) {
@@ -78,11 +95,9 @@ static void prv_heart_rate_readings(HeartRateReadings *out, bool fetch_history_m
 
   time_t end = argus_time_now();
 
-  HealthServiceAccessibilityMask current_mask =
-      health_service_metric_accessible(HealthMetricHeartRateBPM, end, end);
-  if (current_mask & HealthServiceAccessibilityMaskAvailable) {
+  if (prv_hr_aggregate_available(end, end, HealthAggregationAvg)) {
     HealthValue current = health_service_peek_current_value(HealthMetricHeartRateBPM);
-    if (current > 0) {
+    if (prv_valid_health_hr_bpm(current)) {
       out->current = (uint8_t)current;
       out->ready = true;
     }
@@ -92,13 +107,11 @@ static void prv_heart_rate_readings(HeartRateReadings *out, bool fetch_history_m
 
   if (fetch_history_max) {
     time_t history_start = end - HR_HISTORY_WINDOW_SEC;
-    HealthServiceAccessibilityMask history_mask =
-        health_service_metric_accessible(HealthMetricHeartRateBPM, history_start, end);
-    if (history_mask & HealthServiceAccessibilityMaskAvailable) {
+    if (prv_hr_aggregate_available(history_start, end, HealthAggregationMax)) {
       HealthValue aggregate_max = health_service_aggregate_averaged(HealthMetricHeartRateBPM, history_start, end,
                                                                   HealthAggregationMax,
                                                                   HealthServiceTimeScopeOnce);
-      if (aggregate_max > 0) {
+      if (prv_valid_health_hr_bpm(aggregate_max)) {
         max_bpm = (uint8_t)aggregate_max;
         out->ready = true;
       }
@@ -229,12 +242,12 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       char current_buf[8];
       char max_buf[8];
       char max_display_buf[12];
-      if (header->status_hr_ready && header->status_hr_current > 0) {
+      if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_current)) {
         snprintf(current_buf, sizeof(current_buf), "%d", header->status_hr_current);
       } else {
         snprintf(current_buf, sizeof(current_buf), "--");
       }
-      if (header->status_hr_ready && header->status_hr_max > 0) {
+      if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_max)) {
         snprintf(max_buf, sizeof(max_buf), "%d", header->status_hr_max);
       } else {
         snprintf(max_buf, sizeof(max_buf), "--");
@@ -343,6 +356,14 @@ Header *header_create(Layer *parent) {
   header->last_mday = -1;
   header->last_steps_count = -2;
   header->status_text[0] = '\0';
+  header->status_mode = HEADER_DISPLAY_FULL_DATE;
+  header->status_temp_ready = false;
+  header->status_temp_current = 0;
+  header->status_temp_min = 0;
+  header->status_temp_max = 0;
+  header->status_hr_ready = false;
+  header->status_hr_current = 0;
+  header->status_hr_max = 0;
   s_header = header;
   prv_sync_bt_visibility(header);
   return header;
