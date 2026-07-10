@@ -75,11 +75,11 @@ static void settings_set_defaults(void) {
   s_settings.show_event_indicators = false;
   s_settings.debug_mode = false;
   s_settings.demo_weather = false;
-  s_settings.steps_update_mode = STEPS_UPDATE_OPTIMISED;
+  s_settings.biometric_update_mode = BIOMETRIC_UPDATE_OPTIMISED;
 }
 
 static void settings_validate(void) {
-  if (s_settings.header_display_mode > HEADER_DISPLAY_TEMP_RANGE) {
+  if (s_settings.header_display_mode > HEADER_DISPLAY_HEART_RATE) {
     s_settings.header_display_mode = HEADER_DISPLAY_FULL_DATE;
   }
   if (s_settings.week_start != WEEK_START_MONDAY && s_settings.week_start != WEEK_START_SUNDAY) {
@@ -91,8 +91,8 @@ static void settings_validate(void) {
   if (s_settings.clock_font > CLOCK_FONT_BITHAM_MEDIUM) {
     s_settings.clock_font = CLOCK_FONT_LECO;
   }
-  if (s_settings.steps_update_mode > STEPS_UPDATE_REALTIME) {
-    s_settings.steps_update_mode = STEPS_UPDATE_OPTIMISED;
+  if (s_settings.biometric_update_mode > BIOMETRIC_UPDATE_LIVE) {
+    s_settings.biometric_update_mode = BIOMETRIC_UPDATE_OPTIMISED;
   }
 }
 
@@ -152,8 +152,8 @@ static void settings_migrate_from_v4(const ArgusSettingsV4 *legacy) {
   s_settings.show_event_indicators = legacy->show_event_indicators;
   s_settings.debug_mode = legacy->debug_mode;
   s_settings.demo_weather = legacy->demo_weather;
-  s_settings.steps_update_mode =
-      legacy->realtime_steps ? STEPS_UPDATE_EVERY_MINUTE : STEPS_UPDATE_OPTIMISED;
+  s_settings.biometric_update_mode =
+      legacy->realtime_steps ? BIOMETRIC_UPDATE_EVERY_MINUTE : BIOMETRIC_UPDATE_OPTIMISED;
   s_settings.version = SETTINGS_PERSIST_VERSION;
 }
 
@@ -224,6 +224,11 @@ bool settings_show_calendar_month(void) {
   return s_settings.header_display_mode != HEADER_DISPLAY_FULL_DATE;
 }
 
+bool settings_header_shows_biometrics(void) {
+  return s_settings.header_display_mode == HEADER_DISPLAY_STEPS ||
+         s_settings.header_display_mode == HEADER_DISPLAY_HEART_RATE;
+}
+
 void settings_save(void) {
   persist_write_data(SETTINGS_PERSIST_KEY, &s_settings, sizeof(s_settings));
 }
@@ -290,7 +295,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   t = dict_find(iter, MESSAGE_KEY_HeaderDisplay);
   if (t) {
     int32_t mode = settings_tuple_to_int32(t);
-    if (mode >= HEADER_DISPLAY_FULL_DATE && mode <= HEADER_DISPLAY_TEMP_RANGE) {
+    if (mode >= HEADER_DISPLAY_FULL_DATE && mode <= HEADER_DISPLAY_HEART_RATE) {
       s_settings.header_display_mode = (HeaderDisplayMode)mode;
       changed = true;
     }
@@ -342,8 +347,8 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   t = dict_find(iter, MESSAGE_KEY_RealtimeSteps);
   if (t) {
     int32_t mode = settings_tuple_to_int32(t);
-    if (mode >= STEPS_UPDATE_OPTIMISED && mode <= STEPS_UPDATE_REALTIME) {
-      s_settings.steps_update_mode = (StepsUpdateMode)mode;
+    if (mode >= BIOMETRIC_UPDATE_OPTIMISED && mode <= BIOMETRIC_UPDATE_LIVE) {
+      s_settings.biometric_update_mode = (BiometricUpdateMode)mode;
       changed = true;
     }
   }

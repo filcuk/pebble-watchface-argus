@@ -2,6 +2,7 @@
 
 #include "argus_time.h"
 #include "formatting.h"
+#include "heart_icon.h"
 #include "settings.h"
 #include "weather.h"
 
@@ -19,6 +20,9 @@ struct Header {
   bool status_temp_ready;
   int8_t status_temp_min;
   int8_t status_temp_max;
+  bool status_hr_ready;
+  uint8_t status_hr_current;
+  uint8_t status_hr_max;
   int battery_percent;
   bool bt_connected;
   bool force_dirty;
@@ -72,6 +76,8 @@ static void prv_destroy_arrow_paths(void) {
 }
 
 #if defined(PBL_HEALTH)
+#define HR_HISTORY_WINDOW_SEC (2 * SECONDS_PER_HOUR)
+
 static int prv_today_steps(void) {
   HealthMetric metric = HealthMetricStepCount;
   time_t start = time_start_of_today();
@@ -81,6 +87,55 @@ static int prv_today_steps(void) {
     return (int)health_service_sum(metric, start, end);
   }
   return -1;
+}
+
+typedef struct {
+  bool ready;
+  uint8_t current;
+  uint8_t max;
+} HeartRateReadings;
+
+static void prv_heart_rate_readings(HeartRateReadings *out, bool fetch_history_max) {
+  out->ready = false;
+  out->current = 0;
+  out->max = 0;
+
+  time_t end = argus_time_now();
+
+  HealthServiceAccessibilityMask current_mask =
+      health_service_metric_accessible(HealthMetricHeartRateBPM, end, end);
+  if (current_mask & HealthServiceAccessibilityMaskAvailable) {
+    HealthValue current = health_service_peek_current_value(HealthMetricHeartRateBPM);
+    if (current > 0) {
+      out->current = (uint8_t)current;
+      out->ready = true;
+    }
+  }
+
+  uint8_t max_bpm = 0;
+
+  if (fetch_history_max) {
+    time_t history_start = end - HR_HISTORY_WINDOW_SEC;
+    HealthServiceAccessibilityMask history_mask =
+        health_service_metric_accessible(HealthMetricHeartRateBPM, history_start, end);
+    if (history_mask & HealthServiceAccessibilityMaskAvailable) {
+      HealthValue aggregate_max = health_service_aggregate_averaged(HealthMetricHeartRateBPM, history_start, end,
+                                                                  HealthAggregationMax,
+                                                                  HealthServiceTimeScopeOnce);
+      if (aggregate_max > 0) {
+        max_bpm = (uint8_t)aggregate_max;
+        out->ready = true;
+      }
+    }
+  }
+
+  if (out->current > max_bpm) {
+    max_bpm = out->current;
+  }
+  if (max_bpm > 0) {
+    out->max = max_bpm;
+    out->ready = true;
+  }
 }
 #endif
 
@@ -108,6 +163,7 @@ static void prv_format_steps(char *buffer, size_t len, int *steps_out) {
 }
 
 #define STATUS_ICON_GAP 3
+#define HEART_ICON_Y_OFFSET 1
 #define ARROW_WIDTH 8
 
 static GFont prv_status_font_bold(void) {
@@ -214,6 +270,35 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       prv_draw_down_arrow(ctx, x + ARROW_WIDTH / 2, center_y);
       x += ARROW_WIDTH + STATUS_ICON_GAP;
       prv_draw_text(ctx, min_buf, x, bounds);
+      break;
+    }
+    case HEADER_DISPLAY_HEART_RATE: {
+      char current_buf[8];
+      char max_buf[8];
+      char max_display_buf[12];
+      if (header->status_hr_ready && header->status_hr_current > 0) {
+        snprintf(current_buf, sizeof(current_buf), "%d", header->status_hr_current);
+      } else {
+        snprintf(current_buf, sizeof(current_buf), "--");
+      }
+      if (header->status_hr_ready && header->status_hr_max > 0) {
+        snprintf(max_buf, sizeof(max_buf), "%d", header->status_hr_max);
+      } else {
+        snprintf(max_buf, sizeof(max_buf), "--");
+      }
+      snprintf(max_display_buf, sizeof(max_display_buf), "(%s)", max_buf);
+
+      GSize current_size = prv_text_size(current_buf);
+      GSize max_size = prv_text_size_font(max_display_buf, prv_status_font_regular());
+      int total_w = HEART_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + max_size.w;
+      int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      int icon_y = center_y - HEART_ICON_HEIGHT / 2 + HEART_ICON_Y_OFFSET;
+
+      heart_icon_draw(ctx, x, icon_y);
+      x += HEART_ICON_WIDTH + STATUS_ICON_GAP;
+      prv_draw_text(ctx, current_buf, x, bounds);
+      x += current_size.w + STATUS_ICON_GAP;
+      prv_draw_text_font(ctx, max_display_buf, prv_status_font_regular(), x, bounds);
       break;
     }
     case HEADER_DISPLAY_FULL_DATE:
@@ -363,7 +448,7 @@ void header_update(Header *header, struct tm *now) {
   bool force = header->force_dirty;
 
   if (!force) {
-    if (mode == HEADER_DISPLAY_STEPS || mode == HEADER_DISPLAY_TEMP_RANGE) {
+    if (mode == HEADER_DISPLAY_STEPS || mode == HEADER_DISPLAY_TEMP_RANGE || mode == HEADER_DISPLAY_HEART_RATE) {
       return;
     }
     if (mode == HEADER_DISPLAY_FULL_DATE && header->last_year == now->tm_year && header->last_mon == now->tm_mon &&
@@ -380,11 +465,11 @@ void header_update(Header *header, struct tm *now) {
   bool temp_ready = false;
   int8_t temp_min = 0;
   int8_t temp_max = 0;
-  int steps_count = header->last_steps_count;
 
   switch (mode) {
     case HEADER_DISPLAY_STEPS:
-      prv_format_steps(new_text, sizeof(new_text), &steps_count);
+      strncpy(new_text, header->status_text, sizeof(new_text) - 1);
+      new_text[sizeof(new_text) - 1] = '\0';
       break;
     case HEADER_DISPLAY_TEMP_RANGE: {
       const WeatherData *data = weather_get();
@@ -395,6 +480,8 @@ void header_update(Header *header, struct tm *now) {
       }
       break;
     }
+    case HEADER_DISPLAY_HEART_RATE:
+      break;
     case HEADER_DISPLAY_FULL_DATE:
     default:
       prv_format_full_date(new_text, sizeof(new_text), now);
@@ -412,11 +499,10 @@ void header_update(Header *header, struct tm *now) {
       header->last_mday = now->tm_mday;
     }
   } else if (mode == HEADER_DISPLAY_STEPS) {
-    changed = changed || steps_count != header->last_steps_count || strcmp(header->status_text, new_text) != 0;
-    if (changed) {
+    changed = changed || strcmp(header->status_text, new_text) != 0;
+    if (changed && new_text[0] != '\0') {
       strncpy(header->status_text, new_text, sizeof(header->status_text) - 1);
       header->status_text[sizeof(header->status_text) - 1] = '\0';
-      header->last_steps_count = steps_count;
     }
   } else if (mode == HEADER_DISPLAY_TEMP_RANGE) {
     changed = changed || header->status_temp_ready != temp_ready || header->status_temp_min != temp_min ||
@@ -426,6 +512,54 @@ void header_update(Header *header, struct tm *now) {
       header->status_temp_min = temp_min;
       header->status_temp_max = temp_max;
     }
+  } else if (mode == HEADER_DISPLAY_HEART_RATE) {
+    changed = changed || force;
+  }
+
+  if (changed) {
+    layer_mark_dirty(header->status_layer);
+  }
+}
+
+void header_refresh_biometrics(Header *header, struct tm *now, bool fetch_hr_history) {
+  if (!header || !now) {
+    return;
+  }
+
+  const ArgusSettings *settings = settings_get();
+  HeaderDisplayMode mode = settings->header_display_mode;
+
+  if (mode != HEADER_DISPLAY_STEPS && mode != HEADER_DISPLAY_HEART_RATE) {
+    return;
+  }
+
+  header->status_mode = mode;
+  bool changed = false;
+
+  if (mode == HEADER_DISPLAY_STEPS) {
+#if defined(PBL_HEALTH)
+    char new_text[sizeof(header->status_text)];
+    int steps_count = header->last_steps_count;
+    prv_format_steps(new_text, sizeof(new_text), &steps_count);
+    changed = steps_count != header->last_steps_count || strcmp(header->status_text, new_text) != 0;
+    if (changed) {
+      strncpy(header->status_text, new_text, sizeof(header->status_text) - 1);
+      header->status_text[sizeof(header->status_text) - 1] = '\0';
+      header->last_steps_count = steps_count;
+    }
+#endif
+  } else if (mode == HEADER_DISPLAY_HEART_RATE) {
+#if defined(PBL_HEALTH)
+    HeartRateReadings hr;
+    prv_heart_rate_readings(&hr, fetch_hr_history);
+    changed = header->status_hr_ready != hr.ready || header->status_hr_current != hr.current ||
+              header->status_hr_max != hr.max;
+    if (changed) {
+      header->status_hr_ready = hr.ready;
+      header->status_hr_current = hr.current;
+      header->status_hr_max = hr.max;
+    }
+#endif
   }
 
   if (changed) {

@@ -16,6 +16,20 @@ static TimeDisplay *s_time_display;
 static WeatherChart *s_weather_chart;
 static UnobstructedAreaHandlers s_unobstructed_handlers;
 
+#if defined(PBL_HEALTH)
+#define BIOMETRIC_SAMPLE_PERIOD_SEC 60
+#define BIOMETRIC_LOAD_REFRESH_MS 50
+#define BIOMETRIC_HR_HISTORY_REFRESH_MS 2000
+
+static AppTimer *s_biometric_load_timer;
+static AppTimer *s_biometric_history_timer;
+
+static void prv_sync_health_sampling(void);
+static void prv_refresh_biometric_header(bool fetch_hr_history);
+static void prv_schedule_biometric_load_refresh(void);
+static void prv_schedule_biometric_history_refresh(void);
+#endif
+
 static void prv_update_layout(void) {
   if (!s_window_layer) {
     return;
@@ -99,18 +113,20 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   time_display_update(s_time_display, &tick_copy);
 
   if (units_changed & DAY_UNIT) {
-    if (settings_get()->header_display_mode == HEADER_DISPLAY_STEPS) {
+    if (settings_header_shows_biometrics()) {
       header_invalidate(s_header);
+#if defined(PBL_HEALTH)
+      prv_schedule_biometric_load_refresh();
+#endif
     }
     header_update(s_header, &tick_copy);
     calendar_update(s_calendar, &tick_copy);
   }
 
 #if defined(PBL_HEALTH)
-  if (settings_get()->steps_update_mode == STEPS_UPDATE_EVERY_MINUTE &&
-      settings_get()->header_display_mode == HEADER_DISPLAY_STEPS) {
-    header_invalidate(s_header);
-    header_update(s_header, &tick_copy);
+  if (settings_get()->biometric_update_mode == BIOMETRIC_UPDATE_EVERY_MINUTE &&
+      settings_header_shows_biometrics()) {
+    prv_refresh_biometric_header(true);
   }
 #endif
 
@@ -150,6 +166,12 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   if (header_settings) {
     header_invalidate(s_header);
     header_apply_settings(s_header);
+#if defined(PBL_HEALTH)
+    if (dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_RealtimeSteps)) {
+      prv_sync_health_sampling();
+      prv_schedule_biometric_load_refresh();
+    }
+#endif
   }
   if (dict_find(iter, MESSAGE_KEY_ClockFont) && s_time_display) {
     time_display_apply_settings(s_time_display);
@@ -259,41 +281,99 @@ static void prv_weather_updated(void) {
 }
 
 #if defined(PBL_HEALTH)
-static void prv_refresh_steps_header(void) {
-  if (settings_get()->header_display_mode != HEADER_DISPLAY_STEPS) {
+static void prv_sync_health_sampling(void) {
+  const ArgusSettings *settings = settings_get();
+  uint16_t period = 0;
+
+  if (settings->biometric_update_mode == BIOMETRIC_UPDATE_EVERY_MINUTE &&
+      settings->header_display_mode == HEADER_DISPLAY_HEART_RATE) {
+    period = BIOMETRIC_SAMPLE_PERIOD_SEC;
+  }
+
+  health_service_set_heart_rate_sample_period(period);
+}
+
+static void prv_refresh_biometric_header(bool fetch_hr_history) {
+  if (!s_header || !settings_header_shows_biometrics()) {
     return;
   }
   time_t now = argus_time_now();
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
-    header_invalidate(s_header);
-    header_update(s_header, tm_now);
+    header_refresh_biometrics(s_header, tm_now, fetch_hr_history);
   }
 }
 
 static void prv_health_handler(HealthEventType event, void *context) {
   (void)context;
   const ArgusSettings *settings = settings_get();
-  if (settings->header_display_mode != HEADER_DISPLAY_STEPS) {
+
+  if (!settings_header_shows_biometrics()) {
     return;
   }
 
-  switch (settings->steps_update_mode) {
-    case STEPS_UPDATE_REALTIME:
-      if (event != HealthEventSignificantUpdate && event != HealthEventMovementUpdate) {
-        return;
-      }
-      break;
-    case STEPS_UPDATE_OPTIMISED:
-    case STEPS_UPDATE_EVERY_MINUTE:
-    default:
+  switch (settings->biometric_update_mode) {
+    case BIOMETRIC_UPDATE_OPTIMISED:
       if (event != HealthEventSignificantUpdate) {
         return;
       }
       break;
+    case BIOMETRIC_UPDATE_EVERY_MINUTE:
+      if (event != HealthEventSignificantUpdate) {
+        return;
+      }
+      break;
+    case BIOMETRIC_UPDATE_LIVE:
+      if (settings->header_display_mode == HEADER_DISPLAY_HEART_RATE) {
+        if (event != HealthEventHeartRateUpdate && event != HealthEventSignificantUpdate) {
+          return;
+        }
+      } else if (event != HealthEventSignificantUpdate && event != HealthEventMovementUpdate) {
+        return;
+      }
+      break;
+    default:
+      return;
   }
 
-  prv_refresh_steps_header();
+  bool fetch_history = event == HealthEventSignificantUpdate;
+  prv_refresh_biometric_header(fetch_history);
+}
+
+static void prv_biometric_load_timer_cb(void *context) {
+  (void)context;
+  s_biometric_load_timer = NULL;
+  prv_refresh_biometric_header(false);
+  prv_schedule_biometric_history_refresh();
+}
+
+static void prv_biometric_history_timer_cb(void *context) {
+  (void)context;
+  s_biometric_history_timer = NULL;
+  if (settings_get()->header_display_mode == HEADER_DISPLAY_HEART_RATE) {
+    prv_refresh_biometric_header(true);
+  }
+}
+
+static void prv_schedule_biometric_load_refresh(void) {
+  if (!settings_header_shows_biometrics()) {
+    return;
+  }
+  if (s_biometric_load_timer) {
+    app_timer_cancel(s_biometric_load_timer);
+  }
+  s_biometric_load_timer = app_timer_register(BIOMETRIC_LOAD_REFRESH_MS, prv_biometric_load_timer_cb, NULL);
+}
+
+static void prv_schedule_biometric_history_refresh(void) {
+  if (settings_get()->header_display_mode != HEADER_DISPLAY_HEART_RATE) {
+    return;
+  }
+  if (s_biometric_history_timer) {
+    app_timer_cancel(s_biometric_history_timer);
+  }
+  s_biometric_history_timer =
+      app_timer_register(BIOMETRIC_HR_HISTORY_REFRESH_MS, prv_biometric_history_timer_cb, NULL);
 }
 #endif
 
@@ -323,6 +403,8 @@ static void init(void) {
 
 #if defined(PBL_HEALTH)
   health_service_events_subscribe(prv_health_handler, NULL);
+  prv_sync_health_sampling();
+  prv_schedule_biometric_load_refresh();
 #endif
 
   weather_request();
@@ -330,6 +412,15 @@ static void init(void) {
 
 static void deinit(void) {
 #if defined(PBL_HEALTH)
+  if (s_biometric_load_timer) {
+    app_timer_cancel(s_biometric_load_timer);
+    s_biometric_load_timer = NULL;
+  }
+  if (s_biometric_history_timer) {
+    app_timer_cancel(s_biometric_history_timer);
+    s_biometric_history_timer = NULL;
+  }
+  health_service_set_heart_rate_sample_period(0);
   health_service_events_unsubscribe();
 #endif
   tick_timer_service_unsubscribe();

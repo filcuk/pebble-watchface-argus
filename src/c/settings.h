@@ -40,6 +40,7 @@ typedef enum {
   HEADER_DISPLAY_FULL_DATE = 0,
   HEADER_DISPLAY_STEPS = 1,
   HEADER_DISPLAY_TEMP_RANGE = 2,
+  HEADER_DISPLAY_HEART_RATE = 3,
 } HeaderDisplayMode;
 
 typedef enum {
@@ -50,10 +51,10 @@ typedef enum {
 } ClockFont;
 
 typedef enum {
-  STEPS_UPDATE_OPTIMISED = 0,
-  STEPS_UPDATE_EVERY_MINUTE = 1,
-  STEPS_UPDATE_REALTIME = 2,
-} StepsUpdateMode;
+  BIOMETRIC_UPDATE_OPTIMISED = 0,
+  BIOMETRIC_UPDATE_EVERY_MINUTE = 1,
+  BIOMETRIC_UPDATE_LIVE = 2,
+} BiometricUpdateMode;
 
 typedef struct {
   uint8_t version;
@@ -71,11 +72,12 @@ typedef struct {
   bool show_event_indicators;
   bool debug_mode;
   bool demo_weather;
-  StepsUpdateMode steps_update_mode;
+  BiometricUpdateMode biometric_update_mode;
 } ArgusSettings;
 
 void settings_init(void);
 const ArgusSettings *settings_get(void);
 bool settings_show_calendar_month(void);
+bool settings_header_shows_biometrics(void);
 void settings_apply_from_message(DictionaryIterator *iter);
 void settings_save(void);
