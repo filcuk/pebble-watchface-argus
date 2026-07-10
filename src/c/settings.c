@@ -59,6 +59,25 @@ typedef struct {
   bool realtime_steps;
 } ArgusSettingsV4;
 
+typedef struct {
+  uint8_t version;
+  HourFormat hour_format;
+  ClockFont clock_font;
+  WeekStart week_start;
+  WeekNumberMode week_number_mode;
+  BluetoothDisplay bluetooth_display;
+  LocationMode location_mode;
+  HeaderDisplayMode header_display_mode;
+  char manual_location[48];
+  uint8_t forecast_hours;
+  bool temperature_fahrenheit;
+  TemperatureDisplay temperature_display;
+  bool show_event_indicators;
+  bool debug_mode;
+  bool demo_weather;
+  BiometricUpdateMode biometric_update_mode;
+} ArgusSettingsV5;
+
 static void settings_set_defaults(void) {
   s_settings.version = SETTINGS_PERSIST_VERSION;
   s_settings.hour_format = HOUR_FORMAT_SYSTEM;
@@ -75,11 +94,12 @@ static void settings_set_defaults(void) {
   s_settings.show_event_indicators = false;
   s_settings.debug_mode = false;
   s_settings.demo_weather = false;
-  s_settings.steps_update_mode = STEPS_UPDATE_OPTIMISED;
+  s_settings.demo_biometrics = false;
+  s_settings.biometric_update_mode = BIOMETRIC_UPDATE_OPTIMISED;
 }
 
 static void settings_validate(void) {
-  if (s_settings.header_display_mode > HEADER_DISPLAY_TEMP_RANGE) {
+  if (s_settings.header_display_mode > HEADER_DISPLAY_HEART_RATE) {
     s_settings.header_display_mode = HEADER_DISPLAY_FULL_DATE;
   }
   if (s_settings.week_start != WEEK_START_MONDAY && s_settings.week_start != WEEK_START_SUNDAY) {
@@ -91,8 +111,8 @@ static void settings_validate(void) {
   if (s_settings.clock_font > CLOCK_FONT_BITHAM_MEDIUM) {
     s_settings.clock_font = CLOCK_FONT_LECO;
   }
-  if (s_settings.steps_update_mode > STEPS_UPDATE_REALTIME) {
-    s_settings.steps_update_mode = STEPS_UPDATE_OPTIMISED;
+  if (s_settings.biometric_update_mode > BIOMETRIC_UPDATE_LIVE) {
+    s_settings.biometric_update_mode = BIOMETRIC_UPDATE_OPTIMISED;
   }
 }
 
@@ -152,8 +172,29 @@ static void settings_migrate_from_v4(const ArgusSettingsV4 *legacy) {
   s_settings.show_event_indicators = legacy->show_event_indicators;
   s_settings.debug_mode = legacy->debug_mode;
   s_settings.demo_weather = legacy->demo_weather;
-  s_settings.steps_update_mode =
-      legacy->realtime_steps ? STEPS_UPDATE_EVERY_MINUTE : STEPS_UPDATE_OPTIMISED;
+  s_settings.biometric_update_mode =
+      legacy->realtime_steps ? BIOMETRIC_UPDATE_EVERY_MINUTE : BIOMETRIC_UPDATE_OPTIMISED;
+  s_settings.version = SETTINGS_PERSIST_VERSION;
+}
+
+static void settings_migrate_from_v5(const ArgusSettingsV5 *legacy) {
+  settings_set_defaults();
+  s_settings.hour_format = legacy->hour_format;
+  s_settings.clock_font = legacy->clock_font;
+  s_settings.week_start = legacy->week_start;
+  s_settings.week_number_mode = legacy->week_number_mode;
+  s_settings.bluetooth_display = legacy->bluetooth_display;
+  s_settings.location_mode = legacy->location_mode;
+  s_settings.header_display_mode = legacy->header_display_mode;
+  strncpy(s_settings.manual_location, legacy->manual_location, sizeof(s_settings.manual_location) - 1);
+  s_settings.manual_location[sizeof(s_settings.manual_location) - 1] = '\0';
+  s_settings.forecast_hours = legacy->forecast_hours;
+  s_settings.temperature_fahrenheit = legacy->temperature_fahrenheit;
+  s_settings.temperature_display = legacy->temperature_display;
+  s_settings.show_event_indicators = legacy->show_event_indicators;
+  s_settings.debug_mode = legacy->debug_mode;
+  s_settings.demo_weather = legacy->demo_weather;
+  s_settings.biometric_update_mode = legacy->biometric_update_mode;
   s_settings.version = SETTINGS_PERSIST_VERSION;
 }
 
@@ -212,6 +253,18 @@ void settings_init(void) {
     }
   }
 
+  if (persist_size == sizeof(ArgusSettingsV5)) {
+    ArgusSettingsV5 legacy;
+    persist_read_data(SETTINGS_PERSIST_KEY, &legacy, sizeof(legacy));
+    if (legacy.version == 5) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Migrating settings from version 5");
+      settings_migrate_from_v5(&legacy);
+      settings_validate();
+      settings_save();
+      return;
+    }
+  }
+
   APP_LOG(APP_LOG_LEVEL_INFO, "Settings persist size mismatch — resetting defaults");
   settings_save();
 }
@@ -222,6 +275,15 @@ const ArgusSettings *settings_get(void) {
 
 bool settings_show_calendar_month(void) {
   return s_settings.header_display_mode != HEADER_DISPLAY_FULL_DATE;
+}
+
+bool settings_header_shows_biometrics(void) {
+  return s_settings.header_display_mode == HEADER_DISPLAY_STEPS ||
+         s_settings.header_display_mode == HEADER_DISPLAY_HEART_RATE;
+}
+
+bool settings_use_demo_biometrics(void) {
+  return s_settings.debug_mode && s_settings.demo_biometrics;
 }
 
 void settings_save(void) {
@@ -290,7 +352,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   t = dict_find(iter, MESSAGE_KEY_HeaderDisplay);
   if (t) {
     int32_t mode = settings_tuple_to_int32(t);
-    if (mode >= HEADER_DISPLAY_FULL_DATE && mode <= HEADER_DISPLAY_TEMP_RANGE) {
+    if (mode >= HEADER_DISPLAY_FULL_DATE && mode <= HEADER_DISPLAY_HEART_RATE) {
       s_settings.header_display_mode = (HeaderDisplayMode)mode;
       changed = true;
     }
@@ -339,11 +401,17 @@ void settings_apply_from_message(DictionaryIterator *iter) {
     changed = true;
   }
 
+  t = dict_find(iter, MESSAGE_KEY_DemoBiometrics);
+  if (t) {
+    s_settings.demo_biometrics = settings_tuple_to_int32(t) != 0;
+    changed = true;
+  }
+
   t = dict_find(iter, MESSAGE_KEY_RealtimeSteps);
   if (t) {
     int32_t mode = settings_tuple_to_int32(t);
-    if (mode >= STEPS_UPDATE_OPTIMISED && mode <= STEPS_UPDATE_REALTIME) {
-      s_settings.steps_update_mode = (StepsUpdateMode)mode;
+    if (mode >= BIOMETRIC_UPDATE_OPTIMISED && mode <= BIOMETRIC_UPDATE_LIVE) {
+      s_settings.biometric_update_mode = (BiometricUpdateMode)mode;
       changed = true;
     }
   }

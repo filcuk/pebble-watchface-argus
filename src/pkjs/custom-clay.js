@@ -1,15 +1,19 @@
 module.exports = function () {
   var clayConfig = this;
 
-  function syncDemoWeatherToggle() {
+  function syncDebugToggles() {
     var debugToggle = clayConfig.getItemByMessageKey('DebugMode');
     var demoWeatherToggle = clayConfig.getItemByMessageKey('DemoWeather');
+    var demoBiometricsToggle = clayConfig.getItemByMessageKey('DemoBiometrics');
 
     if (debugToggle.get()) {
       demoWeatherToggle.enable();
+      demoBiometricsToggle.enable();
     } else {
       demoWeatherToggle.set(false);
       demoWeatherToggle.disable();
+      demoBiometricsToggle.set(false);
+      demoBiometricsToggle.disable();
     }
   }
 
@@ -28,8 +32,8 @@ module.exports = function () {
     var debugToggle = clayConfig.getItemByMessageKey('DebugMode');
     var locationMode = clayConfig.getItemByMessageKey('LocationMode');
 
-    syncDemoWeatherToggle();
-    debugToggle.on('change', syncDemoWeatherToggle);
+    syncDebugToggles();
+    debugToggle.on('change', syncDebugToggles);
 
     syncManualLocationInput();
     locationMode.on('change', syncManualLocationInput);

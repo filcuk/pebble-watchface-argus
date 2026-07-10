@@ -9,6 +9,7 @@ typedef struct Header Header;
 Header *header_create(Layer *parent);
 void header_destroy(Header *header);
 void header_update(Header *header, struct tm *now);
+void header_refresh_biometrics(Header *header, struct tm *now, bool fetch_hr_history);
 void header_invalidate(Header *header);
 void header_apply_settings(Header *header);
 void header_set_bounds(Header *header, GRect frame);
