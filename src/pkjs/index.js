@@ -1,9 +1,16 @@
 var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
 var customClay = require('./custom-clay');
+var pkg = require('../../package.json');
 var keys = require('message_keys');
 
-var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false });
+var clay = new Clay(clayConfig, customClay, {
+  autoHandleEvents: false,
+  userData: {
+    version: pkg.version,
+    githubUrl: 'https://github.com/filcuk/pebble-watchface-argus',
+  },
+});
 
 var DEFAULT_LAT = 51.5074;
 var DEFAULT_LON = -0.1278;
@@ -21,6 +28,35 @@ function weatherFetchIsStale() {
   return weatherFetchInFlight && Date.now() - weatherFetchStartedAt >= WEATHER_FETCH_STALE_MS;
 }
 
+function normalizeStoredClaySettings(settings) {
+  if (!settings) {
+    return settings;
+  }
+
+  var normalized = {};
+  var key;
+  for (key in settings) {
+    if (Object.prototype.hasOwnProperty.call(settings, key)) {
+      normalized[key] = settings[key];
+    }
+  }
+
+  var steps = normalized.RealtimeSteps;
+  if (steps && typeof steps === 'object' && 'value' in steps) {
+    steps = steps.value;
+  }
+
+  if (steps !== '0' && steps !== '1' && steps !== '2') {
+    if (steps === true || steps === 'true' || steps === 1) {
+      normalized.RealtimeSteps = '1';
+    } else {
+      normalized.RealtimeSteps = '0';
+    }
+  }
+
+  return normalized;
+}
+
 function getStoredClaySettings() {
   try {
     var raw = localStorage.getItem('clay-settings');
@@ -31,7 +67,7 @@ function getStoredClaySettings() {
     if (!settings || Object.keys(settings).length === 0) {
       return null;
     }
-    return settings;
+    return normalizeStoredClaySettings(settings);
   } catch (e) {
     return null;
   }
