@@ -4,6 +4,7 @@
 #include "formatting.h"
 #include "heart_icon.h"
 #include "steps_icon.h"
+#include "temp_icon.h"
 #include "settings.h"
 #include "weather.h"
 
@@ -19,6 +20,7 @@ struct Header {
   char status_text[24];
   HeaderDisplayMode status_mode;
   bool status_temp_ready;
+  int8_t status_temp_current;
   int8_t status_temp_min;
   int8_t status_temp_max;
   bool status_hr_ready;
@@ -34,47 +36,6 @@ struct Header {
 };
 
 static Header *s_header;
-static GPath *s_up_arrow_path;
-static GPath *s_down_arrow_path;
-
-static void prv_init_arrow_paths(void) {
-  if (s_up_arrow_path) {
-    return;
-  }
-
-  static GPoint up_points[] = {
-      GPoint(0, -4),
-      GPoint(-4, 3),
-      GPoint(4, 3),
-  };
-  static GPoint down_points[] = {
-      GPoint(0, 4),
-      GPoint(-4, -3),
-      GPoint(4, -3),
-  };
-
-  GPathInfo up_info = {
-      .num_points = 3,
-      .points = up_points,
-  };
-  GPathInfo down_info = {
-      .num_points = 3,
-      .points = down_points,
-  };
-  s_up_arrow_path = gpath_create(&up_info);
-  s_down_arrow_path = gpath_create(&down_info);
-}
-
-static void prv_destroy_arrow_paths(void) {
-  if (s_up_arrow_path) {
-    gpath_destroy(s_up_arrow_path);
-    s_up_arrow_path = NULL;
-  }
-  if (s_down_arrow_path) {
-    gpath_destroy(s_down_arrow_path);
-    s_down_arrow_path = NULL;
-  }
-}
 
 #if defined(PBL_HEALTH)
 #define HR_HISTORY_WINDOW_SEC (2 * SECONDS_PER_HOUR)
@@ -179,7 +140,6 @@ static void prv_format_steps(char *buffer, size_t len, int *steps_out) {
 
 #define STATUS_ICON_GAP 3
 #define STATUS_ICON_Y_OFFSET 1
-#define ARROW_WIDTH 8
 
 static GFont prv_status_font_bold(void) {
   return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
@@ -207,26 +167,6 @@ static void prv_draw_text_font(GContext *ctx, const char *text, GFont font, int 
 
 static void prv_draw_text(GContext *ctx, const char *text, int x, GRect bounds) {
   prv_draw_text_font(ctx, text, prv_status_font_bold(), x, bounds);
-}
-
-static void prv_draw_up_arrow(GContext *ctx, int cx, int cy) {
-  prv_init_arrow_paths();
-  if (!s_up_arrow_path) {
-    return;
-  }
-  gpath_move_to(s_up_arrow_path, GPoint(cx, cy));
-  graphics_context_set_fill_color(ctx, GColorRed);
-  gpath_draw_filled(ctx, s_up_arrow_path);
-}
-
-static void prv_draw_down_arrow(GContext *ctx, int cx, int cy) {
-  prv_init_arrow_paths();
-  if (!s_down_arrow_path) {
-    return;
-  }
-  gpath_move_to(s_down_arrow_path, GPoint(cx, cy));
-  graphics_context_set_fill_color(ctx, GColorBlue);
-  gpath_draw_filled(ctx, s_down_arrow_path);
 }
 
 static bool prv_bt_should_show(const Header *header) {
@@ -261,32 +201,28 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       break;
     }
     case HEADER_DISPLAY_TEMP_RANGE: {
-      char min_buf[8];
-      char max_buf[8];
+      char current_buf[8];
+      char range_buf[16];
       if (header->status_temp_ready) {
-        snprintf(min_buf, sizeof(min_buf), "%d", (int)header->status_temp_min);
-        snprintf(max_buf, sizeof(max_buf), "%d", (int)header->status_temp_max);
+        snprintf(current_buf, sizeof(current_buf), "%d", (int)header->status_temp_current);
+        snprintf(range_buf, sizeof(range_buf), "(%d/%d)", (int)header->status_temp_min,
+                 (int)header->status_temp_max);
       } else {
-        snprintf(min_buf, sizeof(min_buf), "--");
-        snprintf(max_buf, sizeof(max_buf), "--");
+        snprintf(current_buf, sizeof(current_buf), "--");
+        snprintf(range_buf, sizeof(range_buf), "(--/--)");
       }
 
-      GSize min_size = prv_text_size(min_buf);
-      GSize sep_size = prv_text_size(" / ");
-      GSize max_size = prv_text_size(max_buf);
-      int total_w = ARROW_WIDTH + STATUS_ICON_GAP + max_size.w + sep_size.w + ARROW_WIDTH + STATUS_ICON_GAP +
-                    min_size.w;
+      GSize current_size = prv_text_size(current_buf);
+      GSize range_size = prv_text_size_font(range_buf, prv_status_font_regular());
+      int total_w = TEMP_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + range_size.w;
       int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      int icon_y = center_y - TEMP_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
-      prv_draw_up_arrow(ctx, x + ARROW_WIDTH / 2, center_y);
-      x += ARROW_WIDTH + STATUS_ICON_GAP;
-      prv_draw_text(ctx, max_buf, x, bounds);
-      x += max_size.w;
-      prv_draw_text(ctx, " / ", x, bounds);
-      x += sep_size.w;
-      prv_draw_down_arrow(ctx, x + ARROW_WIDTH / 2, center_y);
-      x += ARROW_WIDTH + STATUS_ICON_GAP;
-      prv_draw_text(ctx, min_buf, x, bounds);
+      temp_icon_draw(ctx, x, icon_y);
+      x += TEMP_ICON_WIDTH + STATUS_ICON_GAP;
+      prv_draw_text(ctx, current_buf, x, bounds);
+      x += current_size.w + STATUS_ICON_GAP;
+      prv_draw_text_font(ctx, range_buf, prv_status_font_regular(), x, bounds);
       break;
     }
     case HEADER_DISPLAY_HEART_RATE: {
@@ -408,7 +344,6 @@ Header *header_create(Layer *parent) {
   header->last_steps_count = -2;
   header->status_text[0] = '\0';
   s_header = header;
-  prv_init_arrow_paths();
   prv_sync_bt_visibility(header);
   return header;
 }
@@ -419,7 +354,6 @@ void header_destroy(Header *header) {
   }
   if (s_header == header) {
     s_header = NULL;
-    prv_destroy_arrow_paths();
   }
   layer_destroy(header->status_layer);
   layer_destroy(header->bt_layer);
@@ -480,6 +414,7 @@ void header_update(Header *header, struct tm *now) {
   char new_text[sizeof(header->status_text)];
   new_text[0] = '\0';
   bool temp_ready = false;
+  int8_t temp_current = 0;
   int8_t temp_min = 0;
   int8_t temp_max = 0;
 
@@ -491,9 +426,14 @@ void header_update(Header *header, struct tm *now) {
     case HEADER_DISPLAY_TEMP_RANGE: {
       const WeatherData *data = weather_get();
       if (data && data->state == WEATHER_STATE_READY) {
-        temp_ready = true;
-        temp_min = formatting_display_temp(weather_display_temp_min());
-        temp_max = formatting_display_temp(weather_display_temp_max());
+        WeatherView view;
+        weather_get_view(&view);
+        if (weather_view_has_data(&view)) {
+          temp_ready = true;
+          temp_current = formatting_display_temp(weather_display_temp_at(view.start_index));
+          temp_min = formatting_display_temp(weather_display_temp_min());
+          temp_max = formatting_display_temp(weather_display_temp_max());
+        }
       }
       break;
     }
@@ -522,10 +462,11 @@ void header_update(Header *header, struct tm *now) {
       header->status_text[sizeof(header->status_text) - 1] = '\0';
     }
   } else if (mode == HEADER_DISPLAY_TEMP_RANGE) {
-    changed = changed || header->status_temp_ready != temp_ready || header->status_temp_min != temp_min ||
-              header->status_temp_max != temp_max;
+    changed = changed || header->status_temp_ready != temp_ready || header->status_temp_current != temp_current ||
+              header->status_temp_min != temp_min || header->status_temp_max != temp_max;
     if (changed) {
       header->status_temp_ready = temp_ready;
+      header->status_temp_current = temp_current;
       header->status_temp_min = temp_min;
       header->status_temp_max = temp_max;
     }
