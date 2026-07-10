@@ -3,7 +3,7 @@
 #include <pebble.h>
 
 #define SETTINGS_PERSIST_KEY 2
-#define SETTINGS_PERSIST_VERSION 5
+#define SETTINGS_PERSIST_VERSION 6
 
 typedef enum {
   HOUR_FORMAT_SYSTEM = 0,
@@ -72,6 +72,7 @@ typedef struct {
   bool show_event_indicators;
   bool debug_mode;
   bool demo_weather;
+  bool demo_biometrics;
   BiometricUpdateMode biometric_update_mode;
 } ArgusSettings;
 
@@ -79,5 +80,6 @@ void settings_init(void);
 const ArgusSettings *settings_get(void);
 bool settings_show_calendar_month(void);
 bool settings_header_shows_biometrics(void);
+bool settings_use_demo_biometrics(void);
 void settings_apply_from_message(DictionaryIterator *iter);
 void settings_save(void);

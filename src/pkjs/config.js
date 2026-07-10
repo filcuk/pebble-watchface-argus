@@ -181,6 +181,13 @@ module.exports = [
         label: 'Demo weather',
         defaultValue: false,
       },
+      {
+        type: 'toggle',
+        messageKey: 'DemoBiometrics',
+        label: 'Demo biometrics',
+        defaultValue: false,
+        capabilities: ['HEALTH'],
+      },
     ],
   },
   {

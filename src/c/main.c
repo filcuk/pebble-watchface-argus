@@ -160,6 +160,12 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     weather_refresh_for_connection(connection_service_peek_pebble_app_connection());
   }
 
+#if defined(PBL_HEALTH)
+  if (dict_find(iter, MESSAGE_KEY_DebugMode) || dict_find(iter, MESSAGE_KEY_DemoBiometrics)) {
+    prv_refresh_biometric_header(true);
+  }
+#endif
+
   if (calendar_settings) {
     calendar_invalidate(s_calendar);
   }

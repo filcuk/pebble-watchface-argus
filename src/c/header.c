@@ -78,8 +78,15 @@ static void prv_destroy_arrow_paths(void) {
 
 #if defined(PBL_HEALTH)
 #define HR_HISTORY_WINDOW_SEC (2 * SECONDS_PER_HOUR)
+#define DEMO_STEPS_COUNT 6000
+#define DEMO_HR_CURRENT 80
+#define DEMO_HR_MAX 120
 
 static int prv_today_steps(void) {
+  if (settings_use_demo_biometrics()) {
+    return DEMO_STEPS_COUNT;
+  }
+
   HealthMetric metric = HealthMetricStepCount;
   time_t start = time_start_of_today();
   time_t end = argus_time_now();
@@ -100,6 +107,13 @@ static void prv_heart_rate_readings(HeartRateReadings *out, bool fetch_history_m
   out->ready = false;
   out->current = 0;
   out->max = 0;
+
+  if (settings_use_demo_biometrics()) {
+    out->ready = true;
+    out->current = DEMO_HR_CURRENT;
+    out->max = DEMO_HR_MAX;
+    return;
+  }
 
   time_t end = argus_time_now();
 

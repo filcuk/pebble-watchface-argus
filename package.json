@@ -38,6 +38,7 @@
       "TemperatureDisplay",
       "DebugMode",
       "DemoWeather",
+      "DemoBiometrics",
       "REQUEST_WEATHER",
       "WeatherHourCount",
       "TempMin",
