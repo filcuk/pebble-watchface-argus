@@ -119,9 +119,10 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
       prv_schedule_biometric_load_refresh();
 #endif
     }
-    header_update(s_header, &tick_copy);
-    calendar_update(s_calendar, &tick_copy);
   }
+
+  header_update(s_header, &tick_copy);
+  calendar_update(s_calendar, &tick_copy);
 
 #if defined(PBL_HEALTH)
   if (settings_get()->biometric_update_mode == BIOMETRIC_UPDATE_EVERY_MINUTE &&
@@ -396,7 +397,7 @@ static void init(void) {
   });
   window_stack_push(s_main_window, true);
 
-  tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
+  tick_timer_service_subscribe(MINUTE_UNIT | DAY_UNIT, prv_tick_handler);
   battery_state_service_subscribe(prv_battery_handler);
   connection_service_subscribe((ConnectionHandlers){
       .pebble_app_connection_handler = prv_bt_handler,

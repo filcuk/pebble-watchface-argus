@@ -233,13 +233,19 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
 }
 
 static void prv_today_layer_update_proc(Layer *layer, GContext *ctx) {
-  (void)layer;
   Calendar *calendar = s_calendar;
-  if (!calendar || !calendar->cells_valid) {
+  if (!calendar) {
     return;
   }
 
   GRect bounds = layer_get_bounds(layer);
+  graphics_context_set_fill_color(ctx, GColorClear);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+
+  if (!calendar->cells_valid) {
+    return;
+  }
+
   const ArgusSettings *settings = settings_get();
 
   struct tm now = {0};
