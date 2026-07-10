@@ -3,6 +3,7 @@
 #include "argus_time.h"
 #include "formatting.h"
 #include "heart_icon.h"
+#include "steps_icon.h"
 #include "settings.h"
 #include "weather.h"
 
@@ -163,7 +164,7 @@ static void prv_format_steps(char *buffer, size_t len, int *steps_out) {
 }
 
 #define STATUS_ICON_GAP 3
-#define HEART_ICON_Y_OFFSET 1
+#define STATUS_ICON_Y_OFFSET 1
 #define ARROW_WIDTH 8
 
 static GFont prv_status_font_bold(void) {
@@ -236,11 +237,13 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
   switch (header->status_mode) {
     case HEADER_DISPLAY_STEPS: {
       GSize count_size = prv_text_size(header->status_text);
-      GSize suffix_size = prv_text_size_font(" steps", prv_status_font_regular());
-      int total_w = count_size.w + suffix_size.w;
+      int total_w = STEPS_ICON_WIDTH + STATUS_ICON_GAP + count_size.w;
       int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      int icon_y = center_y - STEPS_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
+
+      steps_icon_draw(ctx, x, icon_y);
+      x += STEPS_ICON_WIDTH + STATUS_ICON_GAP;
       prv_draw_text(ctx, header->status_text, x, bounds);
-      prv_draw_text_font(ctx, " steps", prv_status_font_regular(), x + count_size.w, bounds);
       break;
     }
     case HEADER_DISPLAY_TEMP_RANGE: {
@@ -292,7 +295,7 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       GSize max_size = prv_text_size_font(max_display_buf, prv_status_font_regular());
       int total_w = HEART_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + max_size.w;
       int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
-      int icon_y = center_y - HEART_ICON_HEIGHT / 2 + HEART_ICON_Y_OFFSET;
+      int icon_y = center_y - HEART_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       heart_icon_draw(ctx, x, icon_y);
       x += HEART_ICON_WIDTH + STATUS_ICON_GAP;
