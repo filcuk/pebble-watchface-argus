@@ -34,7 +34,7 @@ typedef struct {
   int plot_h;
   int8_t axis_min;
   int8_t axis_max;
-  uint8_t wind_max;
+  uint8_t wind_axis_max;
   bool ready;
 } ChartLayout;
 
@@ -77,6 +77,7 @@ static WeatherChart *s_weather_chart;
 #define TEMP_POINT_COLOR GColorRed
 #define PRECIP_BAR_COLOR GColorVividCerulean
 #define WIND_MARK_COLOR GColorLightGray
+#define WIND_MARK_COLOR_HIGH GColorYellow
 #define NIGHT_FILL_COLOR GColorBlack
 #define NIGHT_HATCH_COLOR GColorDarkGray
 #define NIGHT_BORDER_COLOR GColorDarkGray
@@ -91,6 +92,13 @@ static WeatherChart *s_weather_chart;
 #define PRECIP_MM100_LIGHT_MAX 250
 #define PRECIP_MM100_MODERATE_MAX 1000
 #define PRECIP_MM100_HEAVY_MAX 2500
+
+#define WIND_AXIS_SCALE 1000
+#define WIND_AXIS_BEAUFORT_DEFAULT 8
+#define WIND_AXIS_BEAUFORT_EXTENDED 12
+#define WIND_BEAUFORT_EXTENDED_KMH 75
+
+static const uint8_t BEAUFORT_KMH_LOWER[] = {0, 1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118};
 
 static void prv_chart_geometry(GRect bounds, ChartGeometry *geo) {
   int plot_left = CHART_MARGIN_H + Y_LABEL_WIDTH + Y_LABEL_AXIS_GAP;
@@ -114,6 +122,9 @@ static void prv_chart_geometry(GRect bounds, ChartGeometry *geo) {
   geo->plot_h = plot_h;
 }
 
+static bool prv_wind_exceeds_beaufort_8(uint8_t wind_kmh);
+static uint8_t prv_wind_axis_max_for_view(const WeatherData *data, const WeatherView *view);
+
 static bool prv_compute_layout(GRect bounds, const WeatherData *data, const WeatherView *view, ChartLayout *layout) {
   ChartGeometry geo;
   prv_chart_geometry(bounds, &geo);
@@ -129,10 +140,7 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, const Weat
     axis_max = axis_min + 1;
   }
 
-  uint8_t wind_max = weather_wind_max_for_view(view);
-  if (wind_max == 0) {
-    wind_max = 1;
-  }
+  uint8_t wind_axis_max = prv_wind_axis_max_for_view(data, view);
 
   layout->plot_left = geo.plot_left;
   layout->plot_right = geo.plot_right;
@@ -142,7 +150,7 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, const Weat
   layout->plot_h = geo.plot_h;
   layout->axis_min = axis_min;
   layout->axis_max = axis_max;
-  layout->wind_max = wind_max;
+  layout->wind_axis_max = wind_axis_max;
   layout->ready = true;
   return true;
 }
@@ -335,32 +343,76 @@ static int prv_precip_y(int plot_bottom, int plot_h, uint8_t precip_tenth_mm) {
   return plot_bottom - (fraction * plot_h) / PRECIP_AXIS_SCALE;
 }
 
-static int prv_wind_y(int plot_bottom, int plot_h, uint8_t wind, uint8_t wind_max) {
-  return plot_bottom - (wind * plot_h) / wind_max;
+static int prv_wind_beaufort_fraction1000(uint8_t wind_kmh) {
+  if (wind_kmh >= BEAUFORT_KMH_LOWER[12]) {
+    return WIND_AXIS_BEAUFORT_EXTENDED * WIND_AXIS_SCALE;
+  }
+
+  for (int n = 11; n >= 0; n--) {
+    if (wind_kmh >= BEAUFORT_KMH_LOWER[n]) {
+      int lower = BEAUFORT_KMH_LOWER[n];
+      int upper = BEAUFORT_KMH_LOWER[n + 1];
+      int span = upper - lower;
+      if (span <= 0) {
+        return n * WIND_AXIS_SCALE;
+      }
+      return n * WIND_AXIS_SCALE + ((int)(wind_kmh - lower) * WIND_AXIS_SCALE) / span;
+    }
+  }
+  return 0;
 }
 
-static void prv_draw_wind_x(GContext *ctx, GPoint center, int arm) {
-  graphics_context_set_stroke_color(ctx, WIND_MARK_COLOR);
+static bool prv_wind_exceeds_beaufort_8(uint8_t wind_kmh) {
+  return wind_kmh >= WIND_BEAUFORT_EXTENDED_KMH;
+}
+
+static uint8_t prv_wind_axis_max_for_view(const WeatherData *data, const WeatherView *view) {
+  if (!data->has_wind || !view || view->hour_count == 0) {
+    return WIND_AXIS_BEAUFORT_DEFAULT;
+  }
+
+  for (uint8_t i = 0; i < view->hour_count; i++) {
+    uint8_t wind = data->winds[view->start_index + i];
+    if (prv_wind_exceeds_beaufort_8(wind)) {
+      return WIND_AXIS_BEAUFORT_EXTENDED;
+    }
+  }
+  return WIND_AXIS_BEAUFORT_DEFAULT;
+}
+
+static int prv_wind_y(int plot_bottom, int plot_h, uint8_t wind_kmh, uint8_t axis_max_beaufort) {
+  int beaufort1000 = prv_wind_beaufort_fraction1000(wind_kmh);
+  int axis_max1000 = axis_max_beaufort * WIND_AXIS_SCALE;
+  if (beaufort1000 > axis_max1000) {
+    beaufort1000 = axis_max1000;
+  }
+  return plot_bottom - (beaufort1000 * plot_h) / axis_max1000;
+}
+
+static void prv_draw_wind_x(GContext *ctx, GPoint center, int arm, GColor color) {
+  graphics_context_set_stroke_color(ctx, color);
   graphics_context_set_stroke_width(ctx, 1);
   graphics_draw_line(ctx, GPoint(center.x - arm, center.y - arm), GPoint(center.x + arm, center.y + arm));
   graphics_draw_line(ctx, GPoint(center.x - arm, center.y + arm), GPoint(center.x + arm, center.y - arm));
 }
 
 static void prv_draw_wind_marks(GContext *ctx, const WeatherData *data, const WeatherView *view, int plot_left,
-                                int plot_w, int axis_y, int plot_h, uint8_t wind_max) {
+                                int plot_w, int axis_y, int plot_h, uint8_t wind_axis_max) {
   if (!data->has_wind) {
     return;
   }
 
   for (int i = 0; i < view->hour_count; i++) {
     int storage = prv_storage_index(view, i);
-    if (data->winds[storage] == 0) {
+    uint8_t wind = data->winds[storage];
+    if (wind == 0) {
       continue;
     }
 
     int x = prv_plot_x(plot_left, plot_w, i, view->hour_count);
-    int y = prv_wind_y(axis_y, plot_h, data->winds[storage], wind_max);
-    prv_draw_wind_x(ctx, GPoint(x, y), WIND_X_ARM);
+    int y = prv_wind_y(axis_y, plot_h, wind, wind_axis_max);
+    GColor color = prv_wind_exceeds_beaufort_8(wind) ? WIND_MARK_COLOR_HIGH : WIND_MARK_COLOR;
+    prv_draw_wind_x(ctx, GPoint(x, y), WIND_X_ARM, color);
   }
 }
 
@@ -651,7 +703,7 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
   chart->point_count = view.hour_count;
   prv_draw_precip_bars(ctx, data, &view, plot_left, plot_right, plot_w, axis_y, plot_h);
   prv_draw_night_regions(ctx, data, &view, plot_left, plot_right, plot_top, axis_y, plot_w);
-  prv_draw_wind_marks(ctx, data, &view, plot_left, plot_w, axis_y, plot_h, layout.wind_max);
+  prv_draw_wind_marks(ctx, data, &view, plot_left, plot_w, axis_y, plot_h, layout.wind_axis_max);
 
   for (int i = 0; i < view.hour_count; i++) {
     int8_t temp = formatting_display_temp(weather_display_temp_at((uint8_t)prv_storage_index(&view, i)));

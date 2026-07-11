@@ -534,7 +534,11 @@ module.exports = function () {
     'html.argus-settings .argus-precip-info {',
     '  color: inherit;',
     '}',
-    'html.argus-settings .argus-precip-info > .argus-setting-label {',
+    'html.argus-settings .argus-wind-info {',
+    '  color: inherit;',
+    '}',
+    'html.argus-settings .argus-precip-info > .argus-setting-label,',
+    'html.argus-settings .argus-wind-info > .argus-setting-label {',
     '  margin-bottom: 8px !important;',
     '}',
     'html.argus-settings .argus-precip-intro {',
@@ -577,6 +581,16 @@ module.exports = function () {
     '  color: #9aa1ab !important;',
     '  line-height: 1.45;',
     '  margin: 0;',
+    '}',
+    'html.argus-settings .argus-wind-note {',
+    '  font-size: 13px;',
+    '  color: #9aa1ab !important;',
+    '  line-height: 1.45;',
+    '  margin: 12px 0 0;',
+    '}',
+    'html.argus-settings .argus-wind-note em {',
+    '  font-style: normal;',
+    '  color: #f5d442;',
     '}',
     'html.argus-settings .component-submit {',
     '  position: fixed;',
@@ -709,6 +723,53 @@ module.exports = function () {
     }
   }
 
+  function injectWindInfo() {
+    var infoItem = clayConfig.getItemById('argus-wind-info');
+    if (!infoItem) {
+      return;
+    }
+
+    infoItem.set(
+      '<div class="argus-wind-info">' +
+        '<div class="argus-setting-label">Wind</div>' +
+        '<p class="argus-precip-intro">' +
+          'Gray × marks show wind speed on the Beaufort scale. Within each force level, ' +
+          'mark height reflects where the hourly speed falls in that level\'s range. ' +
+          'The chart axis normally spans force 0 to 8. If any visible hour exceeds force 8 ' +
+          '(75&nbsp;km/h or more), the axis extends to force 12.' +
+        '</p>' +
+        '<div class="argus-precip-table-wrap">' +
+          '<table class="argus-precip-table">' +
+            '<thead><tr><th>Force</th><th>Name</th><th>Speed (km/h)</th></tr></thead>' +
+            '<tbody>' +
+              '<tr><td>0</td><td>Calm</td><td>&lt; 1</td></tr>' +
+              '<tr><td>1</td><td>Light air</td><td>1 – 5</td></tr>' +
+              '<tr><td>2</td><td>Light breeze</td><td>6 – 11</td></tr>' +
+              '<tr><td>3</td><td>Gentle breeze</td><td>12 – 19</td></tr>' +
+              '<tr><td>4</td><td>Moderate breeze</td><td>20 – 28</td></tr>' +
+              '<tr><td>5</td><td>Fresh breeze</td><td>29 – 38</td></tr>' +
+              '<tr><td>6</td><td>Strong breeze</td><td>39 – 49</td></tr>' +
+              '<tr><td>7</td><td>Moderate gale</td><td>50 – 61</td></tr>' +
+              '<tr><td>8</td><td>Gale</td><td>62 – 74</td></tr>' +
+              '<tr><td>9</td><td>Strong gale</td><td>75 – 88</td></tr>' +
+              '<tr><td>10</td><td>Storm</td><td>89 – 102</td></tr>' +
+              '<tr><td>11</td><td>Violent storm</td><td>103 – 117</td></tr>' +
+              '<tr><td>12</td><td>Hurricane force</td><td>118+</td></tr>' +
+            '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<p class="argus-wind-note">' +
+          'Forces 9–12 only appear when the axis extends. Marks above force 8 are drawn in ' +
+          '<em>yellow</em>.' +
+        '</p>' +
+      '</div>'
+    );
+
+    if (infoItem.$element && infoItem.$element[0]) {
+      infoItem.$element[0].classList.add('argus-row');
+    }
+  }
+
   function applyRowStyles() {
     var allKeys = SEGMENT_KEYS.concat(LIST_RADIO_KEYS).concat([
       'ManualLocation',
@@ -728,6 +789,11 @@ module.exports = function () {
     var precipInfo = clayConfig.getItemById('argus-precipitation-info');
     if (precipInfo && precipInfo.$element && precipInfo.$element[0]) {
       precipInfo.$element[0].classList.add('argus-row');
+    }
+
+    var windInfo = clayConfig.getItemById('argus-wind-info');
+    if (windInfo && windInfo.$element && windInfo.$element[0]) {
+      windInfo.$element[0].classList.add('argus-row');
     }
 
     var manualLocation = clayConfig.getItemByMessageKey('ManualLocation');
@@ -1105,6 +1171,7 @@ module.exports = function () {
     wrapTabPanels();
     wrapInlineControlBodies();
     injectPrecipitationInfo();
+    injectWindInfo();
     injectSettingsFieldHelp();
     hideHeaderHeartRateIfNeeded();
     normalizeRealtimeStepsDefault();

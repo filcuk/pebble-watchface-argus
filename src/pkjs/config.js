@@ -150,6 +150,12 @@ module.exports = [
     defaultValue: '',
   },
   {
+    type: 'text',
+    id: 'argus-wind-info',
+    group: 'tabWeather',
+    defaultValue: '',
+  },
+  {
     type: 'toggle',
     messageKey: 'DebugMode',
     label: 'Debug mode',
