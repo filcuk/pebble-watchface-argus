@@ -62,7 +62,8 @@
       "HeaderDisplay",
       "RealtimeSteps",
       "CaptureTimeOffset",
-      "WeatherForEpoch"
+      "WeatherForEpoch",
+      "WeatherFetchFailed"
     ],
     "resources": {
       "media": []

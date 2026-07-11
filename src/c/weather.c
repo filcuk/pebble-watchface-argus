@@ -376,6 +376,21 @@ void weather_mark_unavailable(void) {
   prv_notify_updated();
 }
 
+void weather_mark_fetch_failed(void) {
+  if (weather_use_demo_data()) {
+    return;
+  }
+
+  prv_cancel_timers();
+  s_last_weather_request_at = 0;
+  if (weather_cache_is_valid()) {
+    s_weather.state = WEATHER_STATE_READY;
+  } else {
+    s_weather.state = WEATHER_STATE_ERROR;
+  }
+  prv_notify_updated();
+}
+
 void weather_refresh_for_connection(bool phone_connected) {
   if (weather_use_demo_data()) {
     weather_apply_demo_data();

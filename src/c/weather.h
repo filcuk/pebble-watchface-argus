@@ -52,6 +52,7 @@ void weather_request_force(void);
 bool weather_is_night_now(void);
 void weather_mark_error(void);
 void weather_mark_unavailable(void);
+void weather_mark_fetch_failed(void);
 bool weather_use_demo_data(void);
 void weather_refresh_for_connection(bool phone_connected);
 void weather_schedule_retry(void);
