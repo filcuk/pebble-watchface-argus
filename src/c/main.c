@@ -446,6 +446,28 @@ static void prv_schedule_biometric_load_refresh(void) {
 }
 #endif
 
+static AppTimer *s_check_release_notice_timer;
+
+static void prv_check_release_notice_timer_cb(void *context) {
+  (void)context;
+  s_check_release_notice_timer = NULL;
+
+  DictionaryIterator *iter;
+  if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
+    return;
+  }
+
+  dict_write_uint8(iter, MESSAGE_KEY_CheckReleaseNotice, 1);
+  app_message_outbox_send();
+}
+
+static void prv_schedule_release_notice_check(void) {
+  if (s_check_release_notice_timer) {
+    app_timer_cancel(s_check_release_notice_timer);
+  }
+  s_check_release_notice_timer = app_timer_register(500, prv_check_release_notice_timer_cb, NULL);
+}
+
 static void init(void) {
   settings_init();
   weather_init();
@@ -480,9 +502,15 @@ static void init(void) {
 
   weather_request_force();
   s_last_periodic_weather_refresh = argus_time_now();
+
+  prv_schedule_release_notice_check();
 }
 
 static void deinit(void) {
+  if (s_check_release_notice_timer) {
+    app_timer_cancel(s_check_release_notice_timer);
+    s_check_release_notice_timer = NULL;
+  }
 #if defined(PBL_HEALTH)
   if (s_biometric_load_timer) {
     app_timer_cancel(s_biometric_load_timer);
