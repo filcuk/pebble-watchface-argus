@@ -205,6 +205,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
 #if defined(PBL_HEALTH)
     if (dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_RealtimeSteps)) {
       prv_sync_health_sampling();
+      prv_refresh_biometric_header();
       prv_schedule_biometric_load_refresh();
       prv_schedule_hr_backfill();
     }
@@ -212,6 +213,9 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   }
   if (dict_find(iter, MESSAGE_KEY_ClockFont) && s_time_display) {
     time_display_apply_settings(s_time_display);
+    if (s_window_layer) {
+      layer_mark_dirty(s_window_layer);
+    }
   }
 
   Tuple *offset_tuple = dict_find(iter, MESSAGE_KEY_CaptureTimeOffset);

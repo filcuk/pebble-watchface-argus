@@ -745,6 +745,11 @@ static void prv_send_weather_request(time_t when_hour) {
   if (argus_time_get_offset() != 0) {
     dict_write_int32(iter, MESSAGE_KEY_WeatherForEpoch, (int32_t)request_hour);
   }
+  const ArgusSettings *settings = settings_get();
+  dict_write_int32(iter, MESSAGE_KEY_LocationMode, (int32_t)settings->location_mode);
+  if (settings->location_mode == LOCATION_MODE_MANUAL && settings->manual_location[0] != '\0') {
+    dict_write_cstring(iter, MESSAGE_KEY_ManualLocation, settings->manual_location);
+  }
   AppMessageResult result = app_message_outbox_send();
   if (result != APP_MSG_OK) {
     APP_LOG(APP_LOG_LEVEL_WARNING, "Weather request send failed: %d", (int)result);
