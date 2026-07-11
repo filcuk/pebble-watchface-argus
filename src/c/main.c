@@ -161,7 +161,8 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   (void)context;
   bool request_weather = false;
 
-  if (dict_find(iter, MESSAGE_KEY_WeatherFetchFailed)) {
+  /* PKJS failure signal: WeatherHourCount without WeatherTempHourly. */
+  if (dict_find(iter, MESSAGE_KEY_WeatherHourCount) && !dict_find(iter, MESSAGE_KEY_WeatherTempHourly)) {
     weather_mark_fetch_failed();
     return;
   }

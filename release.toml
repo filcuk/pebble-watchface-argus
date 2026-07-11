@@ -4,7 +4,7 @@
 version = "1.1.0"
 
 message = """
-We have improved weather readings and customisation, added heart rate header reading and re-designed settings.
+We have improved weather readings and customisation, added heart rate reading option and re-designed settings.
 
 Thanks for your patronage <3
 """

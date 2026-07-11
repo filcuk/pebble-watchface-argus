@@ -452,7 +452,7 @@ function packWeatherPayload(json, hours, startEpoch) {
 function notifyWeatherFetchFailed() {
   clearWeatherFetchInFlight();
   var dict = {};
-  dict[keys.WeatherFetchFailed] = 1;
+  dict[keys.WeatherHourCount] = 0;
   Pebble.sendAppMessage(
     dict,
     function () {
