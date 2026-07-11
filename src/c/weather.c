@@ -410,24 +410,91 @@ void weather_mark_error(void) {
   s_weather.state = WEATHER_STATE_ERROR;
 }
 
+static int8_t prv_demo_temp_for_clock_hour(int clock_hour) {
+  static const int8_t TEMP_BY_HOUR[24] = {
+      6, 5, 4, 4, 5, 6, 7, 9, 11, 13, 15, 16, 17, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8,
+  };
+  return TEMP_BY_HOUR[clock_hour % 24];
+}
+
+static int8_t prv_demo_feels_for_clock_hour(int clock_hour, int8_t temp) {
+  if (clock_hour >= 15 && clock_hour <= 21) {
+    return (int8_t)(temp - 3);
+  }
+  if (clock_hour >= 10 && clock_hour <= 14) {
+    return (int8_t)(temp + 1);
+  }
+  return (int8_t)(temp - 1);
+}
+
+static uint8_t prv_demo_precip_for_clock_hour(int clock_hour) {
+  static const uint8_t PRECIP_TENTH_MM[24] = {
+      0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0, 8, 18, 40, 85, 150, 220, 180, 45, 8, 0,
+  };
+  return PRECIP_TENTH_MM[clock_hour % 24];
+}
+
+static uint8_t prv_demo_wind_for_clock_hour(int clock_hour) {
+  static const uint8_t WIND_KMH[24] = {
+      5, 4, 3, 4, 5, 8, 10, 12, 15, 18, 20, 22, 25, 28, 32, 45, 58, 68, 78, 95, 125, 88, 40, 15,
+  };
+  return WIND_KMH[clock_hour % 24];
+}
+
+static int8_t prv_demo_fair_temp_for_clock_hour(int clock_hour) {
+  static const int8_t TEMP_BY_HOUR[24] = {
+      9, 8, 7, 7, 8, 9, 10, 12, 14, 16, 18, 19, 20, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10,
+  };
+  return TEMP_BY_HOUR[clock_hour % 24];
+}
+
+static uint8_t prv_demo_fair_precip_for_clock_hour(int clock_hour) {
+  if (clock_hour == 14) {
+    return 12;
+  }
+  if (clock_hour == 15) {
+    return 6;
+  }
+  return 0;
+}
+
+static uint8_t prv_demo_fair_wind_for_clock_hour(int clock_hour) {
+  static const uint8_t WIND_KMH[24] = {
+      6, 5, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 20, 18, 16, 14, 12, 10, 9, 8, 7, 6, 6,
+  };
+  return WIND_KMH[clock_hour % 24];
+}
+
 void weather_apply_demo_data(void) {
   if (!weather_use_demo_data()) {
     return;
   }
 
-  s_weather.hour_count = 24;
-  s_weather.precip_max = 40;
-  s_weather.wind_max = 30;
+  s_weather.hour_count = 48;
   s_weather.fetch_time = prv_current_hour_start();
 
-  for (uint8_t i = 0; i < 24; i++) {
+  for (uint8_t i = 0; i < s_weather.hour_count; i++) {
     time_t hour_time = s_weather.fetch_time + (time_t)i * 3600;
     struct tm *tm_hour = localtime(&hour_time);
-    int clock_hour = tm_hour ? tm_hour->tm_hour : (int)i;
-    s_weather.temps[i] = (int8_t)(8 + ((clock_hour * 3) % 9));
-    s_weather.feels_temps[i] = (int8_t)(s_weather.temps[i] - 2);
-    s_weather.precips[i] = (uint8_t)((clock_hour % 5) * 8);
-    s_weather.winds[i] = (uint8_t)(5 + ((clock_hour * 7) % 20));
+    int clock_hour = tm_hour ? tm_hour->tm_hour : (int)(i % 24);
+    bool fair_day = i >= 24;
+    int8_t temp;
+    int8_t feels;
+
+    if (fair_day) {
+      temp = prv_demo_fair_temp_for_clock_hour(clock_hour);
+      feels = (int8_t)(temp - 1);
+      s_weather.precips[i] = prv_demo_fair_precip_for_clock_hour(clock_hour);
+      s_weather.winds[i] = prv_demo_fair_wind_for_clock_hour(clock_hour);
+    } else {
+      temp = prv_demo_temp_for_clock_hour(clock_hour);
+      feels = prv_demo_feels_for_clock_hour(clock_hour, temp);
+      s_weather.precips[i] = prv_demo_precip_for_clock_hour(clock_hour);
+      s_weather.winds[i] = prv_demo_wind_for_clock_hour(clock_hour);
+    }
+
+    s_weather.temps[i] = temp;
+    s_weather.feels_temps[i] = feels;
     s_weather.is_day[i] = (clock_hour >= 6 && clock_hour < 20) ? 1 : 0;
   }
   s_weather.has_is_day = true;
