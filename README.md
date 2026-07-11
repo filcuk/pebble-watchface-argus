@@ -4,7 +4,7 @@ Argus guides you through the days ahead with hourly weather forecast, a two-week
 Inspired by [WarnWeather](https://github.com/Toasbi/WarnWeather).
 
 <div align="center">
-<img width="200" height="228" alt="argus-1" src="images/argus-3.gif" />
+<img width="200" height="228" alt="argus-1" src="images/argus.gif" />
 </div>
 <div align="center">
 <img width="200" height="228" alt="header" src="images/header.png" />
