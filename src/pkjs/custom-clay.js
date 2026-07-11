@@ -205,6 +205,15 @@ module.exports = function () {
     '  margin-top: 10px;',
     '  padding: 0;',
     '}',
+    'html.argus-settings .argus-field-help-secondary {',
+    '  display: block;',
+    '  width: 100%;',
+    '  font-size: 13px;',
+    '  color: #9aa1ab !important;',
+    '  line-height: 1.45;',
+    '  margin-top: 8px;',
+    '  padding: 0;',
+    '}',
     'html.argus-settings .argus-inline-control {',
     '  display: block;',
     '}',
@@ -301,6 +310,11 @@ module.exports = function () {
     '  -webkit-box-ordinal-group: 4;',
     '  order: 4;',
     '  margin-top: 10px;',
+    '}',
+    'html.argus-settings .argus-list-radiogroup > .argus-field-help-secondary {',
+    '  -webkit-box-ordinal-group: 5;',
+    '  order: 5;',
+    '  margin-top: 8px;',
     '}',
     'html.argus-settings .argus-segment-radiogroup .radio-group {',
     '  display: inline-flex;',
@@ -1051,6 +1065,35 @@ module.exports = function () {
     }
   }
 
+  function appendFieldHelp(messageKey, text, secondaryClass) {
+    var item = clayConfig.getItemByMessageKey(messageKey);
+    if (!item || !item.$element || !item.$element[0]) {
+      return;
+    }
+
+    var root = item.$element[0];
+    var className = secondaryClass || 'argus-field-help-secondary';
+    if (root.querySelector(':scope > .' + className)) {
+      return;
+    }
+
+    var help = document.createElement('div');
+    help.className = className;
+    help.textContent = text;
+
+    var primaryHelp = root.querySelector(':scope > .argus-field-help');
+    if (primaryHelp) {
+      if (primaryHelp.nextSibling) {
+        root.insertBefore(help, primaryHelp.nextSibling);
+      } else {
+        root.appendChild(help);
+      }
+      return;
+    }
+
+    root.appendChild(help);
+  }
+
   function injectFieldHelp(messageKey, text) {
     var item = clayConfig.getItemByMessageKey(messageKey);
     if (!item || !item.$element || !item.$element[0]) {
@@ -1101,6 +1144,12 @@ module.exports = function () {
       'Step count shows your total steps for the day. Temperature shows the current ' +
       'reading with today\'s minimum and maximum forecasted. Heart rate ' +
       'shows your current BPM with today\'s maximum.'
+    );
+    appendFieldHelp(
+      'HeaderDisplay',
+      'Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
+      'earlier peaks from today may be included if the watch already stored minute ' +
+      'heart-rate samples.'
     );
   }
 

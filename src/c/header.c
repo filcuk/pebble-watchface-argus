@@ -3,6 +3,7 @@
 #include "argus_time.h"
 #include "formatting.h"
 #include "heart_icon.h"
+#include "hr_day.h"
 #include "steps_icon.h"
 #include "temp_icon.h"
 #include "settings.h"
@@ -45,19 +46,12 @@ static bool prv_valid_hr_bpm(uint8_t bpm) {
 }
 
 #if defined(PBL_HEALTH)
-#define HR_HISTORY_WINDOW_SEC (2 * SECONDS_PER_HOUR)
 #define DEMO_STEPS_COUNT 6000
 #define DEMO_HR_CURRENT 80
 #define DEMO_HR_MAX 120
 
 static bool prv_valid_health_hr_bpm(HealthValue bpm) {
   return bpm >= HR_BPM_MIN && bpm <= HR_BPM_MAX;
-}
-
-static bool prv_hr_aggregate_available(time_t start, time_t end, HealthAggregation aggregation) {
-  HealthServiceAccessibilityMask mask = health_service_metric_aggregate_averaged_accessible(
-      HealthMetricHeartRateBPM, start, end, aggregation, HealthServiceTimeScopeOnce);
-  return (mask & HealthServiceAccessibilityMaskAvailable) != 0;
 }
 
 static int prv_today_steps(void) {
@@ -81,7 +75,7 @@ typedef struct {
   uint8_t max;
 } HeartRateReadings;
 
-static void prv_heart_rate_readings(HeartRateReadings *out, bool fetch_history_max) {
+static void prv_heart_rate_readings(HeartRateReadings *out) {
   out->ready = false;
   out->current = 0;
   out->max = 0;
@@ -94,33 +88,18 @@ static void prv_heart_rate_readings(HeartRateReadings *out, bool fetch_history_m
   }
 
   time_t end = argus_time_now();
-
-  if (prv_hr_aggregate_available(end, end, HealthAggregationAvg)) {
+  HealthServiceAccessibilityMask mask =
+      health_service_metric_accessible(HealthMetricHeartRateBPM, end, end);
+  if (mask & HealthServiceAccessibilityMaskAvailable) {
     HealthValue current = health_service_peek_current_value(HealthMetricHeartRateBPM);
     if (prv_valid_health_hr_bpm(current)) {
       out->current = (uint8_t)current;
       out->ready = true;
+      hr_day_record(out->current);
     }
   }
 
-  uint8_t max_bpm = 0;
-
-  if (fetch_history_max) {
-    time_t history_start = end - HR_HISTORY_WINDOW_SEC;
-    if (prv_hr_aggregate_available(history_start, end, HealthAggregationMax)) {
-      HealthValue aggregate_max = health_service_aggregate_averaged(HealthMetricHeartRateBPM, history_start, end,
-                                                                  HealthAggregationMax,
-                                                                  HealthServiceTimeScopeOnce);
-      if (prv_valid_health_hr_bpm(aggregate_max)) {
-        max_bpm = (uint8_t)aggregate_max;
-        out->ready = true;
-      }
-    }
-  }
-
-  if (out->current > max_bpm) {
-    max_bpm = out->current;
-  }
+  uint8_t max_bpm = hr_day_max();
   if (max_bpm > 0) {
     out->max = max_bpm;
     out->ready = true;
@@ -500,7 +479,7 @@ void header_update(Header *header, struct tm *now) {
   }
 }
 
-void header_refresh_biometrics(Header *header, struct tm *now, bool fetch_hr_history) {
+void header_refresh_biometrics(Header *header, struct tm *now) {
   if (!header || !now) {
     return;
   }
@@ -530,7 +509,7 @@ void header_refresh_biometrics(Header *header, struct tm *now, bool fetch_hr_his
   } else if (mode == HEADER_DISPLAY_HEART_RATE) {
 #if defined(PBL_HEALTH)
     HeartRateReadings hr;
-    prv_heart_rate_readings(&hr, fetch_hr_history);
+    prv_heart_rate_readings(&hr);
     changed = header->status_hr_ready != hr.ready || header->status_hr_current != hr.current ||
               header->status_hr_max != hr.max;
     if (changed) {
