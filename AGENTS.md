@@ -51,7 +51,7 @@ Inject theme CSS **last** in `AFTER_BUILD` so it wins the cascade. Remove any ex
 
 - **Tabs** — injected in `custom-clay.js`; compact buttons, not Clay’s full-width uppercase buttons
 - **One-line controls** (segments, toggles) — title on top; description + control in `.argus-control-row` (flex, top-aligned)
-- **List radiogroups** (`HeaderDisplay`, `ClockFont`) — full-width list; left-aligned text, radio circle on the right
+- **List radiogroups** (`HeaderDisplay`, `ClockFont`, `WeatherProvider`, `GpsMaxAge`, `WeatherUpdateInterval`) — full-width list; left-aligned text, radio circle on the right
 - **Theme** — fixed dark gray palette; do not use `@media (prefers-color-scheme)` (causes phone/emulator mismatch)
 - **Accent** — steel blue `#4a6885` for active states (chosen for white-text contrast)
 
@@ -66,9 +66,9 @@ Inject theme CSS **last** in `AFTER_BUILD` so it wins the cascade. Remove any ex
 | UI pattern | Clay type | Keys / notes |
 |------------|-----------|--------------|
 | Segment pills | `radiogroup` + `.argus-segment-radiogroup` | `HourFormat`, `WeekStart`, `BluetoothDisplay`, `LocationMode`, `ForecastHours`, `TemperatureUnit`, `WeekNumberMode` (label: Calendar; ISO/US) |
-| Toggle list | `radiogroup` + `.argus-list-radiogroup` | `HeaderDisplay`, `ClockFont`, `RealtimeSteps` |
-| Boolean toggle | `toggle` + `.argus-inline-control` | `TemperatureDisplay`, debug toggles |
-| Text input | `input` | `ManualLocation` |
+| List radiogroup | `radiogroup` + `.argus-list-radiogroup` | `HeaderDisplay`, `ClockFont`, `RealtimeSteps`, `WeatherProvider`, `GpsMaxAge`, `WeatherUpdateInterval` |
+| Boolean toggle | `toggle` + `.argus-inline-control` | `TemperatureDisplay`, `PauseWeatherAtNight`, debug toggles |
+| Text input | `input` | `ManualLocation` (hidden when Location is Auto; GPS frequency hidden when Manual) |
 
 ### Testing checklist
 
