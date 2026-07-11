@@ -1,7 +1,7 @@
 # Shared helpers for Argus emulator screenshot capture scripts.
 # Source from capture-screenshots.sh / capture-scenario.sh (do not execute directly).
 
-APP_UUID="${APP_UUID:-f8c3a2b1-4d5e-6f70-8a9b-0c1d2e3f4a5b}"
+APP_UUID="${APP_UUID:-7b435c75-5965-4f3f-8c1c-206acf20ca7f}"
 PEBBLE_RETRIES="${PEBBLE_RETRIES:-4}"
 PEBBLE_RETRY_DELAY="${PEBBLE_RETRY_DELAY:-5}"
 PEBBLE_CMD_GAP="${PEBBLE_CMD_GAP:-1}"

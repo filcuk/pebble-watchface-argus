@@ -11,7 +11,7 @@
   },
   "pebble": {
     "displayName": "Argus",
-    "uuid": "f8c3a2b1-4d5e-6f70-8a9b-0c1d2e3f4a5b",
+    "uuid": "7b435c75-5965-4f3f-8c1c-206acf20ca7f",
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [
