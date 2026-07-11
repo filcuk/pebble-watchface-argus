@@ -12,7 +12,15 @@ module.exports = function () {
     'TemperatureUnit',
   ];
   var LIST_RADIO_KEYS = ['HeaderDisplay', 'ClockFont', 'RealtimeSteps'];
-  var INLINE_CONTROL_KEYS = SEGMENT_KEYS.concat([
+  var TITLE_INLINE_SEGMENT_KEYS = [
+    'HourFormat',
+    'WeekStart',
+    'LocationMode',
+    'TemperatureUnit',
+  ];
+  var INLINE_CONTROL_KEYS = SEGMENT_KEYS.filter(function (key) {
+    return TITLE_INLINE_SEGMENT_KEYS.indexOf(key) === -1;
+  }).concat([
     'TemperatureDisplay',
     'DebugMode',
     'DemoWeather',
@@ -70,15 +78,28 @@ module.exports = function () {
     '  text-align: left !important;',
     '}',
     'html.argus-settings .argus-tabs {',
+    '  display: -webkit-box;',
+    '  display: -webkit-flex;',
     '  display: flex;',
-    '  flex-wrap: wrap;',
+    '  -webkit-flex-wrap: nowrap;',
+    '  flex-wrap: nowrap;',
     '  gap: 6px;',
+    '  overflow-x: auto;',
+    '  overflow-y: hidden;',
+    '  -webkit-overflow-scrolling: touch;',
+    '  scrollbar-width: none;',
+    '  -ms-overflow-style: none;',
     '  position: sticky;',
     '  top: 0;',
     '  z-index: 10;',
     '  background: #1a1d21 !important;',
     '  padding: 0 0 6px;',
     '  margin-bottom: 6px;',
+    '}',
+    'html.argus-settings .argus-tabs::-webkit-scrollbar {',
+    '  display: none;',
+    '  width: 0;',
+    '  height: 0;',
     '}',
     'html.argus-settings .argus-tabs .argus-tab {',
     '  appearance: none;',
@@ -90,9 +111,10 @@ module.exports = function () {
     '  min-width: 0 !important;',
     '  max-width: none !important;',
     '  flex: 0 0 auto;',
+    '  flex-shrink: 0;',
     '  box-sizing: border-box;',
     '  min-height: 36px !important;',
-    '  padding: 8px 18px !important;',
+    '  padding: 8px 14px !important;',
     '  margin: 0 !important;',
     '  border: 1px solid #464d58 !important;',
     '  border-radius: 9px !important;',
@@ -217,10 +239,61 @@ module.exports = function () {
     '  display: block;',
     '  margin-bottom: 10px !important;',
     '}',
+    'html.argus-settings .argus-title-inline-control {',
+    '  display: -webkit-box;',
+    '  display: -webkit-flex;',
+    '  display: flex;',
+    '  -webkit-box-align: center;',
+    '  -webkit-align-items: center;',
+    '  align-items: center;',
+    '  -webkit-box-pack: justify;',
+    '  -webkit-justify-content: space-between;',
+    '  justify-content: space-between;',
+    '  gap: 8px 12px;',
+    '}',
+    'html.argus-settings .argus-title-inline-control > .label {',
+    '  -webkit-box-flex: 1;',
+    '  -webkit-flex: 1 1 auto;',
+    '  flex: 1 1 auto;',
+    '  min-width: 0;',
+    '  margin-bottom: 0 !important;',
+    '}',
+    'html.argus-settings .argus-title-inline-control > .radio-group {',
+    '  -webkit-box-flex: 0;',
+    '  -webkit-flex: 0 0 auto;',
+    '  flex: 0 0 auto;',
+    '  margin-left: auto;',
+    '}',
     'html.argus-settings .argus-segment-radiogroup > .radio-group {',
     '  margin-left: auto;',
     '}',
+    'html.argus-settings .argus-list-radiogroup {',
+    '  display: -webkit-box;',
+    '  display: -webkit-flex;',
+    '  display: flex;',
+    '  -webkit-box-orient: vertical;',
+    '  -webkit-flex-direction: column;',
+    '  flex-direction: column;',
+    '}',
+    'html.argus-settings .argus-list-radiogroup > .label {',
+    '  -webkit-box-ordinal-group: 1;',
+    '  order: 1;',
+    '  display: block;',
+    '  margin-bottom: 8px !important;',
+    '}',
     'html.argus-settings .argus-list-radiogroup > .description {',
+    '  -webkit-box-ordinal-group: 2;',
+    '  order: 2;',
+    '  margin-top: 0 !important;',
+    '  margin-bottom: 10px !important;',
+    '}',
+    'html.argus-settings .argus-list-radiogroup > .radio-group {',
+    '  -webkit-box-ordinal-group: 3;',
+    '  order: 3;',
+    '}',
+    'html.argus-settings .argus-list-radiogroup > .argus-field-help {',
+    '  -webkit-box-ordinal-group: 4;',
+    '  order: 4;',
     '  margin-top: 10px;',
     '}',
     'html.argus-settings .argus-segment-radiogroup .radio-group {',
@@ -239,7 +312,7 @@ module.exports = function () {
     '  flex: 0 0 auto;',
     '  min-height: 30px;',
     '  margin: 0 !important;',
-    '  padding: 6px 16px !important;',
+    '  padding: 6px 12px !important;',
     '  border: none;',
     '  border-radius: 7px;',
     '  cursor: pointer;',
@@ -252,7 +325,7 @@ module.exports = function () {
     '  font-weight: 600;',
     '  color: #b4bac3 !important;',
     '  text-align: center;',
-    '  padding: 0 4px !important;',
+    '  padding: 0 2px !important;',
     '  margin: 0 !important;',
     '}',
     'html.argus-settings .argus-segment-radiogroup .radio-group i {',
@@ -269,10 +342,6 @@ module.exports = function () {
     '}',
     'html.argus-settings .argus-segment-radiogroup .radio-group label.active .label {',
     '  color: #ffffff !important;',
-    '}',
-    'html.argus-settings .argus-list-radiogroup > .label {',
-    '  display: block;',
-    '  margin-bottom: 10px !important;',
     '}',
     'html.argus-settings .argus-list-radiogroup .radio-group {',
     '  display: flex;',
@@ -399,25 +468,52 @@ module.exports = function () {
     '  display: block;',
     '  padding: 0 !important;',
     '}',
+    'html.argus-settings .argus-row.component-input > label.tap-highlight,',
+    'html.argus-settings .argus-row.component-input > label.tap-highlight:active,',
+    'html.argus-settings .argus-row.component-input > label.tap-highlight:focus,',
+    'html.argus-settings .argus-row.component-input > label.tap-highlight:focus-within {',
+    '  -webkit-tap-highlight-color: transparent !important;',
+    '  background: transparent !important;',
+    '  background-color: transparent !important;',
+    '}',
     'html.argus-settings .argus-row.component-input .input {',
     '  margin-top: 8px;',
     '  margin-left: 0 !important;',
     '  max-width: none !important;',
     '}',
-    'html.argus-settings .component-input input[type="text"] {',
+    'html.argus-settings .argus-row.component-input input,',
+    'html.argus-settings .argus-row.component-input input.argus-city-input {',
     '  width: 100%;',
     '  box-sizing: border-box;',
     '  min-height: 44px;',
     '  padding: 10px 12px;',
-    '  border: 1px solid #464d58 !important;',
+    '  border: 1px solid #c5cad1 !important;',
     '  border-radius: 10px;',
     '  font-size: 16px;',
-    '  background: #32373f !important;',
-    '  color: #e8ebef !important;',
+    '  background: #ffffff !important;',
+    '  background-color: #ffffff !important;',
+    '  color: #1a1d21 !important;',
+    '  color-scheme: light;',
+    '  -webkit-appearance: none;',
+    '  appearance: none;',
+    '  -webkit-tap-highlight-color: transparent;',
+    '  box-shadow: none !important;',
     '}',
-    'html.argus-settings .component-input.disabled input[type="text"] {',
+    'html.argus-settings .argus-row.component-input input::-webkit-input-placeholder {',
+    '  color: #8a919a;',
+    '}',
+    'html.argus-settings .argus-row.component-input input:focus {',
+    '  outline: none;',
+    '  border-color: #4a6885 !important;',
+    '  background: #ffffff !important;',
+    '  background-color: #ffffff !important;',
+    '  color: #1a1d21 !important;',
+    '}',
+    'html.argus-settings .argus-row.component-input.disabled input {',
     '  opacity: 0.55;',
-    '  background: #282c32 !important;',
+    '  background: #e8ebef !important;',
+    '  background-color: #e8ebef !important;',
+    '  color: #6b7280 !important;',
     '}',
     'html.argus-settings .argus-footer {',
     '  text-align: center;',
@@ -538,6 +634,21 @@ module.exports = function () {
       }
     });
 
+    var manualLocation = clayConfig.getItemByMessageKey('ManualLocation');
+    if (manualLocation && manualLocation.$element && manualLocation.$element[0]) {
+      var inputLabel = manualLocation.$element[0].querySelector('label.tap-highlight');
+      if (inputLabel) {
+        inputLabel.classList.remove('tap-highlight');
+      }
+
+      var cityInput = manualLocation.$element[0].querySelector('input');
+      if (cityInput) {
+        cityInput.classList.add('argus-city-input');
+        cityInput.style.backgroundColor = '#ffffff';
+        cityInput.style.color = '#1a1d21';
+      }
+    }
+
     SEGMENT_KEYS.forEach(function (key) {
       var item = clayConfig.getItemByMessageKey(key);
       if (item && item.$element && item.$element[0]) {
@@ -556,6 +667,13 @@ module.exports = function () {
       var item = clayConfig.getItemByMessageKey(key);
       if (item && item.$element && item.$element[0]) {
         item.$element[0].classList.add('argus-inline-control');
+      }
+    });
+
+    TITLE_INLINE_SEGMENT_KEYS.forEach(function (key) {
+      var item = clayConfig.getItemByMessageKey(key);
+      if (item && item.$element && item.$element[0]) {
+        item.$element[0].classList.add('argus-title-inline-control');
       }
     });
 
@@ -771,8 +889,8 @@ module.exports = function () {
     }
   }
 
-  function injectCalendarTypeHelp() {
-    var item = clayConfig.getItemByMessageKey('WeekNumberMode');
+  function injectFieldHelp(messageKey, text) {
+    var item = clayConfig.getItemByMessageKey(messageKey);
     if (!item || !item.$element || !item.$element[0]) {
       return;
     }
@@ -784,17 +902,44 @@ module.exports = function () {
 
     var help = document.createElement('div');
     help.className = 'argus-field-help';
-    help.textContent =
-      'ISO 8601 weeks start on Monday. Week 1 is the week that contains the first Thursday ' +
-      'of the year, so week numbers near January can differ from the US style. US week 1 is ' +
-      'the week containing January 1, with week numbers counting through the calendar year.';
+    help.textContent = text;
 
-    var anchor = root.querySelector(':scope > .argus-control-row');
+    var description = root.querySelector(':scope > .description');
+    if (description) {
+      if (description.nextSibling) {
+        root.insertBefore(help, description.nextSibling);
+      } else {
+        root.appendChild(help);
+      }
+      return;
+    }
+
+    var anchor = root.querySelector(':scope > .argus-control-row') ||
+      root.querySelector(':scope > .radio-group');
     if (anchor) {
-      root.insertBefore(help, anchor.nextSibling);
+      if (anchor.nextSibling) {
+        root.insertBefore(help, anchor.nextSibling);
+      } else {
+        root.appendChild(help);
+      }
     } else {
       root.appendChild(help);
     }
+  }
+
+  function injectSettingsFieldHelp() {
+    injectFieldHelp(
+      'WeekNumberMode',
+      'ISO 8601 is the international standard. Week 1 is determined by the first Thursday ' +
+      'of the year. US traditional style is typically used in North America. US week 1 is ' +
+      'the week containing 1st of January.'
+    );
+    injectFieldHelp(
+      'HeaderDisplay',
+      'Step count shows your total steps for the day. Temperature shows the current ' +
+      'reading with today\'s minimum and maximum forecasted. Heart rate ' +
+      'shows your current BPM with today\'s maximum.'
+    );
   }
 
   function hideHeaderHeartRateIfNeeded() {
@@ -838,13 +983,19 @@ module.exports = function () {
 
     var buttons = tabsRoot.querySelectorAll('.argus-tab');
     var j;
+    var activeButton = null;
     for (j = 0; j < buttons.length; j += 1) {
       var btn = buttons[j];
       if (btn.getAttribute('data-tab') === activeTab) {
         btn.classList.add('active');
+        activeButton = btn;
       } else {
         btn.classList.remove('active');
       }
+    }
+
+    if (activeButton && activeButton.scrollIntoView) {
+      activeButton.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
   }
 
@@ -857,7 +1008,7 @@ module.exports = function () {
     applyRowStyles();
     wrapTabPanels();
     wrapInlineControlBodies();
-    injectCalendarTypeHelp();
+    injectSettingsFieldHelp();
     hideHeaderHeartRateIfNeeded();
     normalizeRealtimeStepsDefault();
     bindSegmentSync();
