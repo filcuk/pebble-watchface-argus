@@ -11,7 +11,14 @@ module.exports = function () {
     'ForecastHours',
     'TemperatureUnit',
   ];
-  var LIST_RADIO_KEYS = ['HeaderDisplay', 'ClockFont', 'RealtimeSteps'];
+  var LIST_RADIO_KEYS = [
+    'HeaderDisplay',
+    'ClockFont',
+    'RealtimeSteps',
+    'WeatherProvider',
+    'GpsMaxAge',
+    'WeatherUpdateInterval',
+  ];
   var TITLE_INLINE_SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
@@ -22,6 +29,7 @@ module.exports = function () {
     return TITLE_INLINE_SEGMENT_KEYS.indexOf(key) === -1;
   }).concat([
     'TemperatureDisplay',
+    'PauseWeatherAtNight',
     'DebugMode',
     'DemoWeather',
     'DemoBiometrics',
@@ -788,6 +796,7 @@ module.exports = function () {
     var allKeys = SEGMENT_KEYS.concat(LIST_RADIO_KEYS).concat([
       'ManualLocation',
       'TemperatureDisplay',
+      'PauseWeatherAtNight',
       'DebugMode',
       'DemoWeather',
       'DemoBiometrics',
@@ -972,18 +981,34 @@ module.exports = function () {
   function syncManualLocationInput() {
     var locationMode = clayConfig.getItemByMessageKey('LocationMode');
     var manualLocation = clayConfig.getItemByMessageKey('ManualLocation');
+    var gpsMaxAge = clayConfig.getItemByMessageKey('GpsMaxAge');
 
-    if (!locationMode || !manualLocation) {
+    if (!locationMode) {
       return;
     }
 
-    if (locationMode.get() === '1') {
-      manualLocation.enable();
-      if (manualLocation.$manipulatorTarget && manualLocation.$manipulatorTarget[0]) {
-        manualLocation.$manipulatorTarget[0].focus();
+    var isManual = locationMode.get() === '1';
+
+    if (manualLocation && manualLocation.$element && manualLocation.$element[0]) {
+      var manualRoot = manualLocation.$element[0];
+      if (isManual) {
+        manualRoot.classList.remove('hide');
+        manualLocation.enable();
+        if (manualLocation.$manipulatorTarget && manualLocation.$manipulatorTarget[0]) {
+          manualLocation.$manipulatorTarget[0].focus();
+        }
+      } else {
+        manualRoot.classList.add('hide');
+        manualLocation.disable();
       }
-    } else {
-      manualLocation.disable();
+    }
+
+    if (gpsMaxAge && gpsMaxAge.$element && gpsMaxAge.$element[0]) {
+      if (isManual) {
+        gpsMaxAge.$element[0].classList.add('hide');
+      } else {
+        gpsMaxAge.$element[0].classList.remove('hide');
+      }
     }
   }
 
@@ -1150,6 +1175,19 @@ module.exports = function () {
       'Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
       'earlier peaks from today may be included if the watch already stored minute ' +
       'heart-rate samples.'
+    );
+    injectFieldHelp(
+      'WeatherProvider',
+      'All models are served by Open-Meteo without an API key. Auto combines the highest-' +
+      'resolution model available for your coordinates.'
+    );
+    injectFieldHelp(
+      'WeatherUpdateInterval',
+      'Shorter intervals keep data fresher but use more phone and watch battery.'
+    );
+    injectFieldHelp(
+      'GpsMaxAge',
+      'This setting affects battery life.'
     );
   }
 
