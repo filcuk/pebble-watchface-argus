@@ -107,6 +107,37 @@ ffmpeg -framerate 1 -i captures/sim-*/frame-%04d-*.png -loop 0 argus-timelapse.g
 
 **Demo weather** is enabled automatically in simulated capture mode. For manual screenshots, enable it in Clay settings.
 
+### Store demo animation (multi-phase scenario)
+
+Use `scripts/capture-scenario.sh` to run a predefined capture that changes watch settings between simulated time segments — useful for a standard Rebble store animation after each update.
+
+1. Build, install, and start the emulator (terminal 1):
+
+```bash
+pebble build
+pebble install --emulator emery
+```
+
+2. Optional: open Clay once and set **Release notification** to **Never** (this setting is phone-side only and is not sent by the capture script).
+
+3. Run the store demo (terminal 2):
+
+```bash
+bash scripts/capture-scenario.sh scenarios/store-demo.json
+```
+
+The bundled `scenarios/store-demo.json` captures **36 hourly frames** (6 phases × 6 hours) starting **2026-07-04 06:00**, with demo weather/biometrics, manual location **Prague**, and phases that cycle header modes (steps → HR → temperature), week start (Sunday), clock font (Bitham Bold), and °F scale.
+
+The scenario runner applies the `setup` block once after boot wait. Each phase sends **only its changed settings**; the first screenshot in each phase sets the simulated time offset.
+
+Frames land in `captures/sim-YYYYMMDD-HHMMSS/` (a new folder each run). Stitch into a GIF:
+
+```bash
+ffmpeg -framerate 2 -i captures/sim-*/frame-%04d-*.png -loop 0 argus-store-demo.gif
+```
+
+Edit `scenarios/store-demo.json` or add new scenario files to change the timeline. Scenario `setup` holds defaults applied before phase 1; each phase merges its `settings` cumulatively.
+
 ### Opening settings
 
 Clay settings open in **Firefox** (via WSL). The one-time `browser.py` patch in [Environment setup](#environment-setup) must be applied first.

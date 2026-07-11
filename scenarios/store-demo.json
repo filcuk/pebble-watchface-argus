@@ -1,0 +1,75 @@
+{
+  "start": "2026-07-03 06:00:00",
+  "interval": "1h",
+  "settle": 1.5,
+  "warmup": 5,
+  "setup": {
+    "HourFormat": 0,
+    "WeekStart": 0,
+    "WeekNumberMode": 0,
+    "RealtimeSteps": 0,
+    "HeaderDisplay": 0,
+    "ClockFont": 0,
+    "BluetoothDisplay": 1,
+    "TemperatureUnit": 0,
+    "ForecastHours": 24,
+    "TemperatureDisplay": 0,
+    "LocationMode": 1,
+    "ManualLocation": "Singapore",
+    "PauseWeatherAtNight": 0,
+    "WeatherUpdateInterval": 30,
+    "DebugMode": 1,
+    "DemoWeather": 0,
+    "DemoBiometrics": 1
+  },
+  "phases": [
+    {
+      "label": "Initial defaults",
+      "duration": "12h",
+      "settings": {
+      }
+    },
+    {
+      "label": "Step count header",
+      "duration": "6h",
+      "settings": {
+        "HeaderDisplay": 1
+      }
+    },
+    {
+      "label": "Heart rate header",
+      "duration": "6h",
+      "settings": {
+        "HeaderDisplay": 3
+      }
+    },
+    {
+      "label": "Temperature header",
+      "duration": "6h",
+      "settings": {
+        "HeaderDisplay": 2
+      }
+    },
+    {
+      "label": "Week start Sunday",
+      "duration": "6h",
+      "settings": {
+        "WeekStart": 1
+      }
+    },
+    {
+      "label": "Bitham Bold clock",
+      "duration": "6h",
+      "settings": {
+        "ClockFont": 2
+      }
+    },
+    {
+      "label": "Fahrenheit scale",
+      "duration": "6h",
+      "settings": {
+        "TemperatureUnit": 1
+      }
+    }
+  ]
+}

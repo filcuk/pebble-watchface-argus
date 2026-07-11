@@ -218,7 +218,10 @@ void time_display_apply_settings(TimeDisplay *display) {
     return;
   }
   display->char_widths_ready = false;
+  display->cached_clock_font = (ClockFont)-1;
+  prv_cache_char_widths(display);
   layer_mark_dirty(display->time_layer);
+  layer_mark_dirty(display->container);
 }
 
 void time_display_destroy(TimeDisplay *display) {
@@ -244,6 +247,13 @@ void time_display_set_bounds(TimeDisplay *display, GRect frame) {
 void time_display_update(TimeDisplay *display, struct tm *now) {
   if (!display || !now) {
     return;
+  }
+
+  ClockFont clock_font = settings_get()->clock_font;
+  if (display->cached_clock_font != clock_font) {
+    display->char_widths_ready = false;
+    prv_cache_char_widths(display);
+    layer_mark_dirty(display->time_layer);
   }
 
   struct tm local_now = *now;

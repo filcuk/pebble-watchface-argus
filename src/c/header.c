@@ -179,8 +179,9 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
 
   GRect bounds = layer_get_bounds(layer);
   int center_y = bounds.origin.y + bounds.size.h / 2;
+  HeaderDisplayMode mode = settings_get()->header_display_mode;
 
-  switch (header->status_mode) {
+  switch (mode) {
     case HEADER_DISPLAY_STEPS: {
       GSize count_size = prv_text_size(header->status_text);
       int total_w = STEPS_ICON_WIDTH + STATUS_ICON_GAP + count_size.w;

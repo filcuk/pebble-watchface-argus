@@ -9,13 +9,13 @@
 #   pebble build && pebble install --emulator emery
 #   bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m
 #
+# Multi-phase store demos with settings changes:
+#   bash scripts/capture-scenario.sh scenarios/store-demo.json
+#
 # Stitch frames into a GIF (optional):
 #   ffmpeg -framerate 1 -i captures/sim-*/frame-%04d-*.png -loop 0 argus-timelapse.gif
 set -eu
 
-# WSL DrvFS: bash reads scripts incrementally from /mnt/c; after sleep or heavy I/O
-# the next chunk can fail with "error reading input file: No data available".
-# Re-exec from a native Linux temp copy when launched from a Windows mount.
 if [[ "${BASH_SOURCE[0]:-}" == /mnt/* ]] && [[ -z "${ARGUS_CAPTURE_REEXEC:-}" ]]; then
   export ARGUS_CAPTURE_REEXEC=1
   tmp=$(mktemp /tmp/argus-capture.XXXXXX.sh)
@@ -23,6 +23,10 @@ if [[ "${BASH_SOURCE[0]:-}" == /mnt/* ]] && [[ -z "${ARGUS_CAPTURE_REEXEC:-}" ]]
   chmod +x "$tmp"
   exec bash "$tmp" "$@"
 fi
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=capture-lib.sh
+source "$SCRIPT_DIR/capture-lib.sh"
 
 STOP=0
 CLEANUP_DONE=0
@@ -35,15 +39,11 @@ START_TIME="2026-07-06 09:00:00"
 SETTLE_DELAY=""
 WARMUP_SEC=""
 DEMO_WEATHER=-1
-PEBBLE_RETRIES=4
-PEBBLE_RETRY_DELAY=5
-PEBBLE_CMD_GAP=1
 LIVE_WEATHER_MIN_SETTLE=15
 
 MSG_DEBUG_MODE=10010
 MSG_DEMO_WEATHER=10011
 MSG_CAPTURE_TIME_OFFSET=10027
-APP_UUID="f8c3a2b1-4d5e-6f70-8a9b-0c1d2e3f4a5b"
 
 usage() {
   cat <<'EOF'
@@ -73,82 +73,6 @@ Examples:
 EOF
 }
 
-parse_time() {
-  local value="$1"
-  local default_unit="$2"
-
-  if [[ ! "$value" =~ ^[0-9]+([dhms])?$ ]]; then
-    echo "Invalid time value: $value (use e.g. 3h, 90m, 14d, 45s)" >&2
-    exit 1
-  fi
-
-  if [[ "$value" =~ d$ ]]; then
-    echo $(( ${value%d} * 86400 ))
-  elif [[ "$value" =~ h$ ]]; then
-    echo $(( ${value%h} * 3600 ))
-  elif [[ "$value" =~ m$ ]]; then
-    echo $(( ${value%m} * 60 ))
-  elif [[ "$value" =~ s$ ]]; then
-    echo ${value%s}
-  elif [[ "$default_unit" == "m" ]]; then
-    echo $(( value * 60 ))
-  else
-    echo "$value"
-  fi
-}
-
-format_duration() {
-  local total="$1"
-  local days=$(( total / 86400 ))
-  local hours=$(( (total % 86400) / 3600 ))
-  local minutes=$(( (total % 3600) / 60 ))
-  local seconds=$(( total % 60 ))
-  if (( days > 0 )); then
-    printf '%dd %dh %dm' "$days" "$hours" "$minutes"
-  elif (( hours > 0 )); then
-    printf '%dh %dm %ds' "$hours" "$minutes" "$seconds"
-  elif (( minutes > 0 )); then
-    printf '%dm %ds' "$minutes" "$seconds"
-  else
-    printf '%ds' "$seconds"
-  fi
-}
-
-parse_start_epoch() {
-  local value="$1"
-  if [[ "$value" =~ ^[0-9]+$ ]]; then
-    echo "$value"
-    return
-  fi
-  local epoch
-  if ! epoch=$(date -d "$value" +%s 2>/dev/null); then
-    echo "Invalid --start value: $value (use e.g. \"2026-07-06 09:00\" or Unix seconds)" >&2
-    exit 1
-  fi
-  echo "$epoch"
-}
-
-format_sim_time() {
-  date -d "@$1" +"%Y-%m-%d %H:%M"
-}
-
-resolve_message_key() {
-  local name="$1"
-  local fallback="$2"
-  local keys_file="build/js/message_keys.json"
-  if [[ -f "$keys_file" ]]; then
-    python3 - "$name" "$fallback" "$keys_file" <<'PY'
-import json, sys
-name, fallback, path = sys.argv[1:4]
-with open(path, encoding="utf-8") as f:
-    keys = json.load(f)
-print(keys.get(name, fallback))
-PY
-  else
-    echo "$fallback"
-  fi
-}
-
 on_interrupt() {
   if (( STOP )); then
     echo "Force quit."
@@ -159,65 +83,6 @@ on_interrupt() {
   echo "Stopping (Ctrl+C again to force quit)..."
 }
 
-sleep_interruptible() {
-  local secs="$1"
-  local end=$(( SECONDS + secs ))
-  while (( SECONDS < end && !STOP )); do
-    sleep 0.2 || break
-  done
-}
-
-pebble_cmd() {
-  pebble "$@" </dev/null 2>/dev/null
-}
-
-run_pebble_with_retry() {
-  local desc="$1"
-  shift
-  local attempt=1
-  while (( attempt <= PEBBLE_RETRIES && !STOP )); do
-    if pebble_cmd "$@"; then
-      sleep_interruptible "$PEBBLE_CMD_GAP"
-      return 0
-    fi
-    if (( attempt < PEBBLE_RETRIES )); then
-      echo "  ${desc} failed (attempt ${attempt}/${PEBBLE_RETRIES}), retrying in ${PEBBLE_RETRY_DELAY}s..." >&2
-      sleep_interruptible "$PEBBLE_RETRY_DELAY"
-    fi
-    attempt=$(( attempt + 1 ))
-  done
-  return 1
-}
-
-wait_for_emulator() {
-  local tmp
-  tmp=$(mktemp /tmp/argus-pebble-check.XXXXXX.png)
-  echo "Checking emulator connection..."
-  if run_pebble_with_retry "Emulator check" screenshot --no-open "$tmp"; then
-    rm -f "$tmp"
-    echo "Emulator ready."
-    return 0
-  fi
-  rm -f "$tmp"
-  echo "Error: cannot connect to the emulator." >&2
-  echo "  Run: bash scripts/reset-emulator.sh && pebble install --emulator emery" >&2
-  exit 1
-}
-
-take_screenshot() {
-  local filename="$1"
-  run_pebble_with_retry "Screenshot" screenshot --no-open "$filename"
-}
-
-send_app_message_int() {
-  local -a pairs=()
-  while (( $# >= 2 )); do
-    pairs+=(--int "$1=$2")
-    shift 2
-  done
-  run_pebble_with_retry "App message" send-app-message --app-uuid "$APP_UUID" "${pairs[@]}"
-}
-
 enable_debug_mode() {
   echo "Enabling debug mode (required for simulated time)..."
   send_app_message_int "$MSG_DEBUG_MODE" 1
@@ -226,21 +91,6 @@ enable_debug_mode() {
 enable_demo_weather() {
   echo "Enabling demo weather..."
   send_app_message_int "$MSG_DEMO_WEATHER" 1
-}
-
-apply_capture_offset() {
-  local elapsed="$1"
-  local offset=$(( START_EPOCH + elapsed - $(date +%s) ))
-  echo "  Setting time offset to $(format_sim_time $(( START_EPOCH + elapsed )))..."
-  send_app_message_int "$MSG_CAPTURE_TIME_OFFSET" "$offset"
-}
-
-reset_capture_offset() {
-  send_app_message_int "$MSG_CAPTURE_TIME_OFFSET" 0 2>/dev/null || true
-}
-
-wait_for_settle() {
-  sleep_interruptible "$SETTLE_DELAY"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -371,7 +221,7 @@ fi
 START_EPOCH=0
 if (( SIMULATE )); then
   START_EPOCH=$(parse_start_epoch "$START_TIME")
-  if [[ ! -f build/js/message_keys.json ]]; then
+  if [[ ! -f "$MSG_KEYS_FILE" ]]; then
     echo "Error: run 'pebble build' first (needed for CaptureTimeOffset message key)" >&2
     exit 1
   fi

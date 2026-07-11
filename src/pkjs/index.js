@@ -128,6 +128,72 @@ function getClaySetting(key, defaultValue) {
   return value;
 }
 
+var APP_MESSAGE_INT_BATCH = 4;
+
+function sendPreparedSettingsInChunks(prepared, onComplete, onError) {
+  var intKeys = [];
+  var stringKeys = [];
+  var key;
+
+  for (key in prepared) {
+    if (!Object.prototype.hasOwnProperty.call(prepared, key)) {
+      continue;
+    }
+    if (typeof prepared[key] === 'string') {
+      stringKeys.push(key);
+    } else {
+      intKeys.push(key);
+    }
+  }
+
+  function done(err) {
+    if (err) {
+      console.log('Settings chunk send failed: ' + JSON.stringify(err));
+      if (onError) {
+        onError(err);
+      } else if (onComplete) {
+        onComplete(err);
+      }
+      return;
+    }
+    if (onComplete) {
+      onComplete();
+    }
+  }
+
+  function sendStringBatch(index) {
+    if (index >= stringKeys.length) {
+      done(null);
+      return;
+    }
+    var payload = {};
+    payload[stringKeys[index]] = prepared[stringKeys[index]];
+    Pebble.sendAppMessage(payload, function () {
+      sendStringBatch(index + 1);
+    }, done);
+  }
+
+  function sendIntBatch(index) {
+    if (index >= intKeys.length) {
+      sendStringBatch(0);
+      return;
+    }
+    var payload = {};
+    var count = 0;
+    var i = index;
+    while (i < intKeys.length && count < APP_MESSAGE_INT_BATCH) {
+      payload[intKeys[i]] = prepared[intKeys[i]];
+      i++;
+      count++;
+    }
+    Pebble.sendAppMessage(payload, function () {
+      sendIntBatch(i);
+    }, done);
+  }
+
+  sendIntBatch(0);
+}
+
 function sendStoredSettings(onComplete) {
   var settings = getStoredClaySettings();
   if (!settings) {
@@ -137,7 +203,17 @@ function sendStoredSettings(onComplete) {
     return;
   }
 
-  Pebble.sendAppMessage(
+  // Debug/capture runs apply settings from the CLI; skip Clay sync so phone
+  // localStorage (e.g. ClockFont) does not overwrite the scenario setup.
+  if (String(getClaySetting('DebugMode', '0')) === '1') {
+    console.log('Debug mode: skipping stored Clay settings sync');
+    if (onComplete) {
+      onComplete();
+    }
+    return;
+  }
+
+  sendPreparedSettingsInChunks(
     Clay.prepareSettingsForAppMessage(settings),
     function () {
       console.log('Stored settings synced to watch');
@@ -145,8 +221,7 @@ function sendStoredSettings(onComplete) {
         onComplete();
       }
     },
-    function (err) {
-      console.log('Stored settings sync failed: ' + JSON.stringify(err));
+    function () {
       if (onComplete) {
         onComplete();
       }
@@ -180,11 +255,19 @@ function getForecastHours() {
   return hours;
 }
 
-function getLocationMode() {
+function getLocationMode(options) {
+  options = options || {};
+  if (options.locationMode !== undefined && options.locationMode !== null) {
+    return String(options.locationMode) === '1' ? 'manual' : 'gps';
+  }
   return getClaySetting('LocationMode', '0') === '1' ? 'manual' : 'gps';
 }
 
-function getManualLocation() {
+function getManualLocation(options) {
+  options = options || {};
+  if (options.manualLocation) {
+    return options.manualLocation;
+  }
   return getClaySetting('ManualLocation', '') || '';
 }
 
@@ -642,8 +725,8 @@ function getWeather(forEpoch, options) {
   weatherFetchInFlight = true;
   weatherFetchStartedAt = Date.now();
 
-  if (getLocationMode() === 'manual') {
-    var city = getManualLocation();
+  if (getLocationMode(options) === 'manual') {
+    var city = getManualLocation(options);
     if (!city) {
       console.log('Manual location empty');
       notifyWeatherFetchFailed();
@@ -672,13 +755,13 @@ function getWeather(forEpoch, options) {
   );
 }
 
-function scheduleWeatherRequest(forEpoch) {
+function scheduleWeatherRequest(forEpoch, options) {
   if (weatherRequestTimer) {
     clearTimeout(weatherRequestTimer);
   }
   weatherRequestTimer = setTimeout(function () {
     weatherRequestTimer = null;
-    getWeather(forEpoch);
+    getWeather(forEpoch, options || {});
   }, 500);
 }
 
@@ -767,7 +850,14 @@ Pebble.addEventListener('appmessage', function (e) {
   }
   if (e.payload && e.payload[keys.REQUEST_WEATHER]) {
     var forEpoch = e.payload[keys.WeatherForEpoch];
-    scheduleWeatherRequest(forEpoch || null);
+    var weatherOptions = {};
+    if (e.payload[keys.LocationMode] !== undefined && e.payload[keys.LocationMode] !== null) {
+      weatherOptions.locationMode = e.payload[keys.LocationMode];
+    }
+    if (e.payload[keys.ManualLocation]) {
+      weatherOptions.manualLocation = e.payload[keys.ManualLocation];
+    }
+    scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
 });
 
@@ -780,7 +870,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
     return;
   }
 
-  Pebble.sendAppMessage(
+  sendPreparedSettingsInChunks(
     clay.getSettings(e.response),
     function () {
       console.log('Settings sent to watch');
