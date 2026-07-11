@@ -65,8 +65,8 @@ Inject theme CSS **last** in `AFTER_BUILD` so it wins the cascade. Remove any ex
 
 | UI pattern | Clay type | Keys / notes |
 |------------|-----------|--------------|
-| Segment pills | `radiogroup` + `.argus-segment-radiogroup` | `HourFormat`, `WeekStart`, `WeekNumberMode`, `BluetoothDisplay`, `RealtimeSteps`, `LocationMode`, `ForecastHours`, `TemperatureUnit` |
-| Toggle list | `radiogroup` + `.argus-list-radiogroup` | `HeaderDisplay`, `ClockFont` |
+| Segment pills | `radiogroup` + `.argus-segment-radiogroup` | `HourFormat`, `WeekStart`, `BluetoothDisplay`, `LocationMode`, `ForecastHours`, `TemperatureUnit`, `WeekNumberMode` (label: Calendar; ISO/US) |
+| Toggle list | `radiogroup` + `.argus-list-radiogroup` | `HeaderDisplay`, `ClockFont`, `RealtimeSteps` |
 | Boolean toggle | `toggle` + `.argus-inline-control` | `TemperatureDisplay`, debug toggles |
 | Text input | `input` | `ManualLocation` |
 

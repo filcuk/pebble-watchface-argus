@@ -7,12 +7,11 @@ module.exports = function () {
     'WeekStart',
     'WeekNumberMode',
     'BluetoothDisplay',
-    'RealtimeSteps',
     'LocationMode',
     'ForecastHours',
     'TemperatureUnit',
   ];
-  var LIST_RADIO_KEYS = ['HeaderDisplay', 'ClockFont'];
+  var LIST_RADIO_KEYS = ['HeaderDisplay', 'ClockFont', 'RealtimeSteps'];
   var INLINE_CONTROL_KEYS = SEGMENT_KEYS.concat([
     'TemperatureDisplay',
     'DebugMode',
@@ -33,13 +32,13 @@ module.exports = function () {
     '  -webkit-font-smoothing: antialiased;',
     '}',
     'html.argus-settings body {',
-    '  padding: 0 16px 0 !important;',
+    '  padding: 0 !important;',
     '}',
     'html.argus-settings .inputs,',
     'html.argus-settings #main-form.inputs {',
     '  max-width: 480px;',
     '  margin: 0 auto;',
-    '  padding: 12px 16px 120px;',
+    '  padding: 12px 12px 120px;',
     '  box-sizing: border-box;',
     '  background: transparent !important;',
     '}',
@@ -169,6 +168,15 @@ module.exports = function () {
     '  margin-top: 10px;',
     '  padding: 0;',
     '}',
+    'html.argus-settings .argus-field-help {',
+    '  display: block;',
+    '  width: 100%;',
+    '  font-size: 13px;',
+    '  color: #9aa1ab !important;',
+    '  line-height: 1.45;',
+    '  margin-top: 10px;',
+    '  padding: 0;',
+    '}',
     'html.argus-settings .argus-inline-control {',
     '  display: block;',
     '}',
@@ -285,10 +293,11 @@ module.exports = function () {
     '  min-height: 36px;',
     '  margin: 0 !important;',
     '  padding: 8px 14px !important;',
-    '  border: none;',
+    '  border: 1px solid transparent;',
     '  border-radius: 7px;',
     '  cursor: pointer;',
     '  background: transparent !important;',
+    '  box-sizing: border-box;',
     '}',
     'html.argus-settings .argus-list-radiogroup .radio-group .label {',
     '  flex: 1 1 auto;',
@@ -314,7 +323,7 @@ module.exports = function () {
     '  pointer-events: none;',
     '}',
     'html.argus-settings .argus-list-radiogroup .radio-group input:checked + i {',
-    '  border-color: #4a6885;',
+    '  border-color: #8eb0d0;',
     '}',
     'html.argus-settings .argus-list-radiogroup .radio-group input:checked + i:after {',
     '  content: "";',
@@ -325,10 +334,11 @@ module.exports = function () {
     '  top: 4px;',
     '  bottom: 4px;',
     '  border-radius: 50%;',
-    '  background: #4a6885;',
+    '  background: #8eb0d0;',
     '}',
     'html.argus-settings .argus-list-radiogroup .radio-group label.active {',
-    '  background: rgba(74, 104, 133, 0.15) !important;',
+    '  background: rgba(142, 176, 208, 0.28) !important;',
+    '  border: 1px solid #8eb0d0 !important;',
     '  box-shadow: none;',
     '}',
     'html.argus-settings .argus-list-radiogroup .radio-group label.active .label {',
@@ -425,7 +435,7 @@ module.exports = function () {
     '  right: 0;',
     '  bottom: 0;',
     '  z-index: 20;',
-    '  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));',
+    '  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)) !important;',
     '  background: #1a1d21 !important;',
     '  border-top: 1px solid #464d58;',
     '  box-sizing: border-box;',
@@ -761,6 +771,32 @@ module.exports = function () {
     }
   }
 
+  function injectCalendarTypeHelp() {
+    var item = clayConfig.getItemByMessageKey('WeekNumberMode');
+    if (!item || !item.$element || !item.$element[0]) {
+      return;
+    }
+
+    var root = item.$element[0];
+    if (root.querySelector(':scope > .argus-field-help')) {
+      return;
+    }
+
+    var help = document.createElement('div');
+    help.className = 'argus-field-help';
+    help.textContent =
+      'ISO 8601 weeks start on Monday. Week 1 is the week that contains the first Thursday ' +
+      'of the year, so week numbers near January can differ from the US style. US week 1 is ' +
+      'the week containing January 1, with week numbers counting through the calendar year.';
+
+    var anchor = root.querySelector(':scope > .argus-control-row');
+    if (anchor) {
+      root.insertBefore(help, anchor.nextSibling);
+    } else {
+      root.appendChild(help);
+    }
+  }
+
   function hideHeaderHeartRateIfNeeded() {
     var headerItem = clayConfig.getItemByMessageKey('HeaderDisplay');
     var healthItem = clayConfig.getItemByMessageKey('RealtimeSteps');
@@ -821,6 +857,7 @@ module.exports = function () {
     applyRowStyles();
     wrapTabPanels();
     wrapInlineControlBodies();
+    injectCalendarTypeHelp();
     hideHeaderHeartRateIfNeeded();
     normalizeRealtimeStepsDefault();
     bindSegmentSync();

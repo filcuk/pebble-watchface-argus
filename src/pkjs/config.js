@@ -27,13 +27,13 @@ module.exports = [
   {
     type: 'radiogroup',
     messageKey: 'WeekNumberMode',
-    label: 'Week number',
-    description: 'ISO follows the international standard. Gregorian uses a simpler year-based count.',
+    label: 'Calendar',
+    description: 'Calendar type.',
     group: 'tabTime',
     defaultValue: '0',
     options: [
       { label: 'ISO', value: '0' },
-      { label: 'Gregorian', value: '1' },
+      { label: 'US', value: '1' },
     ],
   },
   {
@@ -179,6 +179,6 @@ module.exports = [
   },
   {
     type: 'submit',
-    defaultValue: 'Save Settings',
+    defaultValue: 'Save',
   },
 ];
