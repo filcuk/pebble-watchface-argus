@@ -578,6 +578,10 @@ void weather_apply_from_message(DictionaryIterator *iter) {
 
   memcpy(s_weather.temps, t->value->data, count);
 
+  s_weather.has_feels_temps = false;
+  s_weather.has_is_day = false;
+  s_weather.has_wind = false;
+
   Tuple *feels_tuple = dict_find(iter, MESSAGE_KEY_WeatherFeelsTempHourly);
   if (feels_tuple && feels_tuple->type == TUPLE_BYTE_ARRAY) {
     uint8_t feels_len = feels_tuple->length;
@@ -610,6 +614,8 @@ void weather_apply_from_message(DictionaryIterator *iter) {
     memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
     memcpy(s_weather.is_day, is_day_tuple->value->data, is_day_len);
     s_weather.has_is_day = true;
+  } else {
+    memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
   }
 
   Tuple *wind_tuple = dict_find(iter, MESSAGE_KEY_WeatherWindHourly);
@@ -621,6 +627,8 @@ void weather_apply_from_message(DictionaryIterator *iter) {
     memset(s_weather.winds, 0, sizeof(s_weather.winds));
     memcpy(s_weather.winds, wind_tuple->value->data, wind_len);
     s_weather.has_wind = true;
+  } else {
+    memset(s_weather.winds, 0, sizeof(s_weather.winds));
   }
 
   t = dict_find(iter, MESSAGE_KEY_TempMin);

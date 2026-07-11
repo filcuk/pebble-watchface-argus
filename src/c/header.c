@@ -399,7 +399,7 @@ void header_update(Header *header, struct tm *now) {
   bool force = header->force_dirty;
 
   if (!force) {
-    if (mode == HEADER_DISPLAY_STEPS || mode == HEADER_DISPLAY_TEMP_RANGE || mode == HEADER_DISPLAY_HEART_RATE) {
+    if (mode == HEADER_DISPLAY_STEPS || mode == HEADER_DISPLAY_HEART_RATE) {
       return;
     }
     if (mode == HEADER_DISPLAY_FULL_DATE && header->last_year == now->tm_year && header->last_mon == now->tm_mon &&
@@ -431,8 +431,8 @@ void header_update(Header *header, struct tm *now) {
         if (weather_view_has_data(&view)) {
           temp_ready = true;
           temp_current = formatting_display_temp(weather_display_temp_at(view.start_index));
-          temp_min = formatting_display_temp(weather_display_temp_min());
-          temp_max = formatting_display_temp(weather_display_temp_max());
+          temp_min = formatting_display_temp(weather_display_temp_min_for_view(&view));
+          temp_max = formatting_display_temp(weather_display_temp_max_for_view(&view));
         }
       }
       break;
