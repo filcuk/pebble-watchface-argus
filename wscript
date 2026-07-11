@@ -10,6 +10,9 @@ def configure(ctx):
 def build(ctx):
     ctx.load('pebble_sdk')
 
+    import subprocess
+    subprocess.check_call(['node', 'scripts/generate-release.js'], cwd=ctx.path.abspath())
+
     build_worker = False
     binaries = []
 

@@ -235,6 +235,19 @@ module.exports = [
     capabilities: ['HEALTH'],
   },
   {
+    type: 'radiogroup',
+    messageKey: 'ReleaseNotification',
+    label: 'Release notification',
+    description: 'Controls when the update message appears after installing the watchface.',
+    group: 'tabDebug',
+    defaultValue: '0',
+    options: [
+      { label: 'Normal', value: '0' },
+      { label: 'Always', value: '1' },
+      { label: 'Never', value: '2' },
+    ],
+  },
+  {
     type: 'text',
     id: 'argus-footer',
     defaultValue: '',

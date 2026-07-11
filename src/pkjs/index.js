@@ -2,6 +2,7 @@ var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
 var customClay = require('./custom-clay');
 var pkg = require('../../package.json');
+var release = require('./release');
 var keys = require('message_keys');
 
 var clay = new Clay(clayConfig, customClay, {
@@ -19,6 +20,11 @@ var weatherFetchStartedAt = 0;
 var weatherRequestTimer = null;
 var WEATHER_FETCH_STALE_MS = 30000;
 var weatherFetchCache = null;
+var RELEASE_SEEN_KEY = 'argus-release-seen';
+var RELEASE_NOTIFICATION_NORMAL = '0';
+var RELEASE_NOTIFICATION_ALWAYS = '1';
+var RELEASE_NOTIFICATION_NEVER = '2';
+var releaseNoticeShownThisSession = false;
 
 var WEATHER_PROVIDER_MODELS = {
   '1': 'ecmwf_ifs025',
@@ -73,6 +79,20 @@ function normalizeStoredClaySettings(settings) {
       normalized.RealtimeSteps = '1';
     } else {
       normalized.RealtimeSteps = '0';
+    }
+  }
+
+  if (normalized.ReleaseNotification !== '0' &&
+      normalized.ReleaseNotification !== '1' &&
+      normalized.ReleaseNotification !== '2') {
+    var legacyIgnore = normalized.IgnoreReleaseNotice;
+    if (legacyIgnore && typeof legacyIgnore === 'object' && 'value' in legacyIgnore) {
+      legacyIgnore = legacyIgnore.value;
+    }
+    if (legacyIgnore === true || legacyIgnore === 'true' || legacyIgnore === 1 || legacyIgnore === '1') {
+      normalized.ReleaseNotification = RELEASE_NOTIFICATION_NEVER;
+    } else {
+      normalized.ReleaseNotification = RELEASE_NOTIFICATION_NORMAL;
     }
   }
 
@@ -649,6 +669,73 @@ function scheduleWeatherRequest(forEpoch) {
   }, 500);
 }
 
+function getSeenReleaseVersion() {
+  try {
+    return localStorage.getItem(RELEASE_SEEN_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function setSeenReleaseVersion(version) {
+  try {
+    localStorage.setItem(RELEASE_SEEN_KEY, version);
+  } catch (e) {
+    console.log('Release seen version write failed');
+  }
+}
+
+function getReleaseNotificationMode() {
+  var mode = String(getClaySetting('ReleaseNotification', RELEASE_NOTIFICATION_NORMAL));
+  if (mode !== RELEASE_NOTIFICATION_NORMAL &&
+      mode !== RELEASE_NOTIFICATION_ALWAYS &&
+      mode !== RELEASE_NOTIFICATION_NEVER) {
+    return RELEASE_NOTIFICATION_NORMAL;
+  }
+  return mode;
+}
+
+function maybeShowReleaseNotice(options) {
+  options = options || {};
+  if (releaseNoticeShownThisSession && !options.fromWatch) {
+    return;
+  }
+
+  var mode = getReleaseNotificationMode();
+
+  if (mode === RELEASE_NOTIFICATION_NEVER) {
+    setSeenReleaseVersion(release.version);
+    return;
+  }
+
+  if (!release.message) {
+    setSeenReleaseVersion(release.version);
+    return;
+  }
+
+  if (mode === RELEASE_NOTIFICATION_NORMAL && getSeenReleaseVersion() === release.version) {
+    return;
+  }
+
+  if (typeof Pebble.showSimpleNotificationOnPebble !== 'function') {
+    console.log('Release notice skipped: showSimpleNotificationOnPebble unavailable');
+    return;
+  }
+
+  try {
+    Pebble.showSimpleNotificationOnPebble('Argus updated', release.message);
+    console.log('Release notice shown (mode=' + mode + ')');
+  } catch (err) {
+    console.log('Release notice failed: ' + err);
+    return;
+  }
+
+  releaseNoticeShownThisSession = true;
+  if (mode === RELEASE_NOTIFICATION_NORMAL) {
+    setSeenReleaseVersion(release.version);
+  }
+}
+
 Pebble.addEventListener('ready', function () {
   console.log('Argus PKJS ready');
   // Push saved Clay settings on launch so the watch does not stay on defaults.
@@ -656,9 +743,15 @@ Pebble.addEventListener('ready', function () {
     // Fallback fetch when the watch requested weather before PKJS finished loading.
     scheduleWeatherRequest();
   });
+  setTimeout(function () {
+    maybeShowReleaseNotice();
+  }, 1000);
 });
 
 Pebble.addEventListener('appmessage', function (e) {
+  if (e.payload && e.payload[keys.CheckReleaseNotice]) {
+    maybeShowReleaseNotice({ fromWatch: true });
+  }
   if (e.payload && e.payload[keys.REQUEST_WEATHER]) {
     var forEpoch = e.payload[keys.WeatherForEpoch];
     scheduleWeatherRequest(forEpoch || null);

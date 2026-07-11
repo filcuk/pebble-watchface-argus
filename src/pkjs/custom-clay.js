@@ -10,6 +10,7 @@ module.exports = function () {
     'LocationMode',
     'ForecastHours',
     'TemperatureUnit',
+    'ReleaseNotification',
   ];
   var LIST_RADIO_KEYS = [
     'HeaderDisplay',
@@ -962,19 +963,23 @@ module.exports = function () {
     var debugToggle = clayConfig.getItemByMessageKey('DebugMode');
     var demoWeatherToggle = clayConfig.getItemByMessageKey('DemoWeather');
     var demoBiometricsToggle = clayConfig.getItemByMessageKey('DemoBiometrics');
+    var releaseNotification = clayConfig.getItemByMessageKey('ReleaseNotification');
 
-    if (!debugToggle || !demoWeatherToggle || !demoBiometricsToggle) {
+    if (!debugToggle || !demoWeatherToggle || !demoBiometricsToggle || !releaseNotification) {
       return;
     }
 
     if (debugToggle.get()) {
       demoWeatherToggle.enable();
       demoBiometricsToggle.enable();
+      releaseNotification.enable();
     } else {
       demoWeatherToggle.set(false);
       demoWeatherToggle.disable();
       demoBiometricsToggle.set(false);
       demoBiometricsToggle.disable();
+      releaseNotification.set('0');
+      releaseNotification.disable();
     }
   }
 

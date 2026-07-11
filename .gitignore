@@ -1,3 +1,6 @@
+# Generated release metadata
+src/pkjs/release.js
+
 # Build outputs
 build/
 captures/
