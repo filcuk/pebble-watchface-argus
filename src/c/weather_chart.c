@@ -34,7 +34,6 @@ typedef struct {
   int plot_h;
   int8_t axis_min;
   int8_t axis_max;
-  uint8_t precip_max;
   uint8_t wind_max;
   bool ready;
 } ChartLayout;
@@ -85,6 +84,14 @@ static WeatherChart *s_weather_chart;
 #define TEMP_POINT_RADIUS 1
 #define PLOT_TOP_OVERFLOW ((TEMP_LINE_STROKE_WIDTH / 2) + TEMP_POINT_RADIUS + 1)
 
+#define PRECIP_AXIS_SCALE 1000
+#define PRECIP_SECTION_FRACTION (PRECIP_AXIS_SCALE / 5)
+#define PRECIP_MM100_TRACE_MAX 25
+#define PRECIP_MM100_VERY_LIGHT_MAX 100
+#define PRECIP_MM100_LIGHT_MAX 250
+#define PRECIP_MM100_MODERATE_MAX 1000
+#define PRECIP_MM100_HEAVY_MAX 2500
+
 static void prv_chart_geometry(GRect bounds, ChartGeometry *geo) {
   int plot_left = CHART_MARGIN_H + Y_LABEL_WIDTH + Y_LABEL_AXIS_GAP;
   int plot_right = bounds.size.w - CHART_MARGIN_RIGHT - WIND_X_ARM;
@@ -122,11 +129,6 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, const Weat
     axis_max = axis_min + 1;
   }
 
-  uint8_t precip_max = weather_precip_max_for_view(view);
-  if (precip_max == 0) {
-    precip_max = 1;
-  }
-
   uint8_t wind_max = weather_wind_max_for_view(view);
   if (wind_max == 0) {
     wind_max = 1;
@@ -140,7 +142,6 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, const Weat
   layout->plot_h = geo.plot_h;
   layout->axis_min = axis_min;
   layout->axis_max = axis_max;
-  layout->precip_max = precip_max;
   layout->wind_max = wind_max;
   layout->ready = true;
   return true;
@@ -296,8 +297,42 @@ static int prv_plot_y(int plot_top, int plot_h, int8_t temp, int8_t min_temp, in
   return plot_top + plot_h - ((temp - min_temp) * plot_h) / (max_temp - min_temp);
 }
 
-static int prv_precip_y(int plot_bottom, int plot_h, uint8_t precip, uint8_t precip_max) {
-  return plot_bottom - (precip * plot_h) / precip_max;
+static int prv_precip_axis_fraction(uint8_t precip_tenth_mm) {
+  if (precip_tenth_mm == 0) {
+    return 0;
+  }
+
+  int mm100 = precip_tenth_mm * 10;
+
+  if (mm100 < PRECIP_MM100_TRACE_MAX) {
+    return (mm100 * PRECIP_SECTION_FRACTION) / PRECIP_MM100_TRACE_MAX;
+  }
+  if (mm100 < PRECIP_MM100_VERY_LIGHT_MAX) {
+    return PRECIP_SECTION_FRACTION +
+           ((mm100 - PRECIP_MM100_TRACE_MAX) * PRECIP_SECTION_FRACTION) /
+               (PRECIP_MM100_VERY_LIGHT_MAX - PRECIP_MM100_TRACE_MAX);
+  }
+  if (mm100 < PRECIP_MM100_LIGHT_MAX) {
+    return 2 * PRECIP_SECTION_FRACTION +
+           ((mm100 - PRECIP_MM100_VERY_LIGHT_MAX) * PRECIP_SECTION_FRACTION) /
+               (PRECIP_MM100_LIGHT_MAX - PRECIP_MM100_VERY_LIGHT_MAX);
+  }
+  if (mm100 < PRECIP_MM100_MODERATE_MAX) {
+    return 3 * PRECIP_SECTION_FRACTION +
+           ((mm100 - PRECIP_MM100_LIGHT_MAX) * PRECIP_SECTION_FRACTION) /
+               (PRECIP_MM100_MODERATE_MAX - PRECIP_MM100_LIGHT_MAX);
+  }
+  if (mm100 >= PRECIP_MM100_HEAVY_MAX) {
+    return PRECIP_AXIS_SCALE;
+  }
+  return 4 * PRECIP_SECTION_FRACTION +
+         ((mm100 - PRECIP_MM100_MODERATE_MAX) * PRECIP_SECTION_FRACTION) /
+             (PRECIP_MM100_HEAVY_MAX - PRECIP_MM100_MODERATE_MAX);
+}
+
+static int prv_precip_y(int plot_bottom, int plot_h, uint8_t precip_tenth_mm) {
+  int fraction = prv_precip_axis_fraction(precip_tenth_mm);
+  return plot_bottom - (fraction * plot_h) / PRECIP_AXIS_SCALE;
 }
 
 static int prv_wind_y(int plot_bottom, int plot_h, uint8_t wind, uint8_t wind_max) {
@@ -357,7 +392,7 @@ static int prv_segment_right(int plot_left, int plot_right, int plot_w, int inde
 }
 
 static void prv_draw_precip_bars(GContext *ctx, const WeatherData *data, const WeatherView *view, int plot_left,
-                                 int plot_right, int plot_w, int axis_y, int plot_h, uint8_t precip_max) {
+                                 int plot_right, int plot_w, int axis_y, int plot_h) {
   graphics_context_set_fill_color(ctx, PRECIP_BAR_COLOR);
 
   for (int i = 0; i < view->hour_count; i++) {
@@ -373,7 +408,7 @@ static void prv_draw_precip_bars(GContext *ctx, const WeatherData *data, const W
       continue;
     }
 
-    int top = prv_precip_y(axis_y, plot_h, data->precips[storage], precip_max);
+    int top = prv_precip_y(axis_y, plot_h, data->precips[storage]);
     int bar_h = axis_y - top;
     if (bar_h < 1) {
       bar_h = 1;
@@ -614,7 +649,7 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
   int plot_w = plot_bounds.size.w;
 
   chart->point_count = view.hour_count;
-  prv_draw_precip_bars(ctx, data, &view, plot_left, plot_right, plot_w, axis_y, plot_h, layout.precip_max);
+  prv_draw_precip_bars(ctx, data, &view, plot_left, plot_right, plot_w, axis_y, plot_h);
   prv_draw_night_regions(ctx, data, &view, plot_left, plot_right, plot_top, axis_y, plot_w);
   prv_draw_wind_marks(ctx, data, &view, plot_left, plot_w, axis_y, plot_h, layout.wind_max);
 

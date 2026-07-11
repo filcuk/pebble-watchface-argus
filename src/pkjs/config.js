@@ -144,6 +144,12 @@ module.exports = [
     ],
   },
   {
+    type: 'text',
+    id: 'argus-precipitation-info',
+    group: 'tabWeather',
+    defaultValue: '',
+  },
+  {
     type: 'toggle',
     messageKey: 'DebugMode',
     label: 'Debug mode',

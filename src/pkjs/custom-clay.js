@@ -55,9 +55,15 @@ module.exports = function () {
     '  color: inherit !important;',
     '  background: transparent !important;',
     '}',
-    'html.argus-settings .component-heading,',
-    'html.argus-settings .component-text {',
+    'html.argus-settings .component-heading {',
     '  display: none !important;',
+    '}',
+    'html.argus-settings .component.component-text:not(.argus-row) {',
+    '  display: none !important;',
+    '}',
+    'html.argus-settings .component.component-text.argus-row > p {',
+    '  margin: 0;',
+    '  padding: 0;',
     '}',
     'html.argus-settings .component-toggle > label,',
     'html.argus-settings .argus-row.component-input > label {',
@@ -525,6 +531,53 @@ module.exports = function () {
     '  color: #6894b8 !important;',
     '  text-decoration: none;',
     '}',
+    'html.argus-settings .argus-precip-info {',
+    '  color: inherit;',
+    '}',
+    'html.argus-settings .argus-precip-info > .argus-setting-label {',
+    '  margin-bottom: 8px !important;',
+    '}',
+    'html.argus-settings .argus-precip-intro {',
+    '  font-size: 13px;',
+    '  color: #9aa1ab !important;',
+    '  line-height: 1.45;',
+    '  margin: 0 0 14px;',
+    '}',
+    'html.argus-settings .argus-precip-table-wrap {',
+    '  overflow-x: auto;',
+    '  -webkit-overflow-scrolling: touch;',
+    '  margin-bottom: 12px;',
+    '}',
+    'html.argus-settings .argus-precip-table {',
+    '  width: 100%;',
+    '  border-collapse: collapse;',
+    '  font-size: 13px;',
+    '}',
+    'html.argus-settings .argus-precip-table th,',
+    'html.argus-settings .argus-precip-table td {',
+    '  padding: 8px 10px;',
+    '  text-align: left;',
+    '  border-bottom: 1px solid #3a4048;',
+    '  vertical-align: top;',
+    '}',
+    'html.argus-settings .argus-precip-table th {',
+    '  font-size: 12px;',
+    '  font-weight: 600;',
+    '  color: #b4bac3;',
+    '  background: #23272d;',
+    '}',
+    'html.argus-settings .argus-precip-table td {',
+    '  color: #e8ebef;',
+    '}',
+    'html.argus-settings .argus-precip-table tr:last-child td {',
+    '  border-bottom: none;',
+    '}',
+    'html.argus-settings .argus-precip-example {',
+    '  font-size: 13px;',
+    '  color: #9aa1ab !important;',
+    '  line-height: 1.45;',
+    '  margin: 0;',
+    '}',
     'html.argus-settings .component-submit {',
     '  position: fixed;',
     '  left: 0;',
@@ -616,6 +669,44 @@ module.exports = function () {
       '<div class="argus-footer">Argus v' + version + ' · ' +
       '<a href="' + githubUrl + '" target="_blank" rel="noopener noreferrer">View on GitHub</a></div>'
     );
+
+    if (footerItem.$element && footerItem.$element[0]) {
+      footerItem.$element[0].classList.add('argus-row');
+    }
+  }
+
+  function injectPrecipitationInfo() {
+    var infoItem = clayConfig.getItemById('argus-precipitation-info');
+    if (!infoItem) {
+      return;
+    }
+
+    infoItem.set(
+      '<div class="argus-precip-info">' +
+        '<div class="argus-setting-label">Precipitation</div>' +
+        '<p class="argus-precip-intro">' +
+          'Blue bars representing precipitation on the weather chart use a fixed intensity scale. The chart height is split ' +
+          'into five equal bands. Within each band, bar height shows how far the hourly rate falls ' +
+          'within that range.' +
+        '</p>' +
+        '<div class="argus-precip-table-wrap">' +
+          '<table class="argus-precip-table">' +
+            '<thead><tr><th>Intensity</th><th>Rate (mm/h)</th><th>Chart position</th></tr></thead>' +
+            '<tbody>' +
+              '<tr><td>Trace</td><td>< 0.25</td><td>Bottom 1/5</td></tr>' +
+              '<tr><td>Very light</td><td>0.25 – 1</td><td>2nd 1/5</td></tr>' +
+              '<tr><td>Light</td><td>1 – 2.5</td><td>3rd 1/5</td></tr>' +
+              '<tr><td>Moderate</td><td>2.5 – 10</td><td>4th 1/5</td></tr>' +
+              '<tr><td>Heavy</td><td>10 – 25+</td><td>Top 1/5</td></tr>' +
+            '</tbody>' +
+          '</table>' +
+        '</div>' +
+      '</div>'
+    );
+
+    if (infoItem.$element && infoItem.$element[0]) {
+      infoItem.$element[0].classList.add('argus-row');
+    }
   }
 
   function applyRowStyles() {
@@ -633,6 +724,11 @@ module.exports = function () {
         item.$element[0].classList.add('argus-row');
       }
     });
+
+    var precipInfo = clayConfig.getItemById('argus-precipitation-info');
+    if (precipInfo && precipInfo.$element && precipInfo.$element[0]) {
+      precipInfo.$element[0].classList.add('argus-row');
+    }
 
     var manualLocation = clayConfig.getItemByMessageKey('ManualLocation');
     if (manualLocation && manualLocation.$element && manualLocation.$element[0]) {
@@ -1008,6 +1104,7 @@ module.exports = function () {
     applyRowStyles();
     wrapTabPanels();
     wrapInlineControlBodies();
+    injectPrecipitationInfo();
     injectSettingsFieldHelp();
     hideHeaderHeartRateIfNeeded();
     normalizeRealtimeStepsDefault();
