@@ -788,6 +788,13 @@ void weather_request(void) {
   if (prv_should_pause_periodic_refresh()) {
     return;
   }
+  if (!connection_service_peek_pebble_app_connection()) {
+    if (weather_cache_is_valid()) {
+      return;
+    }
+    weather_mark_unavailable();
+    return;
+  }
   prv_send_weather_request(0);
 }
 
