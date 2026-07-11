@@ -10,7 +10,7 @@ static WeatherData s_weather;
 static AppTimer *s_retry_timer;
 static AppTimer *s_timeout_timer;
 static WeatherUpdatedHandler s_updated_handler;
-static time_t s_last_weather_request_hour;
+static time_t s_last_weather_request_at;
 
 static void prv_notify_updated(void) {
   if (s_updated_handler) {
@@ -267,6 +267,42 @@ static bool weather_cache_is_valid(void) {
   return (now - cache_time) <= WEATHER_CACHE_MAX_AGE_S;
 }
 
+bool weather_is_night_now(void) {
+  time_t now = argus_time_now();
+  time_t now_hour = prv_current_hour_start();
+
+  if (s_weather.fetch_time > 0 && s_weather.hour_count > 0 && now_hour >= s_weather.fetch_time) {
+    int index = (int)((now_hour - s_weather.fetch_time) / 3600);
+    if (index >= 0 && (uint8_t)index < s_weather.hour_count && s_weather.has_is_day) {
+      return s_weather.is_day[index] == 0;
+    }
+  }
+
+  struct tm *tm = localtime(&now);
+  if (!tm) {
+    return false;
+  }
+  return tm->tm_hour < 6 || tm->tm_hour >= 20;
+}
+
+static bool prv_should_pause_periodic_refresh(void) {
+  const ArgusSettings *settings = settings_get();
+  if (!settings->pause_weather_at_night) {
+    return false;
+  }
+  if (!weather_cache_is_valid()) {
+    return false;
+  }
+
+  WeatherView view;
+  weather_get_view(&view);
+  if (!weather_view_has_data(&view)) {
+    return false;
+  }
+
+  return weather_is_night_now();
+}
+
 static void prv_sanitize_persisted_weather(void) {
   if (s_weather.hour_count > WEATHER_MAX_HOURS) {
     s_weather.hour_count = 0;
@@ -290,7 +326,7 @@ static void prv_cancel_timers(void) {
 static void prv_retry_callback(void *context) {
   (void)context;
   s_retry_timer = NULL;
-  weather_request();
+  weather_request_force();
 }
 
 static void prv_timeout_callback(void *context) {
@@ -347,7 +383,7 @@ void weather_refresh_for_connection(bool phone_connected) {
   }
 
   if (phone_connected) {
-    weather_request();
+    weather_request_force();
     return;
   }
 
@@ -626,7 +662,7 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.cached_at = argus_time_now();
   s_weather.state = WEATHER_STATE_READY;
-  s_last_weather_request_hour = 0;
+  s_last_weather_request_at = 0;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
   prv_cancel_timers();
   prv_notify_updated();
@@ -663,17 +699,19 @@ void weather_ensure_view_coverage(void) {
   weather_request_for_time(prv_current_hour_start());
 }
 
-void weather_request_for_time(time_t when_hour) {
+static void prv_send_weather_request(time_t when_hour) {
   if (weather_use_demo_data()) {
     weather_apply_demo_data();
     return;
   }
 
   time_t request_hour = when_hour > 0 ? when_hour : prv_current_hour_start();
-  if (s_last_weather_request_hour == request_hour && s_weather.state == WEATHER_STATE_LOADING) {
+  time_t now = argus_time_now();
+  if (s_weather.state == WEATHER_STATE_LOADING && s_last_weather_request_at > 0 &&
+      (now - s_last_weather_request_at) < 60) {
     return;
   }
-  s_last_weather_request_hour = request_hour;
+  s_last_weather_request_at = now;
 
   DictionaryIterator *iter;
   if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
@@ -703,6 +741,10 @@ void weather_request_for_time(time_t when_hour) {
     }
   }
   weather_schedule_retry();
+}
+
+void weather_request_for_time(time_t when_hour) {
+  prv_send_weather_request(when_hour);
 }
 
 static void prv_request_refresh(time_t when_hour) {
@@ -735,5 +777,12 @@ void weather_slide_stale_hours(void) {
 }
 
 void weather_request(void) {
-  weather_request_for_time(0);
+  if (prv_should_pause_periodic_refresh()) {
+    return;
+  }
+  prv_send_weather_request(0);
+}
+
+void weather_request_force(void) {
+  prv_send_weather_request(0);
 }

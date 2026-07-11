@@ -18,6 +18,28 @@ var weatherFetchInFlight = false;
 var weatherFetchStartedAt = 0;
 var weatherRequestTimer = null;
 var WEATHER_FETCH_STALE_MS = 30000;
+var weatherFetchCache = null;
+
+var WEATHER_PROVIDER_MODELS = {
+  '1': 'ecmwf_ifs025',
+  '2': 'gfs_seamless',
+  '3': 'icon_seamless',
+  '4': 'meteofrance_seamless',
+  '5': 'jma_seamless',
+  '6': 'gem_seamless',
+  '7': 'ukmo_seamless',
+};
+
+var GPS_MAX_AGE_MS = {
+  '15': 15 * 60 * 1000,
+  '30': 30 * 60 * 1000,
+  '60': 60 * 60 * 1000,
+  '120': 120 * 60 * 1000,
+  '360': 360 * 60 * 1000,
+};
+
+var NIGHT_FALLBACK_START_HOUR = 20;
+var NIGHT_FALLBACK_END_HOUR = 6;
 
 function clearWeatherFetchInFlight() {
   weatherFetchInFlight = false;
@@ -146,6 +168,104 @@ function getLocationMode() {
 
 function getManualLocation() {
   return getClaySetting('ManualLocation', '') || '';
+}
+
+function getWeatherProvider() {
+  return String(getClaySetting('WeatherProvider', '0'));
+}
+
+function getWeatherProviderModel() {
+  return WEATHER_PROVIDER_MODELS[getWeatherProvider()] || null;
+}
+
+function getWeatherUpdateIntervalMs() {
+  var minutes = parseInt(getClaySetting('WeatherUpdateInterval', '30'), 10);
+  if (minutes !== 5 && minutes !== 15 && minutes !== 30 && minutes !== 60) {
+    minutes = 30;
+  }
+  return minutes * 60 * 1000;
+}
+
+function getGpsMaxAgeMs() {
+  var value = String(getClaySetting('GpsMaxAge', '30'));
+  return GPS_MAX_AGE_MS[value] || GPS_MAX_AGE_MS['30'];
+}
+
+function claySettingIsTruthy(value) {
+  return value === true || value === 'true' || value === 1 || value === '1';
+}
+
+function pauseWeatherAtNightEnabled() {
+  return claySettingIsTruthy(getClaySetting('PauseWeatherAtNight', false));
+}
+
+function readWeatherFetchCache() {
+  if (weatherFetchCache) {
+    return weatherFetchCache;
+  }
+  try {
+    var raw = localStorage.getItem('weather-fetch-cache');
+    if (!raw) {
+      return null;
+    }
+    weatherFetchCache = JSON.parse(raw);
+    return weatherFetchCache;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeWeatherFetchCache(entry) {
+  weatherFetchCache = entry;
+  try {
+    localStorage.setItem('weather-fetch-cache', JSON.stringify(entry));
+  } catch (e) {
+    console.log('Weather fetch cache write failed');
+  }
+}
+
+function weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch) {
+  return (
+    latitude.toFixed(4) +
+    ',' +
+    longitude.toFixed(4) +
+    ',' +
+    (model || 'auto') +
+    ',' +
+    hours +
+    ',' +
+    (startEpoch || 0)
+  );
+}
+
+function shouldUseFetchCache(latitude, longitude, model, hours, startEpoch) {
+  var cache = readWeatherFetchCache();
+  if (!cache) {
+    return false;
+  }
+  if (cache.key !== weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch)) {
+    return false;
+  }
+  return Date.now() - cache.fetchedAt < getWeatherUpdateIntervalMs();
+}
+
+function weatherIsNightNow(cache) {
+  var now = new Date();
+  var hour = now.getHours();
+
+  if (cache && cache.isDayBytes && cache.fetchTime && cache.count) {
+    var nowEpoch = Math.floor(now.getTime() / 1000);
+    var currentHourStart = hourStartEpoch(nowEpoch);
+    var index = Math.floor((currentHourStart - cache.fetchTime) / 3600);
+    if (index >= 0 && index < cache.count && cache.isDayBytes[index] === 0) {
+      return true;
+    }
+    if (index >= 0 && index < cache.count && cache.isDayBytes[index] === 1) {
+      return false;
+    }
+  }
+
+  return hour >= NIGHT_FALLBACK_START_HOUR || hour < NIGHT_FALLBACK_END_HOUR;
 }
 
 function packInt8Array(values, count) {
@@ -347,9 +467,18 @@ function sendWeatherPayload(payload) {
   );
 }
 
-function fetchForecast(latitude, longitude, forEpoch) {
+function fetchForecast(latitude, longitude, forEpoch, options) {
+  options = options || {};
   var hours = getForecastHours();
   var startEpoch = forEpoch ? hourStartEpoch(forEpoch) : null;
+  var model = getWeatherProviderModel();
+
+  if (!options.forceRefresh && shouldUseFetchCache(latitude, longitude, model, hours, startEpoch)) {
+    console.log('Weather fetch skipped (recent cache)');
+    clearWeatherFetchInFlight();
+    return;
+  }
+
   var url =
     'https://api.open-meteo.com/v1/forecast?' +
     'latitude=' +
@@ -358,6 +487,10 @@ function fetchForecast(latitude, longitude, forEpoch) {
     longitude +
     '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day&timezone=auto';
 
+  if (model) {
+    url += '&models=' + encodeURIComponent(model);
+  }
+
   if (startEpoch) {
     var endEpoch = startEpoch + hours * 3600;
     url += '&start_date=' + formatDateYYYYMMDD(startEpoch);
@@ -365,6 +498,12 @@ function fetchForecast(latitude, longitude, forEpoch) {
   } else {
     url += '&forecast_hours=' + hours;
   }
+
+  console.log(
+    'Weather fetch: provider=' +
+      getWeatherProvider() +
+      (model ? ' model=' + model : ' model=auto')
+  );
 
   xhrRequest(url, function (responseText) {
     if (!responseText) {
@@ -375,6 +514,18 @@ function fetchForecast(latitude, longitude, forEpoch) {
     try {
       var json = JSON.parse(responseText);
       var payload = packWeatherPayload(json, hours, startEpoch);
+      if (!payload) {
+        console.log('Weather payload empty');
+        clearWeatherFetchInFlight();
+        return;
+      }
+      writeWeatherFetchCache({
+        key: weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch),
+        fetchedAt: Date.now(),
+        fetchTime: payload.fetchTime,
+        count: payload.count,
+        isDayBytes: payload.isDayBytes,
+      });
       sendWeatherPayload(payload);
     } catch (e) {
       console.log('Weather parse error: ' + e);
@@ -437,7 +588,17 @@ function geocodeCity(city, callback) {
   });
 }
 
-function getWeather(forEpoch) {
+function getWeather(forEpoch, options) {
+  options = options || {};
+
+  if (!options.forceRefresh && pauseWeatherAtNightEnabled()) {
+    var nightCache = readWeatherFetchCache();
+    if (nightCache && weatherIsNightNow(nightCache)) {
+      console.log('Weather fetch paused at night');
+      return;
+    }
+  }
+
   if (weatherFetchInFlight && !weatherFetchIsStale()) {
     return;
   }
@@ -452,29 +613,29 @@ function getWeather(forEpoch) {
     var city = getManualLocation();
     if (!city) {
       console.log('Manual location empty, using default');
-      fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch);
+      fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch, options);
       return;
     }
     geocodeCity(city, function (result) {
       if (!result) {
         console.log('Geocode failed, using default');
-        fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch);
+        fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch, options);
         return;
       }
-      fetchForecast(result.latitude, result.longitude, forEpoch);
+      fetchForecast(result.latitude, result.longitude, forEpoch, options);
     });
     return;
   }
 
   navigator.geolocation.getCurrentPosition(
     function (pos) {
-      fetchForecast(pos.coords.latitude, pos.coords.longitude, forEpoch);
+      fetchForecast(pos.coords.latitude, pos.coords.longitude, forEpoch, options);
     },
     function (err) {
       console.log('Location error: ' + (err && err.message ? err.message : 'unknown'));
-      fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch);
+      fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch, options);
     },
-    { timeout: 15000, maximumAge: 60000 }
+    { timeout: 15000, maximumAge: getGpsMaxAgeMs() }
   );
 }
 
@@ -517,7 +678,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
     clay.getSettings(e.response),
     function () {
       console.log('Settings sent to watch');
-      getWeather();
+      getWeather(null, { forceRefresh: true });
     },
     function (err) {
       console.log('Settings send failed: ' + JSON.stringify(err));

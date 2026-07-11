@@ -48,6 +48,8 @@ WeatherData *weather_get(void);
 void weather_apply_from_message(DictionaryIterator *iter);
 void weather_apply_demo_data(void);
 void weather_request(void);
+void weather_request_force(void);
+bool weather_is_night_now(void);
 void weather_mark_error(void);
 void weather_mark_unavailable(void);
 bool weather_use_demo_data(void);
