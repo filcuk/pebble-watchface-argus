@@ -16,6 +16,7 @@ static Calendar *s_calendar;
 static TimeDisplay *s_time_display;
 static WeatherChart *s_weather_chart;
 static UnobstructedAreaHandlers s_unobstructed_handlers;
+static time_t s_last_periodic_weather_refresh;
 
 #if defined(PBL_HEALTH)
 #define BIOMETRIC_SAMPLE_PERIOD_SEC 60
@@ -35,6 +36,15 @@ static void prv_schedule_hr_backfill(void);
 static void prv_cancel_hr_backfill(void);
 static bool prv_should_run_hr_backfill(void);
 #endif
+
+static uint8_t prv_weather_update_interval_minutes(void) {
+  uint8_t minutes = settings_get()->weather_update_interval_min;
+  if (minutes != WEATHER_UPDATE_INTERVAL_5_MIN && minutes != WEATHER_UPDATE_INTERVAL_15_MIN &&
+      minutes != WEATHER_UPDATE_INTERVAL_30_MIN && minutes != WEATHER_UPDATE_INTERVAL_60_MIN) {
+    return WEATHER_UPDATE_INTERVAL_30_MIN;
+  }
+  return minutes;
+}
 
 static void prv_update_layout(void) {
   if (!s_window_layer) {
@@ -139,8 +149,11 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   }
 #endif
 
-  if (tick_copy.tm_min == 0 || tick_copy.tm_min % 30 == 0) {
+  uint8_t interval_min = prv_weather_update_interval_minutes();
+  if (s_last_periodic_weather_refresh == 0 ||
+      (now - s_last_periodic_weather_refresh) >= (time_t)interval_min * 60) {
     weather_request();
+    s_last_periodic_weather_refresh = now;
   }
 }
 
@@ -149,7 +162,9 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   bool request_weather = false;
 
   if (dict_find(iter, MESSAGE_KEY_LocationMode) || dict_find(iter, MESSAGE_KEY_ManualLocation) ||
-      dict_find(iter, MESSAGE_KEY_ForecastHours) || dict_find(iter, MESSAGE_KEY_TemperatureUnit)) {
+      dict_find(iter, MESSAGE_KEY_ForecastHours) || dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
+      dict_find(iter, MESSAGE_KEY_WeatherProvider) || dict_find(iter, MESSAGE_KEY_PauseWeatherAtNight) ||
+      dict_find(iter, MESSAGE_KEY_WeatherUpdateInterval) || dict_find(iter, MESSAGE_KEY_GpsMaxAge)) {
     request_weather = true;
   }
 
@@ -216,7 +231,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   }
 
   if (request_weather) {
-    weather_request();
+    weather_request_force();
   }
 }
 
@@ -463,7 +478,8 @@ static void init(void) {
   prv_schedule_hr_backfill();
 #endif
 
-  weather_request();
+  weather_request_force();
+  s_last_periodic_weather_refresh = argus_time_now();
 }
 
 static void deinit(void) {
