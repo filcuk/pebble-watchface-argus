@@ -18,6 +18,7 @@ typedef struct {
 static HrDayData s_hr_day;
 static time_t s_backfill_cursor;
 static bool s_backfill_active;
+static bool s_backfill_dirty;
 
 static bool prv_valid_hr_bpm(uint8_t bpm) {
   return bpm >= HR_BPM_MIN && bpm <= HR_BPM_MAX;
@@ -29,6 +30,14 @@ static time_t prv_today_start(void) {
 
 static void prv_persist(void) {
   persist_write_data(HR_DAY_PERSIST_KEY, &s_hr_day, sizeof(s_hr_day));
+}
+
+static void prv_backfill_finish(void) {
+  if (s_backfill_dirty) {
+    prv_persist();
+    s_backfill_dirty = false;
+  }
+  s_backfill_active = false;
 }
 
 static void prv_reset_for_today(void) {
@@ -78,7 +87,11 @@ bool hr_day_record(uint8_t bpm) {
 
   s_hr_day.version = HR_DAY_PERSIST_VERSION;
   s_hr_day.max_bpm = bpm;
-  prv_persist();
+  if (s_backfill_active) {
+    s_backfill_dirty = true;
+  } else {
+    prv_persist();
+  }
   return true;
 }
 
@@ -91,10 +104,11 @@ void hr_day_on_day_change(void) {
 void hr_day_backfill_start(void) {
   s_backfill_cursor = prv_today_start();
   s_backfill_active = true;
+  s_backfill_dirty = false;
 }
 
 void hr_day_backfill_cancel(void) {
-  s_backfill_active = false;
+  prv_backfill_finish();
 }
 
 #if defined(PBL_HEALTH)
@@ -105,7 +119,7 @@ bool hr_day_backfill_chunk(void) {
 
   time_t end = argus_time_now();
   if (s_backfill_cursor >= end) {
-    s_backfill_active = false;
+    prv_backfill_finish();
     return true;
   }
 
@@ -118,8 +132,12 @@ bool hr_day_backfill_chunk(void) {
 
   uint32_t count = health_service_get_minute_history(records, HR_BACKFILL_CHUNK_MINUTES, &query_start, &query_end);
   if (count == 0) {
-    s_backfill_active = false;
-    return true;
+    s_backfill_cursor = query_end;
+    if (s_backfill_cursor >= end) {
+      prv_backfill_finish();
+      return true;
+    }
+    return false;
   }
 
   for (uint32_t i = 0; i < count; i++) {
@@ -131,7 +149,7 @@ bool hr_day_backfill_chunk(void) {
 
   s_backfill_cursor = query_end;
   if (s_backfill_cursor >= end) {
-    s_backfill_active = false;
+    prv_backfill_finish();
     return true;
   }
 

@@ -161,6 +161,12 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   (void)context;
   bool request_weather = false;
 
+  /* PKJS failure signal: WeatherHourCount without WeatherTempHourly. */
+  if (dict_find(iter, MESSAGE_KEY_WeatherHourCount) && !dict_find(iter, MESSAGE_KEY_WeatherTempHourly)) {
+    weather_mark_fetch_failed();
+    return;
+  }
+
   if (dict_find(iter, MESSAGE_KEY_LocationMode) || dict_find(iter, MESSAGE_KEY_ManualLocation) ||
       dict_find(iter, MESSAGE_KEY_ForecastHours) || dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
       dict_find(iter, MESSAGE_KEY_WeatherProvider) || dict_find(iter, MESSAGE_KEY_PauseWeatherAtNight) ||
@@ -353,11 +359,8 @@ static void prv_health_handler(HealthEventType event, void *context) {
 
   switch (settings->biometric_update_mode) {
     case BIOMETRIC_UPDATE_OPTIMISED:
-      if (event != HealthEventSignificantUpdate) {
-        return;
-      }
-      break;
     case BIOMETRIC_UPDATE_EVERY_MINUTE:
+      /* Every-minute mode also refreshes from the tick handler. */
       if (event != HealthEventSignificantUpdate) {
         return;
       }

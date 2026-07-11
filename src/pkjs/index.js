@@ -13,8 +13,6 @@ var clay = new Clay(clayConfig, customClay, {
   },
 });
 
-var DEFAULT_LAT = 51.5074;
-var DEFAULT_LON = -0.1278;
 var weatherFetchInFlight = false;
 var weatherFetchStartedAt = 0;
 var weatherRequestTimer = null;
@@ -451,6 +449,21 @@ function packWeatherPayload(json, hours, startEpoch) {
   };
 }
 
+function notifyWeatherFetchFailed() {
+  clearWeatherFetchInFlight();
+  var dict = {};
+  dict[keys.WeatherHourCount] = 0;
+  Pebble.sendAppMessage(
+    dict,
+    function () {
+      console.log('Weather fetch failure sent to watch');
+    },
+    function (e) {
+      console.log('Weather fetch failure send failed: ' + JSON.stringify(e));
+    }
+  );
+}
+
 function sendWeatherPayload(payload) {
   if (!payload) {
     clearWeatherFetchInFlight();
@@ -528,7 +541,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
   xhrRequest(url, function (responseText) {
     if (!responseText) {
       console.log('Weather fetch failed');
-      clearWeatherFetchInFlight();
+      notifyWeatherFetchFailed();
       return;
     }
     try {
@@ -536,7 +549,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
       var payload = packWeatherPayload(json, hours, startEpoch);
       if (!payload) {
         console.log('Weather payload empty');
-        clearWeatherFetchInFlight();
+        notifyWeatherFetchFailed();
         return;
       }
       writeWeatherFetchCache({
@@ -549,7 +562,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
       sendWeatherPayload(payload);
     } catch (e) {
       console.log('Weather parse error: ' + e);
-      clearWeatherFetchInFlight();
+      notifyWeatherFetchFailed();
     }
   });
 }
@@ -632,14 +645,14 @@ function getWeather(forEpoch, options) {
   if (getLocationMode() === 'manual') {
     var city = getManualLocation();
     if (!city) {
-      console.log('Manual location empty, using default');
-      fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch, options);
+      console.log('Manual location empty');
+      notifyWeatherFetchFailed();
       return;
     }
     geocodeCity(city, function (result) {
       if (!result) {
-        console.log('Geocode failed, using default');
-        fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch, options);
+        console.log('Geocode failed');
+        notifyWeatherFetchFailed();
         return;
       }
       fetchForecast(result.latitude, result.longitude, forEpoch, options);
@@ -653,7 +666,7 @@ function getWeather(forEpoch, options) {
     },
     function (err) {
       console.log('Location error: ' + (err && err.message ? err.message : 'unknown'));
-      fetchForecast(DEFAULT_LAT, DEFAULT_LON, forEpoch, options);
+      notifyWeatherFetchFailed();
     },
     { timeout: 15000, maximumAge: getGpsMaxAgeMs() }
   );

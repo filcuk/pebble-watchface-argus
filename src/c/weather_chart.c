@@ -678,8 +678,6 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
     return;
   }
 
-  weather_slide_stale_hours();
-  data = weather_get();
   WeatherView view;
   weather_get_view(&view);
   if (!weather_view_has_data(&view)) {
@@ -732,7 +730,6 @@ static void prv_decor_layer_update_proc(Layer *layer, GContext *ctx) {
   }
 
   GRect bounds = layer_get_bounds(layer);
-  weather_slide_stale_hours();
   WeatherData *data = weather_get();
 
   graphics_context_set_text_color(ctx, CHART_STATUS_TEXT_COLOR);

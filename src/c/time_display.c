@@ -8,13 +8,14 @@
 
 #define TIME_CHAR_SPACING_24H 6
 #define TIME_CHAR_SPACING_12H 4
+#define TIME_CHAR_WIDTH_COUNT 11
 
 struct TimeDisplay {
   Layer *container;
   Layer *time_layer;
   char time_text[8];
   bool use_12h;
-  int char_widths[256];
+  int char_widths[TIME_CHAR_WIDTH_COUNT];
   bool char_widths_ready;
   ClockFont cached_clock_font;
   int text_height;
@@ -23,6 +24,16 @@ struct TimeDisplay {
 };
 
 static TimeDisplay *s_time_display;
+
+static int prv_time_char_index(char ch) {
+  if (ch >= '0' && ch <= '9') {
+    return ch - '0';
+  }
+  if (ch == ':') {
+    return 10;
+  }
+  return -1;
+}
 
 static GFont prv_digit_font(ClockFont clock_font) {
   switch (clock_font) {
@@ -51,7 +62,7 @@ static void prv_cache_char_widths(TimeDisplay *display) {
     return;
   }
 
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < TIME_CHAR_WIDTH_COUNT; i++) {
     display->char_widths[i] = 0;
   }
 
@@ -63,7 +74,7 @@ static void prv_cache_char_widths(TimeDisplay *display) {
     GSize size = graphics_text_layout_get_content_size(text, prv_font_for_char(ch, clock_font),
                                                        GRect(0, 0, 200, TIME_BLOCK_HEIGHT),
                                                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
-    display->char_widths[(unsigned char)ch] = size.w;
+    display->char_widths[prv_time_char_index(ch)] = size.w;
     if (size.w > max_digit_w) {
       max_digit_w = size.w;
     }
@@ -75,7 +86,7 @@ static void prv_cache_char_widths(TimeDisplay *display) {
   GSize colon_size = graphics_text_layout_get_content_size(text, prv_font_for_char(':', clock_font),
                                                            GRect(0, 0, 200, TIME_BLOCK_HEIGHT),
                                                            GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft);
-  display->char_widths[(unsigned char)':'] = colon_size.w;
+  display->char_widths[prv_time_char_index(':')] = colon_size.w;
   if (colon_size.h > max_h) {
     max_h = colon_size.h;
   }
@@ -88,9 +99,9 @@ static void prv_cache_char_widths(TimeDisplay *display) {
 }
 
 static int prv_char_width(TimeDisplay *display, char ch) {
-  int width = display->char_widths[(unsigned char)ch];
-  if (width > 0) {
-    return width;
+  int index = prv_time_char_index(ch);
+  if (index >= 0 && display->char_widths[index] > 0) {
+    return display->char_widths[index];
   }
   return prv_font_for_char(ch, settings_get()->clock_font) ? 8 : 0;
 }

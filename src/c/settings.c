@@ -132,6 +132,9 @@ static void settings_validate(void) {
   if (s_settings.week_start != WEEK_START_MONDAY && s_settings.week_start != WEEK_START_SUNDAY) {
     s_settings.week_start = WEEK_START_MONDAY;
   }
+  if (s_settings.week_number_mode > WEEK_NUMBER_GREGORIAN) {
+    s_settings.week_number_mode = WEEK_NUMBER_ISO;
+  }
   if (s_settings.temperature_display > TEMPERATURE_DISPLAY_FEELS) {
     s_settings.temperature_display = TEMPERATURE_DISPLAY_ACTUAL;
   }

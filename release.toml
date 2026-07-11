@@ -1,12 +1,10 @@
 # Edit this file on each release. Run `pebble build` (or `node scripts/generate-release.js`)
-# to sync package.json and generate src/c/release.h for the watch update notice.
+# to sync package.json and generate src/pkjs/release.js for the update notice.
 
 version = "1.1.0"
 
 message = """
-Improved weather readings and customisation.
-New heart rate header option.
-Re-designed settings menu.
+We have improved weather readings and customisation, added heart rate reading option and re-designed settings.
 
 Thanks for your patronage <3
 """
