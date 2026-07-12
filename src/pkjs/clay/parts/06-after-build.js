@@ -11,7 +11,6 @@
     wrapInlineControlBodies();
     hideHeaderHeartRateIfNeeded();
     normalizeRealtimeStepsDefault();
-    bindSegmentSync();
 
     if (tabsRoot) {
       tabsRoot.addEventListener('click', function (e) {
@@ -40,6 +39,7 @@
       refreshHolidayCountryDropdown();
       resolveHolidayDefaults();
       syncHolidaySettings();
+      bindSegmentSync();
     });
 
     var showHolidays = clayConfig.getItemByMessageKey('ShowHolidays');

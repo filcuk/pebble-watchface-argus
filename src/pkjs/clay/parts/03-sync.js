@@ -59,12 +59,28 @@
 
   function persistClaySetting(key, value) {
     try {
+      if (typeof window !== 'undefined') {
+        window.claySettings = window.claySettings || {};
+        window.claySettings[key] = value;
+      }
       var stored = JSON.parse(localStorage.getItem('clay-settings')) || {};
       stored[key] = value;
       localStorage.setItem('clay-settings', JSON.stringify(stored));
     } catch (e) {
       // Ignore localStorage errors in the config page.
     }
+  }
+
+  function readClaySetting(key) {
+    try {
+      if (typeof window !== 'undefined' && window.claySettings && window.claySettings[key] !== undefined) {
+        return normalizeClayValue(window.claySettings[key]);
+      }
+    } catch (e) {
+      // Ignore access errors in the config page.
+    }
+
+    return readStoredClaySetting(key);
   }
 
   function readStoredClaySetting(key) {
@@ -96,15 +112,44 @@
       }
     }
 
-    return readStoredClaySetting('HolidayCountry') || '';
+    return readClaySetting('HolidayCountry') || '';
   }
 
   function getHolidayRegionValue(regionItem) {
-    var value = normalizeClayValue(regionItem ? regionItem.get() : '');
-    if (value) {
-      return value;
+    var stored = readClaySetting('HolidayRegion');
+    if (stored) {
+      return stored;
     }
-    return readStoredClaySetting('HolidayRegion') || '';
+    return normalizeClayValue(regionItem ? regionItem.get() : '');
+  }
+
+  function applyHolidayRegionSelection(regionItem, selectedRegion) {
+    if (!regionItem || !regionItem.$element || !regionItem.$element[0]) {
+      return;
+    }
+
+    var radioGroup = regionItem.$element[0].querySelector('.radio-group');
+    if (radioGroup) {
+      var inputs = radioGroup.querySelectorAll('input[type="radio"]');
+      var i;
+      for (i = 0; i < inputs.length; i += 1) {
+        inputs[i].checked = inputs[i].value === selectedRegion;
+      }
+    }
+
+    regionItem.set(selectedRegion);
+    syncRadioLabels('HolidayRegion');
+  }
+
+  function ensureHolidayRegionItemValue(regionItem, selectedRegion) {
+    if (!regionItem) {
+      return selectedRegion || '';
+    }
+    var value = selectedRegion || getHolidayRegionValue(regionItem);
+    if (normalizeClayValue(regionItem.get()) !== value) {
+      applyHolidayRegionSelection(regionItem, value);
+    }
+    return value || '';
   }
 
   function ensureHolidayCountryItemValue(countryItem) {
@@ -214,6 +259,13 @@
       return;
     }
 
+    if (!countryCode) {
+      if (done) {
+        done();
+      }
+      return;
+    }
+
     loadSubdivisionsForCountry(countryCode, function (subdivisions) {
       var options = [{ label: 'National only', value: '' }];
       subdivisions.forEach(function (entry) {
@@ -226,6 +278,7 @@
       });
       if (!validValues[selectedRegion]) {
         if (selectedRegion) {
+          // Subdivisions are loaded for this country; stored region is no longer valid.
           persistClaySetting('HolidayRegion', '');
         }
         selectedRegion = '';
@@ -270,8 +323,7 @@
         radioGroup.appendChild(label);
       });
 
-      regionItem.set(selectedRegion);
-      syncRadioLabels('HolidayRegion');
+      applyHolidayRegionSelection(regionItem, selectedRegion);
       if (done) {
         done();
       }
@@ -303,7 +355,11 @@
       return;
     }
 
-    var showRegion = country && countryHasSubdivisions(country);
+    if (!country) {
+      return;
+    }
+
+    var showRegion = countryHasSubdivisions(country);
     if (showRegion) {
       regionItem.$element[0].classList.remove('hide');
       regionItem.enable();
@@ -345,8 +401,9 @@
 
     var region = getHolidayRegionValue(regionItem);
 
-    rebuildRegionOptions(country || '', region || '', function () {
+    rebuildRegionOptions(country, region || '', function () {
       syncHolidayRegionVisibility(country, regionItem);
+      ensureHolidayRegionItemValue(regionItem, region || '');
     });
   }
 
@@ -386,6 +443,9 @@
       syncRadioLabels(key);
       item.on('change', function () {
         syncRadioLabels(key);
+        if (key === 'HolidayRegion') {
+          persistClaySetting('HolidayRegion', normalizeClayValue(item.get()));
+        }
       });
     });
   }

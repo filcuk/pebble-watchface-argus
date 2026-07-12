@@ -3,7 +3,10 @@ function loadSubdivisionCatalogFromConfig() {
     subdivisionNameLookup = {};
 
     var item = clayConfig.getItemById('argus-holiday-subdivisions-data');
-    var encoded = item ? String(item.get() || '') : '';
+    var encoded = '';
+    if (item) {
+      encoded = String((item.config && item.config.defaultValue) || item.get() || '');
+    }
     if (!encoded) {
       return;
     }
@@ -204,7 +207,7 @@ function loadSubdivisionCatalogFromConfig() {
     }
 
     var cached = readCachedSubdivisions(countryCode);
-    if (cached) {
+    if (cached && cached.length) {
       holidaySubdivisions[countryCode] = cached;
       callback(cached);
       return;
