@@ -16,8 +16,9 @@
     'GpsMaxAge',
     'WeatherUpdateInterval',
     'HolidayRegion',
+    'ReleaseNotification',
   ];
-  var SELECT_DROPDOWN_KEYS = ['HolidayCountry', 'ReleaseNotification'];
+  var SELECT_DROPDOWN_KEYS = ['HolidayCountry'];
   var TITLE_INLINE_SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
@@ -88,6 +89,7 @@
       'DebugMode',
       'DemoWeather',
       'DemoBiometrics',
+      'ReleaseNotification',
       'HolidayCountry',
       'HolidayRegion',
     ]);

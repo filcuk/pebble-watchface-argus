@@ -18,7 +18,7 @@
       demoBiometricsToggle.set(false);
       demoBiometricsToggle.disable();
       releaseNotification.set('0');
-      syncHolidayDropdownValue('ReleaseNotification');
+      syncRadioLabels('ReleaseNotification');
       releaseNotification.disable();
     }
   }
