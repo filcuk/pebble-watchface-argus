@@ -6,8 +6,16 @@
   "keywords": [
     "pebble-app"
   ],
+  "scripts": {
+    "build:clay": "node scripts/build-custom-clay.js",
+    "measure-clay": "node scripts/measure-clay-url.js --max=180000"
+  },
   "dependencies": {
     "@rebble/clay": "^1.0.10"
+  },
+  "devDependencies": {
+    "clean-css": "^5.3.3",
+    "terser": "^5.39.0"
   },
   "pebble": {
     "displayName": "Argus",
@@ -31,6 +39,7 @@
       "WeekStart",
       "WeekNumberMode",
       "BluetoothDisplay",
+      "QuietModeDisplay",
       "LocationMode",
       "ManualLocation",
       "ForecastHours",
@@ -46,6 +55,8 @@
       "ReleaseNotification",
       "CheckReleaseNotice",
       "REQUEST_WEATHER",
+      "WeatherRequestKind",
+      "WeatherDebugSkip",
       "WeatherHourCount",
       "TempMin",
       "TempMax",

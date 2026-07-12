@@ -2,8 +2,10 @@
 
 #include "argus_time.h"
 #include "formatting.h"
+#include "bt_icon.h"
 #include "heart_icon.h"
 #include "hr_day.h"
+#include "quiet_mode_icon.h"
 #include "steps_icon.h"
 #include "temp_icon.h"
 #include "settings.h"
@@ -16,6 +18,7 @@
 struct Header {
   Layer *container;
   Layer *bt_layer;
+  Layer *quiet_layer;
   Layer *battery_layer;
   Layer *status_layer;
   char status_text[24];
@@ -29,6 +32,7 @@ struct Header {
   uint8_t status_hr_max;
   int battery_percent;
   bool bt_connected;
+  bool quiet_time_active;
   bool force_dirty;
   int last_year;
   int last_mon;
@@ -132,6 +136,12 @@ static void prv_format_steps(char *buffer, size_t len, int *steps_out) {
 
 #define STATUS_ICON_GAP 3
 #define STATUS_ICON_Y_OFFSET 1
+#define HEADER_ICON_Y 2
+#define HEADER_ICON_H (HEADER_HEIGHT - 4)
+#define HEADER_ICONS_LEFT 4
+#define HEADER_ICON_GAP 2
+#define HEADER_STATUS_MIN_LEFT 24
+#define HEADER_BATTERY_WIDTH 28
 
 static GFont prv_status_font_bold(void) {
   return fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
@@ -166,8 +176,39 @@ static bool prv_bt_should_show(const Header *header) {
   return settings->bluetooth_display == BT_DISPLAY_ALWAYS || !header->bt_connected;
 }
 
+static bool prv_quiet_should_show(const Header *header) {
+  const ArgusSettings *settings = settings_get();
+  return settings->quiet_mode_display && header->quiet_time_active;
+}
+
+static void prv_layout_header_icons(Header *header, int header_width) {
+  bool show_bt = prv_bt_should_show(header);
+  bool show_quiet = prv_quiet_should_show(header);
+  int x = HEADER_ICONS_LEFT;
+
+  if (show_bt) {
+    layer_set_hidden(header->bt_layer, false);
+    layer_set_frame(header->bt_layer, GRect(x, HEADER_ICON_Y, BT_ICON_WIDTH, HEADER_ICON_H));
+    x += BT_ICON_WIDTH + HEADER_ICON_GAP;
+  } else {
+    layer_set_hidden(header->bt_layer, true);
+  }
+
+  if (show_quiet) {
+    layer_set_hidden(header->quiet_layer, false);
+    layer_set_frame(header->quiet_layer, GRect(x, HEADER_ICON_Y, QUIET_MODE_ICON_WIDTH, HEADER_ICON_H));
+    x += QUIET_MODE_ICON_WIDTH + HEADER_ICON_GAP;
+  } else {
+    layer_set_hidden(header->quiet_layer, true);
+  }
+
+  int status_left = (show_bt || show_quiet) ? x + 2 : HEADER_STATUS_MIN_LEFT;
+  layer_set_frame(header->status_layer,
+                  GRect(status_left, 0, header_width - status_left - HEADER_BATTERY_WIDTH, HEADER_HEIGHT));
+}
+
 static void prv_sync_bt_visibility(Header *header) {
-  layer_set_hidden(header->bt_layer, !prv_bt_should_show(header));
+  prv_layout_header_icons(header, layer_get_bounds(header->container).size.w);
 }
 
 static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
@@ -258,6 +299,23 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
 }
 
 static void prv_bt_update_proc(Layer *layer, GContext *ctx) {
+  Header *header = s_header;
+  if (!header) {
+    return;
+  }
+
+  GRect bounds = layer_get_bounds(layer);
+  int x = (bounds.size.w - BT_ICON_WIDTH) / 2;
+  int y = (bounds.size.h - BT_ICON_HEIGHT) / 2;
+
+  if (header->bt_connected) {
+    bt_icon_draw_connected(ctx, x, y);
+  } else {
+    bt_icon_draw_lost(ctx, x, y);
+  }
+}
+
+static void prv_quiet_update_proc(Layer *layer, GContext *ctx) {
   (void)layer;
   Header *header = s_header;
   if (!header) {
@@ -265,20 +323,9 @@ static void prv_bt_update_proc(Layer *layer, GContext *ctx) {
   }
 
   GRect bounds = layer_get_bounds(layer);
-  graphics_context_set_stroke_color(ctx, GColorWhite);
-  graphics_context_set_fill_color(ctx, header->bt_connected ? GColorWhite : GColorRed);
-
-  int cx = bounds.size.w / 2;
-  int cy = bounds.size.h / 2;
-  if (header->bt_connected) {
-    graphics_draw_circle(ctx, GPoint(cx, cy), 4);
-    graphics_draw_line(ctx, GPoint(cx - 2, cy + 2), GPoint(cx + 2, cy - 2));
-  } else {
-    graphics_fill_circle(ctx, GPoint(cx, cy), 5);
-    graphics_context_set_stroke_color(ctx, GColorBlack);
-    graphics_draw_line(ctx, GPoint(cx - 3, cy - 3), GPoint(cx + 3, cy + 3));
-    graphics_draw_line(ctx, GPoint(cx - 3, cy + 3), GPoint(cx + 3, cy - 3));
-  }
+  int x = (bounds.size.w - QUIET_MODE_ICON_WIDTH) / 2;
+  int y = (bounds.size.h - QUIET_MODE_ICON_HEIGHT) / 2;
+  quiet_mode_icon_draw(ctx, x, y);
 }
 
 static void prv_battery_update_proc(Layer *layer, GContext *ctx) {
@@ -316,20 +363,27 @@ Header *header_create(Layer *parent) {
   header->container = layer_create(GRect(0, 0, bounds.size.w, HEADER_HEIGHT));
   layer_add_child(parent, header->container);
 
-  header->bt_layer = layer_create(GRect(4, 2, 18, HEADER_HEIGHT - 4));
+  header->bt_layer = layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, BT_ICON_WIDTH, HEADER_ICON_H));
   layer_set_update_proc(header->bt_layer, prv_bt_update_proc);
   layer_add_child(header->container, header->bt_layer);
 
-  header->battery_layer = layer_create(GRect(bounds.size.w - 28, 2, 24, HEADER_HEIGHT - 4));
+  header->quiet_layer =
+      layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, QUIET_MODE_ICON_WIDTH, HEADER_ICON_H));
+  layer_set_update_proc(header->quiet_layer, prv_quiet_update_proc);
+  layer_add_child(header->container, header->quiet_layer);
+
+  header->battery_layer = layer_create(GRect(bounds.size.w - HEADER_BATTERY_WIDTH, 2, 24, HEADER_HEIGHT - 4));
   layer_set_update_proc(header->battery_layer, prv_battery_update_proc);
   layer_add_child(header->container, header->battery_layer);
 
-  header->status_layer = layer_create(GRect(24, 0, bounds.size.w - 52, HEADER_HEIGHT));
+  header->status_layer = layer_create(GRect(HEADER_STATUS_MIN_LEFT, 0, bounds.size.w - HEADER_STATUS_MIN_LEFT - HEADER_BATTERY_WIDTH,
+                                          HEADER_HEIGHT));
   layer_set_update_proc(header->status_layer, prv_status_layer_update_proc);
   layer_add_child(header->container, header->status_layer);
 
   header->battery_percent = 100;
   header->bt_connected = true;
+  header->quiet_time_active = false;
   header->force_dirty = true;
   header->last_year = -1;
   header->last_mon = -1;
@@ -357,6 +411,7 @@ void header_destroy(Header *header) {
     s_header = NULL;
   }
   layer_destroy(header->status_layer);
+  layer_destroy(header->quiet_layer);
   layer_destroy(header->bt_layer);
   layer_destroy(header->battery_layer);
   layer_destroy(header->container);
@@ -368,8 +423,8 @@ void header_set_bounds(Header *header, GRect frame) {
     return;
   }
   layer_set_frame(header->container, frame);
-  layer_set_frame(header->battery_layer, GRect(frame.size.w - 28, 2, 24, HEADER_HEIGHT - 4));
-  layer_set_frame(header->status_layer, GRect(24, 0, frame.size.w - 52, HEADER_HEIGHT));
+  layer_set_frame(header->battery_layer, GRect(frame.size.w - HEADER_BATTERY_WIDTH, 2, 24, HEADER_HEIGHT - 4));
+  prv_layout_header_icons(header, frame.size.w);
 }
 
 void header_invalidate(Header *header) {
@@ -386,6 +441,9 @@ void header_apply_settings(Header *header) {
   prv_sync_bt_visibility(header);
   if (!layer_get_hidden(header->bt_layer)) {
     layer_mark_dirty(header->bt_layer);
+  }
+  if (!layer_get_hidden(header->quiet_layer)) {
+    layer_mark_dirty(header->quiet_layer);
   }
 }
 
@@ -530,10 +588,25 @@ void header_refresh_bt(Header *header, bool connected) {
   if (!header) {
     return;
   }
+  bool was_visible = prv_bt_should_show(header);
   header->bt_connected = connected;
+  bool is_visible = prv_bt_should_show(header);
   prv_sync_bt_visibility(header);
-  if (!layer_get_hidden(header->bt_layer)) {
+  if (was_visible != is_visible || is_visible) {
     layer_mark_dirty(header->bt_layer);
+  }
+}
+
+void header_refresh_quiet_time(Header *header, bool active) {
+  if (!header) {
+    return;
+  }
+  bool was_visible = prv_quiet_should_show(header);
+  header->quiet_time_active = active;
+  bool is_visible = prv_quiet_should_show(header);
+  prv_sync_bt_visibility(header);
+  if (was_visible != is_visible || is_visible) {
+    layer_mark_dirty(header->quiet_layer);
   }
 }
 

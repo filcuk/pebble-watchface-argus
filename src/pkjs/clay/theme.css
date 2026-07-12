@@ -1,0 +1,653 @@
+.hide { display: none !important; }
+html.as { color-scheme: dark; }
+html.as,
+html.as body {
+  background: #1a1d21 !important;
+  color: #e8ebef !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+html.as body {
+  padding: 0 !important;
+}
+html.as .inputs,
+html.as #main-form.inputs {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px 12px 120px;
+  box-sizing: border-box;
+  background: transparent !important;
+}
+html.as .component {
+  padding-top: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+}
+html.as .component-heading {
+  display: none !important;
+}
+html.as .component.component-text:not(.argus-row) {
+  display: none !important;
+}
+html.as .component.component-text.argus-row > p {
+  margin: 0;
+  padding: 0;
+}
+html.as .component-toggle > label,
+html.as .argus-row.component-input > label {
+  padding: 0 !important;
+  color: inherit !important;
+}
+html.as .argus-segment-radiogroup .radio-group label {
+  display: -webkit-inline-flex !important;
+  display: inline-flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+html.as .description {
+  color: #9aa1ab !important;
+  padding: 0 !important;
+  text-align: left !important;
+}
+html.as .argus-tabs {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: nowrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #1a1d21 !important;
+  padding: 0 0 4px;
+  margin-bottom: 8px;
+}
+html.as .argus-tabs::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+html.as .argus-tabs .argus-tab {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  min-height: 36px !important;
+  padding: 8px 14px !important;
+  margin: 0 !important;
+  border: 1px solid #464d58 !important;
+  border-radius: 9px !important;
+  background: #282c32 !important;
+  color: #b4bac3 !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  text-transform: none !important;
+  text-align: center !important;
+  cursor: pointer;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+html.as .argus-tabs .argus-tab + .argus-tab {
+  margin-left: 14px !important;
+}
+html.as .argus-tabs .argus-tab.active {
+  background: #4a6885 !important;
+  border-color: #4a6885 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 4px rgba(74, 104, 133, 0.45) !important;
+}
+html.as .argus-tab-panel {
+  background: #282c32 !important;
+  border: 1px solid #464d58;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+html.as .argus-tab-panel.hide {
+  display: none !important;
+}
+html.as .argus-row {
+  padding: 0 16px 18px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+html.as .argus-tab-panel > .argus-row:first-child {
+  padding-top: 10px !important;
+}
+html.as .argus-tab-panel > .argus-row ~ .argus-row {
+  border-top: 1px solid #3a4048;
+  padding-top: 14px !important;
+}
+html.as .argus-setting-label,
+html.as .argus-row > .label,
+html.as .argus-row.component-radio > .label,
+html.as .argus-row.component-toggle > label > .label,
+html.as .argus-row.component-input label > .label {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e8ebef !important;
+  margin-bottom: 10px !important;
+  padding: 0 !important;
+}
+html.as .argus-row.component-toggle > label > .label,
+html.as .component-toggle > label > .label {
+  margin-bottom: 0;
+}
+html.as .argus-row .description {
+  font-size: 13px;
+  color: #9aa1ab !important;
+  line-height: 1.45;
+  margin-top: 10px;
+  padding: 0;
+}
+html.as .argus-row .description strong {
+  font-weight: 600;
+  color: #6894b8 !important;
+}
+html.as .argus-row .description em {
+  font-style: italic;
+}
+html.as .argus-inline-control {
+  display: block;
+}
+html.as .argus-control-row {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: flex-start;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 0;
+}
+html.as .argus-control-row > .description {
+  -webkit-flex: 1 1 0;
+  flex: 1 1 0;
+  min-width: 0;
+  margin-top: 0 !important;
+}
+html.as .argus-control-row > .radio-group,
+html.as .argus-control-row > .argus-toggle-input {
+  -webkit-flex: 0 0 auto;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+html.as .argus-toggle-input {
+  padding: 0 !important;
+  margin: 0 !important;
+  display: -webkit-inline-flex !important;
+  display: inline-flex !important;
+  align-items: flex-start !important;
+}
+html.as .argus-segment-radiogroup > .label,
+html.as .argus-inline-control.component-toggle > .label {
+  display: block;
+  margin-bottom: 10px !important;
+}
+html.as .argus-title-inline-control {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+html.as .argus-title-inline-control > .label {
+  -webkit-flex: 1 1 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0 !important;
+}
+html.as .argus-title-inline-control > .radio-group {
+  -webkit-flex: 0 0 auto;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+html.as .argus-segment-radiogroup > .radio-group {
+  margin-left: auto;
+}
+html.as .argus-list-radiogroup {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+}
+html.as .argus-list-radiogroup > .label {
+  order: 1;
+  display: block;
+  margin-bottom: 8px !important;
+}
+html.as .argus-list-radiogroup > .radio-group {
+  order: 3;
+}
+html.as .argus-list-radiogroup > .description {
+  order: 2;
+  margin-top: 0 !important;
+  margin-bottom: 10px !important;
+}
+html.as .argus-list-radiogroup > .argus-list-help-after {
+  order: 4;
+  margin-top: 10px !important;
+  margin-bottom: 0 !important;
+}
+html.as .argus-segment-radiogroup .radio-group {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  gap: 4px;
+  padding: 4px;
+  background: #3a4048 !important;
+  border-radius: 9px;
+}
+html.as .argus-segment-radiogroup .radio-group label {
+  flex: 0 0 auto;
+  min-height: 30px;
+  margin: 0 !important;
+  padding: 6px 12px !important;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  background: transparent !important;
+  max-width: none !important;
+}
+html.as .argus-segment-radiogroup .radio-group .label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #b4bac3 !important;
+  text-align: center;
+  padding: 0 2px !important;
+  margin: 0 !important;
+}
+html.as .argus-segment-radiogroup .radio-group i {
+  display: none;
+}
+html.as .argus-segment-radiogroup .radio-group input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+html.as .argus-segment-radiogroup .radio-group label.active {
+  background: #4a6885 !important;
+  box-shadow: 0 1px 3px rgba(74, 104, 133, 0.4);
+}
+html.as .argus-segment-radiogroup .radio-group label.active .label {
+  color: #ffffff !important;
+}
+html.as .argus-list-radiogroup .radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  background: #3a4048 !important;
+  border-radius: 9px;
+}
+html.as .argus-list-radiogroup .radio-group label {
+  display: -webkit-flex !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px;
+  min-height: 36px;
+  margin: 0 !important;
+  padding: 8px 14px !important;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  background: transparent !important;
+  box-sizing: border-box;
+}
+html.as .argus-list-radiogroup .radio-group .label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #b4bac3 !important;
+  text-align: left;
+}
+html.as .argus-list-radiogroup .radio-group i {
+  display: block;
+  position: relative;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #5a616c;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+html.as .argus-list-radiogroup .radio-group input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+html.as .argus-list-radiogroup .radio-group input:checked + i {
+  border-color: #8eb0d0;
+}
+html.as .argus-list-radiogroup .radio-group input:checked + i:after {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 50%;
+  background: #8eb0d0;
+}
+html.as .argus-list-radiogroup .radio-group label.active {
+  background: rgba(142, 176, 208, 0.28) !important;
+  border: 1px solid #8eb0d0 !important;
+  box-shadow: none;
+}
+html.as .argus-list-radiogroup .radio-group label.active .label {
+  color: #e8ebef !important;
+}
+html.as .argus-row.component-toggle > label,
+html.as .component-toggle > label {
+  padding: 0 !important;
+  cursor: pointer;
+}
+html.as .argus-row.component-toggle:not(.argus-inline-control) > label,
+html.as .component-toggle:not(.argus-inline-control) > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+}
+html.as .argus-row.component-toggle > label > .label,
+html.as .component-toggle > label > .label {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 0;
+  color: #e8ebef !important;
+}
+html.as .argus-row.component-toggle > label > .input,
+html.as .component-toggle > label > .input {
+  flex: 0 0 auto;
+  max-width: none !important;
+  width: auto !important;
+  margin-left: 0 !important;
+  white-space: nowrap;
+}
+html.as .component-toggle .graphic .slide {
+  display: block;
+  width: 44px !important;
+  height: 26px !important;
+  border-radius: 13px !important;
+  background: #404650 !important;
+}
+html.as .component-toggle .graphic .marker {
+  width: 22px !important;
+  height: 22px !important;
+  top: 2px !important;
+  left: 2px !important;
+  background: #d4d7dc !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35) !important;
+}
+html.as .component-toggle input:checked + .graphic .slide {
+  background: #4a6885 !important;
+  box-shadow: 0 1px 3px rgba(74, 104, 133, 0.4) !important;
+}
+html.as .component-toggle input:checked + .graphic .marker {
+  background: #e8ebef !important;
+  transform: translateX(18px) !important;
+}
+html.as .argus-row.component-input > label {
+  display: block;
+  padding: 0 !important;
+}
+html.as .argus-row.component-input > label.tap-highlight,
+html.as .argus-row.component-input > label.tap-highlight:active,
+html.as .argus-row.component-input > label.tap-highlight:focus,
+html.as .argus-row.component-input > label.tap-highlight:focus-within {
+  -webkit-tap-highlight-color: transparent !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+html.as .argus-row.component-input .input {
+  margin-top: 8px;
+  margin-left: 0 !important;
+  max-width: none !important;
+}
+html.as .argus-row.component-input input,
+html.as .argus-row.component-input input.argus-city-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #c5cad1 !important;
+  border-radius: 10px;
+  font-size: 16px;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #1a1d21 !important;
+  color-scheme: light;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: none !important;
+}
+html.as .argus-row.component-input input::-webkit-input-placeholder {
+  color: #8a919a;
+}
+html.as .argus-row.component-input input:focus {
+  outline: none;
+  border-color: #4a6885 !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #1a1d21 !important;
+}
+html.as .argus-holiday-dropdown .radio-group {
+  display: none !important;
+}
+html.as .argus-holiday-dropdown.component-input input {
+  display: none !important;
+}
+html.as .argus-holiday-select {
+  width: 100%;
+  max-width: 200px;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #c5cad1 !important;
+  border-radius: 10px;
+  font-size: 16px;
+  background: #ffffff !important;
+  color: #1a1d21 !important;
+  -webkit-appearance: menulist;
+  appearance: menulist;
+}
+html.as .argus-holiday-dropdown.disabled .argus-holiday-select,
+html.as .argus-select-control.disabled .argus-holiday-select {
+  opacity: 0.55;
+  pointer-events: none;
+}
+html.as .argus-row.component-input.disabled input {
+  opacity: 0.55;
+  background: #e8ebef !important;
+  background-color: #e8ebef !important;
+  color: #6b7280 !important;
+}
+html.as .argus-footer {
+  text-align: center;
+  font-size: 13px;
+  color: #7a828d !important;
+  padding: 0 0 8px;
+}
+html.as .argus-footer-row {
+  padding: 8px 16px 4px !important;
+  margin: 0 !important;
+}
+html.as .argus-footer a {
+  color: #6894b8 !important;
+  text-decoration: none;
+}
+html.as .argus-precip-info {
+  color: inherit;
+}
+html.as .argus-wind-info {
+  color: inherit;
+}
+html.as .argus-precip-info > .argus-setting-label,
+html.as .argus-wind-info > .argus-setting-label {
+  margin-bottom: 8px !important;
+}
+html.as .argus-precip-intro {
+  font-size: 13px;
+  color: #9aa1ab !important;
+  line-height: 1.45;
+  margin: 0 0 14px;
+}
+html.as .argus-precip-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 12px;
+}
+html.as .argus-precip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+html.as .argus-precip-table th,
+html.as .argus-precip-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid #3a4048;
+  vertical-align: top;
+}
+html.as .argus-precip-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: #b4bac3;
+  background: #23272d;
+}
+html.as .argus-precip-table td {
+  color: #e8ebef;
+}
+html.as .argus-precip-table tr:last-child td {
+  border-bottom: none;
+}
+html.as .argus-precip-example {
+  font-size: 13px;
+  color: #9aa1ab !important;
+  line-height: 1.45;
+  margin: 0;
+}
+html.as .argus-wind-note {
+  font-size: 13px;
+  color: #9aa1ab !important;
+  line-height: 1.45;
+  margin: 12px 0 0;
+}
+html.as .argus-wind-note em {
+  font-style: normal;
+  color: #f5d442;
+}
+html.as .component-submit {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+  background: #1a1d21 !important;
+  border-top: 1px solid #464d58;
+  box-sizing: border-box;
+}
+html.as .component-submit button {
+  width: 100%;
+  max-width: 448px;
+  min-width: 0 !important;
+  min-height: 48px;
+  margin: 0 auto !important;
+  display: block;
+  border: none !important;
+  border-radius: 12px !important;
+  background: #4a6885 !important;
+  color: #ffffff !important;
+  font-family: inherit !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(74, 104, 133, 0.4) !important;
+}
+html.as .argus-weather-log-panel.component-text > p {
+  margin: 0;
+  padding: 0;
+}
+html.as .argus-weather-log-panel {
+  margin-top: 4px;
+}
+html.as .argus-weather-log {
+  max-height: 280px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 10px;
+  border: 1px solid #464d58;
+  border-radius: 8px;
+  background: #12151a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+html.as .argus-weather-log-empty {
+  padding: 8px 10px;
+  border: 1px solid #464d58;
+  border-radius: 8px;
+  background: #12151a;
+  color: #9aa1ab;
+  font-size: 12px;
+  line-height: 1.4;
+}
+html.as .argus-wlog-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 2px;
+}
+html.as .argus-wlog-t {
+  color: #7a8494;
+}
+html.as .argus-wlog-tag {
+  font-weight: 600;
+}
+html.as .argus-wlog-ok .argus-wlog-tag {
+  color: #9aa1ab;
+}
+html.as .argus-wlog-cache .argus-wlog-tag {
+  color: #8ab4d4;
+}
+html.as .argus-wlog-warn .argus-wlog-tag {
+  color: #d4b86a;
+}
+html.as .argus-wlog-err .argus-wlog-tag {
+  color: #d07070;
+}
+html.as .argus-wlog-legend {
+  margin-bottom: 6px;
+  color: #7a8494;
+  font-size: 10px;
+  line-height: 1.35;
+}

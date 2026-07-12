@@ -3,6 +3,7 @@ out = 'build'
 
 def options(ctx):
     import subprocess
+    subprocess.check_call(['node', 'scripts/build-custom-clay.js'], cwd=ctx.path.abspath())
     subprocess.check_call(['node', 'scripts/generate-release.js'], cwd=ctx.path.abspath())
     ctx.load('pebble_sdk')
 
@@ -35,6 +36,9 @@ def build(ctx):
     ctx.set_group('bundle')
     ctx.pbl_bundle(
         binaries=binaries,
-        js=ctx.path.ant_glob(['src/pkjs/**/*.js', 'src/pkjs/**/*.json']),
+        js=ctx.path.ant_glob(
+            ['src/pkjs/**/*.js', 'src/pkjs/**/*.json'],
+            excl=['**/clay/parts/**'],
+        ),
         js_entry_file='src/pkjs/index.js'
     )

@@ -170,6 +170,7 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 
   header_update(s_header, &tick_copy);
   calendar_update(s_calendar, &tick_copy);
+  header_refresh_quiet_time(s_header, quiet_time_is_active());
 
 #if defined(PBL_HEALTH)
   if (settings_get()->biometric_update_mode == BIOMETRIC_UPDATE_EVERY_MINUTE &&
@@ -208,7 +209,8 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   bool header_settings = dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_RealtimeSteps) ||
                          dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
                          dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
-                         dict_find(iter, MESSAGE_KEY_BluetoothDisplay);
+                         dict_find(iter, MESSAGE_KEY_BluetoothDisplay) ||
+                         dict_find(iter, MESSAGE_KEY_QuietModeDisplay);
 
   settings_apply_from_message(iter);
   if (dict_find(iter, MESSAGE_KEY_WeatherTempHourly)) {
@@ -312,6 +314,12 @@ static void prv_bt_handler(bool connected) {
   weather_chart_refresh(s_weather_chart);
 }
 
+static void prv_app_focus_handler(bool in_focus) {
+  if (in_focus) {
+    header_refresh_quiet_time(s_header, quiet_time_is_active());
+  }
+}
+
 static void prv_window_load(Window *window) {
   s_window_layer = window_get_root_layer(window);
   Layer *root = s_window_layer;
@@ -333,6 +341,7 @@ static void prv_window_load(Window *window) {
   }
 
   header_refresh_bt(s_header, connection_service_peek_pebble_app_connection());
+  header_refresh_quiet_time(s_header, quiet_time_is_active());
   header_refresh_battery(s_header, battery_state_service_peek());
 
   prv_update_layout();
@@ -537,6 +546,9 @@ static void init(void) {
   connection_service_subscribe((ConnectionHandlers){
       .pebble_app_connection_handler = prv_bt_handler,
   });
+  app_focus_service_subscribe_handlers((AppFocusHandlers){
+      .did_focus = prv_app_focus_handler,
+  });
 
   app_message_register_inbox_received(prv_inbox_received);
   app_message_register_inbox_dropped(prv_inbox_dropped);
@@ -575,6 +587,7 @@ static void deinit(void) {
   tick_timer_service_unsubscribe();
   battery_state_service_unsubscribe();
   connection_service_unsubscribe();
+  app_focus_service_unsubscribe();
   window_destroy(s_main_window);
 }
 

@@ -5,13 +5,17 @@ var holidays = require('./holidays');
 var pkg = require('../../package.json');
 var release = require('./release');
 var keys = require('message_keys');
+var weatherDebugLog = require('./weather-debug-log');
+
+var clayUserData = {
+  version: pkg.version,
+  githubUrl: 'https://github.com/filcuk/pebble-watchface-argus',
+  weatherLog: [],
+};
 
 var clay = new Clay(clayConfig, customClay, {
   autoHandleEvents: false,
-  userData: {
-    version: pkg.version,
-    githubUrl: 'https://github.com/filcuk/pebble-watchface-argus',
-  },
+  userData: clayUserData,
 });
 
 var weatherFetchInFlight = false;
@@ -132,6 +136,42 @@ function getClaySetting(key, defaultValue) {
 }
 
 var APP_MESSAGE_INT_BATCH = 4;
+/** Clay config keys stored on phone only; not in package.json messageKeys. */
+var CLAY_PKJS_ONLY_KEYS = ['DebugWeatherLog'];
+
+function parseClayWebviewResponse(response) {
+  var raw = String(response).match(/^\{/) ? String(response) : decodeURIComponent(String(response));
+  return JSON.parse(raw);
+}
+
+function stripPkjsOnlyClayKeys(raw) {
+  var i;
+  for (i = 0; i < CLAY_PKJS_ONLY_KEYS.length; i += 1) {
+    delete raw[CLAY_PKJS_ONLY_KEYS[i]];
+  }
+  return raw;
+}
+
+function persistClaySettingsFromRaw(raw) {
+  var flat = {};
+  var key;
+  for (key in raw) {
+    if (!Object.prototype.hasOwnProperty.call(raw, key)) {
+      continue;
+    }
+    var entry = raw[key];
+    if (entry && typeof entry === 'object' && 'value' in entry) {
+      flat[key] = entry.value;
+    } else {
+      flat[key] = entry;
+    }
+  }
+  try {
+    localStorage.setItem('clay-settings', JSON.stringify(flat));
+  } catch (err) {
+    // Ignore storage errors.
+  }
+}
 
 function sendPreparedSettingsInChunks(prepared, onComplete, onError) {
   var intKeys = [];
@@ -140,6 +180,9 @@ function sendPreparedSettingsInChunks(prepared, onComplete, onError) {
 
   for (key in prepared) {
     if (!Object.prototype.hasOwnProperty.call(prepared, key)) {
+      continue;
+    }
+    if (!isFinite(Number(key))) {
       continue;
     }
     if (typeof prepared[key] === 'string') {
@@ -301,6 +344,75 @@ function claySettingIsTruthy(value) {
 
 function pauseWeatherAtNightEnabled() {
   return claySettingIsTruthy(getClaySetting('PauseWeatherAtNight', false));
+}
+
+function wlog(tag, msg) {
+  weatherDebugLog.append(tag, msg);
+}
+
+var WEATHER_REQ_KINDS = {
+  '0': 'periodic',
+  '1': 'force',
+  '2': 'stale',
+};
+
+var WEATHER_WATCH_SKIP_LABELS = {
+  '1': 'night pause',
+  '2': 'offline+cache',
+  '3': 'offline no data',
+  '4': 'throttle 60s',
+};
+
+function wlogWeatherRequestKind(kind, reqDetail) {
+  var kindKey = String(kind);
+  var label = WEATHER_REQ_KINDS[kindKey];
+  if (!label) {
+    label = kind === undefined || kind === null ? 'watch' : 'kind' + kindKey;
+  }
+  wlog('REQ', label + ' ' + reqDetail);
+}
+
+function wlogWeatherWatchSkip(code) {
+  var label = WEATHER_WATCH_SKIP_LABELS[String(code)] || 'code ' + code;
+  wlog('W-SKIP', label);
+}
+
+function injectWeatherLogForClayConfig() {
+  var html = '';
+  if (claySettingIsTruthy(getClaySetting('DebugWeatherLog', false))) {
+    html = weatherDebugLog.formatPanelHtml(weatherDebugLog.read());
+  }
+
+  if (!clay.meta) {
+    clay.meta = {};
+  }
+  clay.meta.userData = {
+    version: clayUserData.version,
+    githubUrl: clayUserData.githubUrl,
+  };
+
+  var config = clay.config;
+  var i;
+  for (i = 0; i < config.length; i += 1) {
+    if (config[i].id === 'argus-weather-debug-log') {
+      config[i].defaultValue = html;
+      break;
+    }
+  }
+}
+
+function wlogCacheMiss(latitude, longitude, model, hours, startEpoch) {
+  var cache = readWeatherFetchCache();
+  var expectedKey = weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch);
+  if (!cache) {
+    wlog('C-', 'phone empty');
+    return;
+  }
+  if (cache.key !== expectedKey) {
+    wlog('C-', 'phone key≠');
+    return;
+  }
+  wlog('C-', 'phone expired ' + weatherDebugLog.formatAgeMs(Date.now() - cache.fetchedAt));
 }
 
 function readWeatherFetchCache() {
@@ -535,8 +647,9 @@ function packWeatherPayload(json, hours, startEpoch) {
   };
 }
 
-function notifyWeatherFetchFailed() {
+function notifyWeatherFetchFailed(reason) {
   clearWeatherFetchInFlight();
+  wlog('W!', reason || 'fail→watch');
   var dict = {};
   dict[keys.WeatherHourCount] = 0;
   Pebble.sendAppMessage(
@@ -577,10 +690,12 @@ function sendWeatherPayload(payload) {
     dict,
     function () {
       console.log('Weather sent to watch (' + payload.count + 'h)');
+      wlog('SND+', payload.count + 'h');
       clearWeatherFetchInFlight();
     },
     function (e) {
       console.log('Weather send failed: ' + JSON.stringify(e));
+      wlog('SND!', 'appmsg');
       clearWeatherFetchInFlight();
     }
   );
@@ -596,10 +711,26 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
     var cached = readWeatherFetchCache();
     if (cached && cached.payload) {
       console.log('Weather fetch skipped (recent cache) — resending to watch');
+      var ageMs = Date.now() - cached.fetchedAt;
+      wlog(
+        'C+',
+        'phone ' +
+          weatherDebugLog.formatAgeMs(ageMs) +
+          '/' +
+          weatherDebugLog.formatAgeMs(getWeatherUpdateIntervalMs()) +
+          ' ' +
+          cached.payload.count +
+          'h'
+      );
       sendWeatherPayload(cached.payload);
       return;
     }
     console.log('Weather fetch cache miss — fetching');
+    wlogCacheMiss(latitude, longitude, model, hours, startEpoch);
+  } else if (!options.forceRefresh) {
+    wlogCacheMiss(latitude, longitude, model, hours, startEpoch);
+  } else {
+    wlog('API', 'force refresh');
   }
 
   var url =
@@ -627,11 +758,23 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
       getWeatherProvider() +
       (model ? ' model=' + model : ' model=auto')
   );
+  wlog(
+    'API',
+    latitude.toFixed(2) +
+      ',' +
+      longitude.toFixed(2) +
+      ' ' +
+      (model || 'auto') +
+      ' ' +
+      hours +
+      'h'
+  );
 
   xhrRequest(url, function (responseText) {
     if (!responseText) {
       console.log('Weather fetch failed');
-      notifyWeatherFetchFailed();
+      wlog('API!', 'no response');
+      notifyWeatherFetchFailed('api');
       return;
     }
     try {
@@ -639,7 +782,8 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
       var payload = packWeatherPayload(json, hours, startEpoch);
       if (!payload) {
         console.log('Weather payload empty');
-        notifyWeatherFetchFailed();
+        wlog('API!', 'empty');
+        notifyWeatherFetchFailed('empty');
         return;
       }
       writeWeatherFetchCache({
@@ -650,10 +794,12 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
         isDayBytes: payload.isDayBytes,
         payload: payload,
       });
+      wlog('API+', payload.count + 'h ' + (model || 'auto'));
       sendWeatherPayload(payload);
     } catch (e) {
       console.log('Weather parse error: ' + e);
-      notifyWeatherFetchFailed();
+      wlog('API!', 'parse');
+      notifyWeatherFetchFailed('parse');
     }
   });
 }
@@ -684,9 +830,12 @@ function writeGeocodeCache(city, latitude, longitude) {
 function geocodeCity(city, callback) {
   var cached = readGeocodeCache(city);
   if (cached) {
+    wlog('GEO+', city);
     callback({ latitude: cached.lat, longitude: cached.lon });
     return;
   }
+
+  wlog('GEO', city + '→api');
 
   var url =
     'https://geocoding-api.open-meteo.com/v1/search?name=' +
@@ -694,12 +843,14 @@ function geocodeCity(city, callback) {
     '&count=1&language=en&format=json';
   xhrRequest(url, function (responseText) {
     if (!responseText) {
+      wlog('GEO!', city);
       callback(null);
       return;
     }
     try {
       var json = JSON.parse(responseText);
       if (!json.results || json.results.length === 0) {
+        wlog('GEO!', city + ' not found');
         callback(null);
         return;
       }
@@ -707,6 +858,7 @@ function geocodeCity(city, callback) {
       writeGeocodeCache(city, result.latitude, result.longitude);
       callback(result);
     } catch (e) {
+      wlog('GEO!', city + ' parse');
       callback(null);
     }
   });
@@ -719,6 +871,7 @@ function getWeather(forEpoch, options) {
     var nightCache = readWeatherFetchCache();
     if (nightCache && weatherIsNightNow(nightCache)) {
       console.log('Weather fetch paused at night');
+      wlog('NIGHT', 'cache→watch');
       if (nightCache.payload) {
         sendWeatherPayload(nightCache.payload);
       }
@@ -727,10 +880,12 @@ function getWeather(forEpoch, options) {
   }
 
   if (weatherFetchInFlight && !weatherFetchIsStale()) {
+    wlog('SKIP', 'phone in-flight');
     return;
   }
   if (weatherFetchIsStale()) {
     console.log('Weather fetch stale — retrying');
+    wlog('STALE', 'retry');
   }
 
   weatherFetchInFlight = true;
@@ -740,13 +895,14 @@ function getWeather(forEpoch, options) {
     var city = getManualLocation(options);
     if (!city) {
       console.log('Manual location empty');
-      notifyWeatherFetchFailed();
+      wlog('GEO!', 'no city');
+      notifyWeatherFetchFailed('no city');
       return;
     }
     geocodeCity(city, function (result) {
       if (!result) {
         console.log('Geocode failed');
-        notifyWeatherFetchFailed();
+        notifyWeatherFetchFailed('geocode');
         return;
       }
       fetchForecast(result.latitude, result.longitude, forEpoch, options);
@@ -756,11 +912,13 @@ function getWeather(forEpoch, options) {
 
   navigator.geolocation.getCurrentPosition(
     function (pos) {
+      wlog('GPS', pos.coords.latitude.toFixed(2) + ',' + pos.coords.longitude.toFixed(2));
       fetchForecast(pos.coords.latitude, pos.coords.longitude, forEpoch, options);
     },
     function (err) {
       console.log('Location error: ' + (err && err.message ? err.message : 'unknown'));
-      notifyWeatherFetchFailed();
+      wlog('GPS!', err && err.message ? err.message : 'unknown');
+      notifyWeatherFetchFailed('gps');
     },
     { timeout: 15000, maximumAge: getGpsMaxAgeMs() }
   );
@@ -916,8 +1074,10 @@ function maybeShowReleaseNotice(options) {
 
 Pebble.addEventListener('ready', function () {
   console.log('Argus PKJS ready');
+  wlog('BOOT', 'pkjs ready');
   // Push saved Clay settings on launch so the watch does not stay on defaults.
   sendStoredSettings(function () {
+    wlog('REQ', 'force pkjs ready');
     scheduleWeatherRequest();
     scheduleHolidaySync({ forceRefresh: true });
   });
@@ -930,6 +1090,9 @@ Pebble.addEventListener('appmessage', function (e) {
   if (e.payload && e.payload[keys.CheckReleaseNotice]) {
     maybeShowReleaseNotice({ fromWatch: true });
   }
+  if (e.payload && e.payload[keys.WeatherDebugSkip] !== undefined && e.payload[keys.WeatherDebugSkip] !== null) {
+    wlogWeatherWatchSkip(e.payload[keys.WeatherDebugSkip]);
+  }
   if (e.payload && e.payload[keys.REQUEST_WEATHER]) {
     var forEpoch = e.payload[keys.WeatherForEpoch];
     var weatherOptions = {};
@@ -939,6 +1102,16 @@ Pebble.addEventListener('appmessage', function (e) {
     if (e.payload[keys.ManualLocation]) {
       weatherOptions.manualLocation = e.payload[keys.ManualLocation];
     }
+    var reqDetail = 'watch';
+    if (forEpoch) {
+      reqDetail += ' t=' + forEpoch;
+    }
+    if (weatherOptions.locationMode === '1' || weatherOptions.locationMode === 1) {
+      reqDetail += ' manual';
+    } else if (weatherOptions.locationMode === '0' || weatherOptions.locationMode === 0) {
+      reqDetail += ' gps';
+    }
+    wlogWeatherRequestKind(e.payload[keys.WeatherRequestKind], reqDetail);
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
   if (e.payload && e.payload[keys.REQUEST_HOLIDAYS]) {
@@ -947,6 +1120,7 @@ Pebble.addEventListener('appmessage', function (e) {
 });
 
 Pebble.addEventListener('showConfiguration', function () {
+  injectWeatherLogForClayConfig();
   Pebble.openURL(clay.generateUrl());
 });
 
@@ -955,10 +1129,22 @@ Pebble.addEventListener('webviewclosed', function (e) {
     return;
   }
 
+  var raw;
+  try {
+    raw = parseClayWebviewResponse(e.response);
+  } catch (err) {
+    console.log('Settings response parse failed: ' + err);
+    return;
+  }
+
+  persistClaySettingsFromRaw(raw);
+  stripPkjsOnlyClayKeys(raw);
+
   sendPreparedSettingsInChunks(
-    clay.getSettings(e.response),
+    Clay.prepareSettingsForAppMessage(raw),
     function () {
       console.log('Settings sent to watch');
+      wlog('REQ', 'force settings save');
       getWeather(null, { forceRefresh: true });
       scheduleHolidaySync({ forceRefresh: true });
     },
