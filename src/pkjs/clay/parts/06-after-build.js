@@ -5,7 +5,7 @@
     var tabsRoot = injectTabs();
     injectFooter();
     applyRowStyles();
-    injectHeaderDisplayHelp();
+    injectSplitListRadiogroupHelp();
     wrapTabPanels();
     loadSubdivisionCatalogFromConfig();
     convertSelectDropdowns();

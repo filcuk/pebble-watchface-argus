@@ -133,13 +133,13 @@ html.as .argus-row {
 html.as .argus-tab-panel > .argus-row:first-child {
   padding-top: 20px;
 }
-html.as .argus-tab-panel > .argus-row + .argus-row {
+html.as .argus-tab-panel > .argus-row ~ .argus-row {
   border-top: 1px solid #3a4048;
   padding-top: 24px;
 }
-html.as .argus-tab-panel > .argus-row + .argus-row > .label,
-html.as .argus-tab-panel > .argus-row + .argus-row.component-toggle > label > .label,
-html.as .argus-tab-panel > .argus-row + .argus-row.component-input > label > .label {
+html.as .argus-tab-panel > .argus-row ~ .argus-row > .label,
+html.as .argus-tab-panel > .argus-row ~ .argus-row.component-toggle > label > .label,
+html.as .argus-tab-panel > .argus-row ~ .argus-row.component-input > label > .label {
   margin-top: 4px;
 }
 html.as .argus-setting-label,

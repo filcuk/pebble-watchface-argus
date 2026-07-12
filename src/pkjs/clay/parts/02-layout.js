@@ -1,4 +1,4 @@
-  var TAB_GROUPS = ['tabTime', 'tabCalendar', 'tabDisplay', 'tabWeather', 'tabDebug'];
+  var TAB_GROUPS = ['tabTime', 'tabDisplay', 'tabCalendar', 'tabWeather', 'tabDebug'];
   var SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
@@ -46,8 +46,8 @@
     tabs.className = 'argus-tabs';
     tabs.innerHTML =
       '<button type="button" class="argus-tab active" data-tab="tabTime">General</button>' +
-      '<button type="button" class="argus-tab" data-tab="tabCalendar">Calendar</button>' +
       '<button type="button" class="argus-tab" data-tab="tabDisplay">Display</button>' +
+      '<button type="button" class="argus-tab" data-tab="tabCalendar">Calendar</button>' +
       '<button type="button" class="argus-tab" data-tab="tabWeather">Weather</button>' +
       '<button type="button" class="argus-tab" data-tab="tabDebug">Debug</button>';
 
@@ -177,14 +177,14 @@
     });
   }
 
-  function injectHeaderDisplayHelp() {
-    var headerItem = clayConfig.getItemByMessageKey('HeaderDisplay');
-    var helpItem = clayConfig.getItemById('argus-header-display-help');
-    if (!headerItem || !headerItem.$element || !headerItem.$element[0] || !helpItem) {
+  function injectListRadiogroupHelp(messageKey, helpItemId) {
+    var settingItem = clayConfig.getItemByMessageKey(messageKey);
+    var helpItem = clayConfig.getItemById(helpItemId);
+    if (!settingItem || !settingItem.$element || !settingItem.$element[0] || !helpItem) {
       return;
     }
 
-    var root = headerItem.$element[0];
+    var root = settingItem.$element[0];
     if (root.querySelector(':scope > .argus-list-help-after')) {
       return;
     }
@@ -205,8 +205,13 @@
     radioGroup.parentNode.insertBefore(help, radioGroup.nextSibling);
 
     if (helpItem.$element && helpItem.$element[0]) {
-      helpItem.$element[0].classList.add('hide');
+      helpItem.$element[0].remove();
     }
+  }
+
+  function injectSplitListRadiogroupHelp() {
+    injectListRadiogroupHelp('HeaderDisplay', 'argus-header-display-help');
+    injectListRadiogroupHelp('RealtimeSteps', 'argus-realtime-steps-help');
   }
 
   function wrapInlineControlBodies() {

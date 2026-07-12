@@ -82,6 +82,10 @@ var headerDisplayHelpHtml =
   'earlier peaks from today may be included if the watch already stored minute ' +
   'heart-rate samples.</em>';
 
+var realtimeStepsHelpHtml =
+  '<strong>Optimised</strong> leaves updates to the OS, <strong>live</strong> updates on every change. ' +
+  'This setting affects battery life.';
+
 module.exports = [
   {
     type: 'radiogroup',
@@ -99,7 +103,7 @@ module.exports = [
     type: 'radiogroup',
     messageKey: 'RealtimeSteps',
     label: 'Biometric updates',
-    description: 'How often biometrics updates are retrieved. Optimised leaves updates to the OS, live updates on every change. This setting affects battery life.',
+    description: 'How often biometrics updates are retrieved.',
     group: 'tabTime',
     defaultValue: '0',
     capabilities: ['HEALTH'],
@@ -108,6 +112,12 @@ module.exports = [
       { label: 'Every minute', value: '1' },
       { label: 'Live', value: '2' },
     ],
+  },
+  {
+    type: 'text',
+    id: 'argus-realtime-steps-help',
+    group: 'tabTime',
+    defaultValue: realtimeStepsHelpHtml,
   },
   {
     type: 'radiogroup',
@@ -249,6 +259,30 @@ module.exports = [
     defaultValue: false,
   },
   {
+    type: 'toggle',
+    messageKey: 'PauseWeatherAtNight',
+    label: 'Pause at night',
+    description: 'Stop weather updates during night hours.',
+    group: 'tabWeather',
+    defaultValue: false,
+  },
+  {
+    type: 'radiogroup',
+    messageKey: 'WeatherUpdateInterval',
+    label: 'Update interval',
+    description:
+      'How often the watch requests fresh weather data from the phone. ' +
+      'Shorter intervals keep data fresher but use more phone and watch battery.',
+    group: 'tabWeather',
+    defaultValue: '30',
+    options: [
+      { label: '5 minutes', value: '5' },
+      { label: '15 minutes', value: '15' },
+      { label: '30 minutes', value: '30' },
+      { label: '1 hour', value: '60' },
+    ],
+  },
+  {
     type: 'radiogroup',
     messageKey: 'LocationMode',
     label: 'Location',
@@ -304,30 +338,6 @@ module.exports = [
       { label: 'JMA (Japan & Korea)', value: '5' },
       { label: 'GEM (Canada)', value: '6' },
       { label: 'UK Met Office (UK)', value: '7' },
-    ],
-  },
-  {
-    type: 'toggle',
-    messageKey: 'PauseWeatherAtNight',
-    label: 'Pause at night',
-    description: 'Stop weather updates during night hours.',
-    group: 'tabWeather',
-    defaultValue: false,
-  },
-  {
-    type: 'radiogroup',
-    messageKey: 'WeatherUpdateInterval',
-    label: 'Update interval',
-    description:
-      'How often the watch requests fresh weather data from the phone. ' +
-      'Shorter intervals keep data fresher but use more phone and watch battery.',
-    group: 'tabWeather',
-    defaultValue: '30',
-    options: [
-      { label: '5 minutes', value: '5' },
-      { label: '15 minutes', value: '15' },
-      { label: '30 minutes', value: '30' },
-      { label: '1 hour', value: '60' },
     ],
   },
   {
