@@ -1,3 +1,22 @@
+var holidaySubdivisions = require('./holiday-subdivisions');
+
+function encodeHolidaySubdivisions(map) {
+  var parts = [];
+  var countryCode;
+
+  for (countryCode in map) {
+    if (!Object.prototype.hasOwnProperty.call(map, countryCode)) {
+      continue;
+    }
+    var regions = map[countryCode].map(function (entry) {
+      return entry.code + '\x1f' + entry.name;
+    }).join('\x1e');
+    parts.push(countryCode + ':' + regions);
+  }
+
+  return parts.join('\x1d');
+}
+
 module.exports = [
   {
     type: 'radiogroup',
@@ -13,29 +32,6 @@ module.exports = [
   },
   {
     type: 'radiogroup',
-    messageKey: 'WeekStart',
-    label: 'Week start',
-    group: 'tabTime',
-    defaultValue: '0',
-    options: [
-      { label: 'Monday', value: '0' },
-      { label: 'Sunday', value: '1' },
-    ],
-  },
-  {
-    type: 'radiogroup',
-    messageKey: 'WeekNumberMode',
-    label: 'Calendar',
-    description: 'Type of calendar. This setting affects week numbers.',
-    group: 'tabTime',
-    defaultValue: '0',
-    options: [
-      { label: 'ISO', value: '0' },
-      { label: 'US', value: '1' },
-    ],
-  },
-  {
-    type: 'radiogroup',
     messageKey: 'RealtimeSteps',
     label: 'Biometric updates',
     description: 'How often biometrics updates are retrieved. Optimised leaves updates to the OS, live updates on every change. This setting affects battery life.',
@@ -47,6 +43,63 @@ module.exports = [
       { label: 'Every minute', value: '1' },
       { label: 'Live', value: '2' },
     ],
+  },
+  {
+    type: 'radiogroup',
+    messageKey: 'WeekStart',
+    label: 'Week start',
+    group: 'tabCalendar',
+    defaultValue: '0',
+    options: [
+      { label: 'Monday', value: '0' },
+      { label: 'Sunday', value: '1' },
+    ],
+  },
+  {
+    type: 'radiogroup',
+    messageKey: 'WeekNumberMode',
+    label: 'Week numbers',
+    description: 'Type of calendar. This setting affects week numbers.',
+    group: 'tabCalendar',
+    defaultValue: '0',
+    options: [
+      { label: 'ISO', value: '0' },
+      { label: 'US', value: '1' },
+    ],
+  },
+  {
+    type: 'toggle',
+    messageKey: 'ShowHolidays',
+    label: 'Show holidays',
+    description: 'Mark public holidays on the calendar with a blue outline.',
+    group: 'tabCalendar',
+    defaultValue: true,
+  },
+  {
+    type: 'input',
+    messageKey: 'HolidayCountry',
+    label: 'Holiday country',
+    description: 'Public holidays for this country are shown on the calendar.',
+    group: 'tabCalendar',
+    defaultValue: '',
+    attributes: {
+      placeholder: 'Select country',
+    },
+  },
+  {
+    type: 'radiogroup',
+    messageKey: 'HolidayRegion',
+    label: 'Region',
+    description: 'Optional region for regional public holidays. National only shows nationwide holidays.',
+    group: 'tabCalendar',
+    defaultValue: '',
+    options: [{ label: 'National only', value: '' }],
+  },
+  {
+    type: 'text',
+    id: 'argus-holiday-subdivisions-data',
+    group: 'tabCalendar',
+    defaultValue: encodeHolidaySubdivisions(holidaySubdivisions),
   },
   {
     type: 'radiogroup',
@@ -200,13 +253,13 @@ module.exports = [
   {
     type: 'text',
     id: 'argus-precipitation-info',
-    group: 'tabWeather',
+    group: 'tabWeatherHelp',
     defaultValue: '',
   },
   {
     type: 'text',
     id: 'argus-wind-info',
-    group: 'tabWeather',
+    group: 'tabWeatherHelp',
     defaultValue: '',
   },
   {

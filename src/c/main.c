@@ -18,6 +18,34 @@ static WeatherChart *s_weather_chart;
 static UnobstructedAreaHandlers s_unobstructed_handlers;
 static time_t s_last_periodic_weather_refresh;
 
+static void prv_holidays_request(void) {
+  if (!settings_get()->show_event_indicators) {
+    if (s_calendar) {
+      calendar_set_event_days(s_calendar, 0);
+    }
+    return;
+  }
+
+  DictionaryIterator *iter;
+  if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
+    return;
+  }
+
+  dict_write_uint8(iter, MESSAGE_KEY_REQUEST_HOLIDAYS, 1);
+  app_message_outbox_send();
+}
+
+static void prv_apply_holiday_mask(uint16_t mask) {
+  if (!s_calendar) {
+    return;
+  }
+  if (!settings_get()->show_event_indicators) {
+    calendar_set_event_days(s_calendar, 0);
+    return;
+  }
+  calendar_set_event_days(s_calendar, mask);
+}
+
 #if defined(PBL_HEALTH)
 #define BIOMETRIC_SAMPLE_PERIOD_SEC 60
 #define BIOMETRIC_LIVE_SAMPLE_PERIOD_SEC 5
@@ -137,6 +165,7 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
       prv_schedule_hr_backfill();
 #endif
     }
+    prv_holidays_request();
   }
 
   header_update(s_header, &tick_copy);
@@ -175,7 +204,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   }
 
   bool calendar_settings = dict_find(iter, MESSAGE_KEY_WeekStart) || dict_find(iter, MESSAGE_KEY_WeekNumberMode) ||
-                           dict_find(iter, MESSAGE_KEY_HeaderDisplay);
+                           dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_ShowHolidays);
   bool header_settings = dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_RealtimeSteps) ||
                          dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
                          dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
@@ -184,6 +213,20 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   settings_apply_from_message(iter);
   if (dict_find(iter, MESSAGE_KEY_WeatherTempHourly)) {
     weather_apply_from_message(iter);
+  }
+
+  Tuple *holiday_mask_tuple = dict_find(iter, MESSAGE_KEY_CalendarHolidayMask);
+  if (holiday_mask_tuple) {
+    uint16_t mask = 0;
+    if (holiday_mask_tuple->type == TUPLE_INT) {
+      mask = (uint16_t)holiday_mask_tuple->value->int32;
+    }
+    prv_apply_holiday_mask(mask);
+  }
+
+  if (dict_find(iter, MESSAGE_KEY_ShowHolidays) && !settings_get()->show_event_indicators) {
+    prv_apply_holiday_mask(0);
+    calendar_invalidate(s_calendar);
   }
 
   if (dict_find(iter, MESSAGE_KEY_DebugMode) || dict_find(iter, MESSAGE_KEY_DemoWeather)) {
@@ -510,6 +553,7 @@ static void init(void) {
 
   weather_request_force();
   s_last_periodic_weather_refresh = argus_time_now();
+  prv_holidays_request();
 
   prv_schedule_release_notice_check();
 }
