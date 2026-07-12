@@ -32,32 +32,45 @@ Module._resolveFilename = function (request, parent, isMain) {
   return originalResolveFilename.call(this, request, parent, isMain);
 };
 
+function parseMaxArg() {
+  var max = 180000;
+  process.argv.slice(2).forEach(function (arg) {
+    var match = arg.match(/^--max(?:=(\d+))?$/);
+    if (match) {
+      max = match[1] ? parseInt(match[1], 10) : max;
+    }
+  });
+  return max;
+}
+
 var Clay = require('@rebble/clay/dist/js/index.js');
 var clayConfig = require('../src/pkjs/config');
 var customClay = require('../src/pkjs/custom-clay');
-
-console.log('config json bytes:', JSON.stringify(clayConfig).length);
 
 var userData = {
   version: '1.2.0',
   githubUrl: 'https://github.com/filcuk/pebble-watchface-argus',
 };
 
-var clay = new Clay(clayConfig, function () {}, {
+var clayBase = new Clay(clayConfig, function () {}, {
   autoHandleEvents: false,
   userData: userData,
 });
 
-clay.meta = {
+clayBase.meta = {
   activeWatchInfo: { platform: 'emery' },
   accountToken: '',
   watchToken: '',
   userData: userData,
 };
 
-console.log('empty customFn url length:', clay.generateUrl().length);
+var baseUrlLength = clayBase.generateUrl().length;
+var configJsonBytes = JSON.stringify(clayConfig).length;
 
-clay = new Clay(clayConfig, customClay, {
+console.log('config json bytes:', configJsonBytes);
+console.log('base clay url length (no customFn):', baseUrlLength);
+
+var clay = new Clay(clayConfig, customClay, {
   autoHandleEvents: false,
   userData: userData,
 });
@@ -73,7 +86,15 @@ try {
   var started = Date.now();
   var url = clay.generateUrl();
   console.log('generateUrl ms:', Date.now() - started);
-  console.log('url length:', url.length);
+  console.log('total url length:', url.length);
+  console.log('customFn contribution:', url.length - baseUrlLength);
+
+  var maxLength = parseMaxArg();
+  console.log('max allowed:', maxLength);
+  if (url.length > maxLength) {
+    console.error('Clay URL exceeds limit by', url.length - maxLength, 'bytes');
+    process.exit(1);
+  }
 } catch (err) {
   console.error('generateUrl failed:', err && err.stack ? err.stack : err);
   process.exit(1);

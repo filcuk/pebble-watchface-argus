@@ -20,6 +20,7 @@ python3 scripts/patch-pebble-tool-browser.py
 pebble sdk install latest
 cd /mnt/c/Users/fifak/Documents/GitHub/pebble-watchface-argus
 pebble package install @rebble/clay
+npm install   # dev deps for Clay build (terser, clean-css)
 ```
 
 Too old for glibc? `wsl --install -d Ubuntu-24.04` from PowerShell, then repeat setup. Or use [CloudPebble](https://cloudpebble.repebble.com) / a physical watch.
@@ -80,6 +81,8 @@ Requires the `browser.py` patch from setup. Open with `pebble emu-app-config --e
 If save opens a broken `$$RETURN_TO$$` URL, re-run `python3 scripts/patch-pebble-tool-browser.py`, restart the emulator, and try again (re-run after `pebble-tool` upgrades).
 
 Clay config must use built-in types only (`radiogroup`, `toggle`, `input`, `submit`, `text`). Unsupported types (e.g. `select`) break the config page.
+
+**Clay UI sources** — edit [`src/pkjs/clay/`](src/pkjs/clay/) (`theme.css`, `parts/*.js`), not [`src/pkjs/custom-clay.js`](src/pkjs/custom-clay.js) directly. `pebble build` runs `scripts/build-custom-clay.js` (via `wscript`) and regenerates `custom-clay.js`. To rebuild Clay only: `npm run build:clay`. Check URL size: `npm run measure-clay` (fails above 180 KB by default; override with `--max=200000`).
 
 ### Troubleshooting
 
