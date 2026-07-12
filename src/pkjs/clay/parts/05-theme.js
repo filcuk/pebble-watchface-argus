@@ -1,5 +1,5 @@
   function injectTheme() {
-    document.documentElement.classList.add('argus-settings');
+    document.documentElement.classList.add('as', 'argus-settings');
 
     var meta = document.querySelector('meta[name="color-scheme"]');
     if (!meta) {
