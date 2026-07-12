@@ -590,9 +590,13 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
   var model = getWeatherProviderModel();
 
   if (!options.forceRefresh && shouldUseFetchCache(latitude, longitude, model, hours, startEpoch)) {
-    console.log('Weather fetch skipped (recent cache)');
-    clearWeatherFetchInFlight();
-    return;
+    var cached = readWeatherFetchCache();
+    if (cached && cached.payload) {
+      console.log('Weather fetch skipped (recent cache) — resending to watch');
+      sendWeatherPayload(cached.payload);
+      return;
+    }
+    console.log('Weather fetch cache miss — fetching');
   }
 
   var url =
@@ -641,6 +645,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
         fetchTime: payload.fetchTime,
         count: payload.count,
         isDayBytes: payload.isDayBytes,
+        payload: payload,
       });
       sendWeatherPayload(payload);
     } catch (e) {
@@ -711,6 +716,9 @@ function getWeather(forEpoch, options) {
     var nightCache = readWeatherFetchCache();
     if (nightCache && weatherIsNightNow(nightCache)) {
       console.log('Weather fetch paused at night');
+      if (nightCache.payload) {
+        sendWeatherPayload(nightCache.payload);
+      }
       return;
     }
   }
