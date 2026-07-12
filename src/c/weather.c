@@ -20,6 +20,22 @@ static void prv_notify_updated(void) {
 
 static void prv_request_refresh(time_t when_hour);
 
+typedef enum {
+  WEATHER_REQ_PERIODIC = 0,
+  WEATHER_REQ_FORCE = 1,
+  WEATHER_REQ_STALE = 2,
+} WeatherRequestKind;
+
+typedef enum {
+  WEATHER_DBG_NIGHT_PAUSE = 1,
+  WEATHER_DBG_OFFLINE_CACHE = 2,
+  WEATHER_DBG_OFFLINE_NONE = 3,
+  WEATHER_DBG_THROTTLE = 4,
+} WeatherDebugSkip;
+
+static void prv_send_weather_debug_skip(uint8_t skip_code);
+static void prv_send_weather_request(time_t when_hour, uint8_t kind);
+
 static time_t prv_current_hour_start(void) {
   time_t now = argus_time_now();
   struct tm *tm = localtime(&now);
@@ -424,10 +440,12 @@ void weather_refresh_for_connection(bool phone_connected) {
     s_weather.state = WEATHER_STATE_READY;
     prv_cancel_timers();
     prv_notify_updated();
+    prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_CACHE);
     return;
   }
 
   weather_mark_unavailable();
+  prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_NONE);
 }
 
 void weather_init(void) {
@@ -741,7 +759,20 @@ void weather_ensure_view_coverage(void) {
   weather_request_for_time(prv_current_hour_start());
 }
 
-static void prv_send_weather_request(time_t when_hour) {
+static void prv_send_weather_debug_skip(uint8_t skip_code) {
+  if (weather_use_demo_data()) {
+    return;
+  }
+
+  DictionaryIterator *iter;
+  if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
+    return;
+  }
+  dict_write_uint8(iter, MESSAGE_KEY_WeatherDebugSkip, skip_code);
+  app_message_outbox_send();
+}
+
+static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
   if (weather_use_demo_data()) {
     weather_apply_demo_data();
     return;
@@ -751,6 +782,7 @@ static void prv_send_weather_request(time_t when_hour) {
   time_t now = argus_time_now();
   if (s_weather.state == WEATHER_STATE_LOADING && s_last_weather_request_at > 0 &&
       (now - s_last_weather_request_at) < 60) {
+    prv_send_weather_debug_skip(WEATHER_DBG_THROTTLE);
     return;
   }
   s_last_weather_request_at = now;
@@ -761,6 +793,7 @@ static void prv_send_weather_request(time_t when_hour) {
     return;
   }
   dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
+  dict_write_uint8(iter, MESSAGE_KEY_WeatherRequestKind, kind);
   if (argus_time_get_offset() != 0) {
     dict_write_int32(iter, MESSAGE_KEY_WeatherForEpoch, (int32_t)request_hour);
   }
@@ -791,7 +824,7 @@ static void prv_send_weather_request(time_t when_hour) {
 }
 
 void weather_request_for_time(time_t when_hour) {
-  prv_send_weather_request(when_hour);
+  prv_send_weather_request(when_hour, WEATHER_REQ_STALE);
 }
 
 static void prv_request_refresh(time_t when_hour) {
@@ -801,6 +834,9 @@ static void prv_request_refresh(time_t when_hour) {
     weather_request_for_time(when_hour);
   } else if (!weather_cache_is_valid()) {
     weather_mark_unavailable();
+    prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_NONE);
+  } else {
+    prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_CACHE);
   }
 }
 
@@ -825,18 +861,21 @@ void weather_slide_stale_hours(void) {
 
 void weather_request(void) {
   if (prv_should_pause_periodic_refresh()) {
+    prv_send_weather_debug_skip(WEATHER_DBG_NIGHT_PAUSE);
     return;
   }
   if (!connection_service_peek_pebble_app_connection()) {
     if (weather_cache_is_valid()) {
+      prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_CACHE);
       return;
     }
     weather_mark_unavailable();
+    prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_NONE);
     return;
   }
-  prv_send_weather_request(0);
+  prv_send_weather_request(0, WEATHER_REQ_PERIODIC);
 }
 
 void weather_request_force(void) {
-  prv_send_weather_request(0);
+  prv_send_weather_request(0, WEATHER_REQ_FORCE);
 }

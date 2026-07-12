@@ -594,3 +594,60 @@ html.as .component-submit button {
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(74, 104, 133, 0.4) !important;
 }
+html.as .argus-weather-log-panel.component-text > p {
+  margin: 0;
+  padding: 0;
+}
+html.as .argus-weather-log-panel {
+  margin-top: 4px;
+}
+html.as .argus-weather-log {
+  max-height: 280px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 10px;
+  border: 1px solid #464d58;
+  border-radius: 8px;
+  background: #12151a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+html.as .argus-weather-log-empty {
+  padding: 8px 10px;
+  border: 1px solid #464d58;
+  border-radius: 8px;
+  background: #12151a;
+  color: #9aa1ab;
+  font-size: 12px;
+  line-height: 1.4;
+}
+html.as .argus-wlog-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 2px;
+}
+html.as .argus-wlog-t {
+  color: #7a8494;
+}
+html.as .argus-wlog-tag {
+  font-weight: 600;
+}
+html.as .argus-wlog-ok .argus-wlog-tag {
+  color: #9aa1ab;
+}
+html.as .argus-wlog-cache .argus-wlog-tag {
+  color: #8ab4d4;
+}
+html.as .argus-wlog-warn .argus-wlog-tag {
+  color: #d4b86a;
+}
+html.as .argus-wlog-err .argus-wlog-tag {
+  color: #d07070;
+}
+html.as .argus-wlog-legend {
+  margin-bottom: 6px;
+  color: #7a8494;
+  font-size: 10px;
+  line-height: 1.35;
+}

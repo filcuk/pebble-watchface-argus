@@ -35,6 +35,7 @@
     'DebugMode',
     'DemoWeather',
     'DemoBiometrics',
+    'DebugWeatherLog',
   ]);
 
   function injectTabs() {
@@ -92,6 +93,7 @@
       'DemoWeather',
       'DemoBiometrics',
       'ReleaseNotification',
+      'DebugWeatherLog',
       'HolidayCountry',
       'HolidayRegion',
     ]);
@@ -111,6 +113,11 @@
     var windInfo = clayConfig.getItemById('argus-wind-info');
     if (windInfo && windInfo.$element && windInfo.$element[0]) {
       windInfo.$element[0].classList.add('argus-row');
+    }
+
+    var weatherLog = clayConfig.getItemById('argus-weather-debug-log');
+    if (weatherLog && weatherLog.$element && weatherLog.$element[0]) {
+      weatherLog.$element[0].classList.add('hide');
     }
 
     var manualLocation = clayConfig.getItemByMessageKey('ManualLocation');

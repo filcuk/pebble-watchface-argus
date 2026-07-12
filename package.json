@@ -55,6 +55,8 @@
       "ReleaseNotification",
       "CheckReleaseNotice",
       "REQUEST_WEATHER",
+      "WeatherRequestKind",
+      "WeatherDebugSkip",
       "WeatherHourCount",
       "TempMin",
       "TempMax",

@@ -399,6 +399,20 @@ module.exports = [
     ],
   },
   {
+    type: 'toggle',
+    messageKey: 'DebugWeatherLog',
+    label: 'Weather updates',
+    description: 'Show recent weather fetch, cache, and send activity (keeps last 85 events).',
+    group: 'tabDebug',
+    defaultValue: false,
+  },
+  {
+    type: 'text',
+    id: 'argus-weather-debug-log',
+    group: 'tabDebug',
+    defaultValue: '',
+  },
+  {
     type: 'text',
     id: 'argus-footer',
     defaultValue: '',

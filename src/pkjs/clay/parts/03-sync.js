@@ -3,6 +3,7 @@
     var demoWeatherToggle = clayConfig.getItemByMessageKey('DemoWeather');
     var demoBiometricsToggle = clayConfig.getItemByMessageKey('DemoBiometrics');
     var releaseNotification = clayConfig.getItemByMessageKey('ReleaseNotification');
+    var weatherLogToggle = clayConfig.getItemByMessageKey('DebugWeatherLog');
 
     if (!debugToggle || !demoWeatherToggle || !demoBiometricsToggle || !releaseNotification) {
       return;
@@ -12,6 +13,9 @@
       demoWeatherToggle.enable();
       demoBiometricsToggle.enable();
       releaseNotification.enable();
+      if (weatherLogToggle) {
+        weatherLogToggle.enable();
+      }
     } else {
       demoWeatherToggle.set(false);
       demoWeatherToggle.disable();
@@ -20,7 +24,13 @@
       releaseNotification.set('0');
       syncRadioLabels('ReleaseNotification');
       releaseNotification.disable();
+      if (weatherLogToggle) {
+        weatherLogToggle.set(false);
+        weatherLogToggle.disable();
+      }
     }
+
+    syncWeatherDebugLogVisibility();
   }
 
   function syncManualLocationInput() {

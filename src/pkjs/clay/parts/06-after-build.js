@@ -27,8 +27,14 @@
     }
 
     syncDebugToggles();
+    syncWeatherDebugLogVisibility();
     if (debugToggle) {
       debugToggle.on('change', syncDebugToggles);
+    }
+
+    var weatherLogToggle = clayConfig.getItemByMessageKey('DebugWeatherLog');
+    if (weatherLogToggle) {
+      weatherLogToggle.on('change', syncWeatherDebugLogVisibility);
     }
 
     syncManualLocationInput();
