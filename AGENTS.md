@@ -8,25 +8,46 @@ The phone settings UI is **not** a hosted web app. Clay embeds HTML, CSS, and Ja
 
 | File | Role |
 |------|------|
-| `src/pkjs/config.js` | Clay config — built-in components only (`radiogroup`, `toggle`, `input`, `submit`, `text`) |
-| `src/pkjs/custom-clay.js` | Theme CSS, tabs, layout wrappers, conditional logic, defaults |
+| `src/pkjs/config.js` | Clay config — built-in components only (`radiogroup`, `toggle`, `input`, `submit`, `text`); static help HTML (precip/wind tables, extended descriptions) |
+| `src/pkjs/clay/theme.css` | Settings theme (scoped under `html.as`) |
+| `src/pkjs/clay/parts/*.js` | Custom Clay logic — tabs, layout, holiday UI, sync (edit these) |
+| `src/pkjs/custom-clay.js` | **Generated** by `scripts/build-custom-clay.js` — do not edit by hand |
 | `src/pkjs/index.js` | Clay init, settings sync to watch, weather PKJS |
 
-Do **not** reintroduce custom Clay components under `clay-components/` unless you can verify they serialize and render reliably on a real phone. Prefer built-ins + `custom-clay.js`.
+Do **not** reintroduce custom Clay components under `clay-components/` unless you can verify they serialize and render reliably on a real phone. Prefer built-ins + `src/pkjs/clay/`.
 
-**Do not use `require()` inside `custom-clay.js`.** Clay embeds the custom function in a data-URI WebView via `toSource()`, so webpack `require` is unavailable there and tab injection will fail silently. Pass minimal data through `userData` in `index.js` (version, URLs only). Holiday country/region lists are loaded at runtime in the settings WebView from Nager.Date (cached in `localStorage`) to keep the Clay URL small.
+**Do not use `require()` inside the generated custom Clay function.** Clay embeds it in a data-URI WebView via `toSource()`, so webpack `require` is unavailable there and tab injection will fail silently. Pass minimal data through `userData` in `index.js` (version, URLs only). Holiday country/region lists are loaded at runtime in the settings WebView from Nager.Date (cached in `localStorage`) to keep the Clay URL small.
+
+### Clay URL budget
+
+The entire settings page is one `data:` URI passed to `Pebble.openURL()`. Size matters.
+
+- Measure: `npm run measure-clay` (uses `scripts/measure-clay-url.js`, fails above **180 KB** by default)
+- Regenerate: `pebble build` runs `scripts/build-custom-clay.js` via `wscript` (or `npm run build:clay` alone)
+- As of the modular refactor: total ~**158 KB** (customFn ~**44 KB**, config JSON ~**13 KB**, Clay base ~**114 KB**)
+- Keep static prose/HTML in `config.js`; keep logic in `clay/parts/`; CSS in `clay/theme.css`
+
+### Clay source modules (`src/pkjs/clay/parts/`)
+
+| File | Role |
+|------|------|
+| `01-holiday.js` | Nager.Date fetch/cache, subdivision catalog, locale country detection |
+| `02-layout.js` | Key arrays, tabs, footer, row styles, tab panels, `showTab` |
+| `03-sync.js` | Debug/location/holiday visibility, select dropdowns, segment sync |
+| `05-theme.js` | `injectTheme()` |
+| `06-after-build.js` | `AFTER_BUILD` handler wiring |
 
 ### What is supported
 
 - Built-in Clay components and standard DOM APIs in the phone WebView
-- Custom JavaScript via `custom-clay.js` (`AFTER_BUILD`, DOM injection, event listeners)
-- Injected CSS via a `<style id="argus-theme">` tag (scoped under `html.argus-settings`)
+- Custom JavaScript via generated `custom-clay.js` (`AFTER_BUILD`, DOM injection, event listeners)
+- Injected CSS via a `<style id="argus-theme">` tag (scoped under `html.as`; `html.argus-settings` class also set on `<html>`)
 - `localStorage` persistence (`clay-settings`) on the phone
 - AppMessage delivery to the watch on save
 
 ### What is unreliable or unsupported
 
-- **CSS Grid** and **`display: contents`** — may work in the emulator but fail or layout incorrectly on older phone WebViews. Use **flexbox** and explicit DOM wrappers (see `.argus-control-row` in `custom-clay.js`).
+- **CSS Grid** and **`display: contents`** — may work in the emulator but fail or layout incorrectly on older phone WebViews. Use **flexbox** and explicit DOM wrappers (see `.argus-control-row` in `clay/parts/`).
 - **Modern CSS** such as `gap`, `position: sticky`, and `env(safe-area-inset-*)` — use with care; test on device.
 - **Blanket CSS selectors** — avoid rules like `html.argus-settings label { … }` because segment pills are `<label>` elements and will inherit unintended styles.
 - **External assets** — no CDN URLs; everything must be inlined in the Clay bundle.
@@ -43,7 +64,7 @@ Clay ships strong base styles (see `@rebble/clay` `_base.scss`). Expect to overr
 
 When overriding Clay, prefer:
 
-1. Scope under `html.argus-settings`
+1. Scope under `html.as` (or `html.argus-settings` on `<html>`)
 2. Target specific classes (`.argus-segment-radiogroup .radio-group label`, not all `label`)
 3. Use `!important` where Clay defaults still win on phone (padding, min-width, text-transform)
 
@@ -51,7 +72,7 @@ Inject theme CSS **last** in `AFTER_BUILD` so it wins the cascade. Remove any ex
 
 ### Layout conventions in this project
 
-- **Tabs** — injected in `custom-clay.js`; compact buttons, not Clay’s full-width uppercase buttons
+- **Tabs** — injected in `clay/parts/02-layout.js`; compact buttons, not Clay’s full-width uppercase buttons
 - **One-line controls** (segments, toggles) — title on top; description + control in `.argus-control-row` (flex, top-aligned)
 - **List radiogroups** (`HeaderDisplay`, `ClockFont`, `WeatherProvider`, `GpsMaxAge`, `WeatherUpdateInterval`) — full-width list; left-aligned text, radio circle on the right
 - **Theme** — fixed dark gray palette; do not use `@media (prefers-color-scheme)` (causes phone/emulator mismatch)
@@ -61,7 +82,7 @@ Inject theme CSS **last** in `AFTER_BUILD` so it wins the cascade. Remove any ex
 
 - C-side defaults live in `src/c/settings.c` (`settings_set_defaults()`).
 - Clay `defaultValue` in `config.js` applies only when a key is **missing** from `localStorage`.
-- Legacy `RealtimeSteps` boolean values in `localStorage` break radiogroup selection — normalize in `custom-clay.js` and `index.js` when reading stored settings.
+- Legacy `RealtimeSteps` boolean values in `localStorage` break radiogroup selection — normalize in `clay/parts/` and `index.js` when reading stored settings.
 
 ### Control type mapping
 
@@ -69,7 +90,8 @@ Inject theme CSS **last** in `AFTER_BUILD` so it wins the cascade. Remove any ex
 |------------|-----------|--------------|
 | Segment pills | `radiogroup` + `.argus-segment-radiogroup` | `HourFormat`, `WeekStart`, `BluetoothDisplay`, `LocationMode`, `ForecastHours`, `TemperatureUnit`, `WeekNumberMode` (label: Calendar; ISO/US) |
 | List radiogroup | `radiogroup` + `.argus-list-radiogroup` | `HeaderDisplay`, `ClockFont`, `RealtimeSteps`, `WeatherProvider`, `GpsMaxAge`, `WeatherUpdateInterval`, `HolidayRegion` (hidden when country has no subdivisions) |
-| Holiday country dropdown | `input` in config + native `<select>` in `custom-clay.js` | `HolidayCountry`; country list fetched from Nager.Date when settings open (cached in phone `localStorage`); region names from hidden `text` item `argus-holiday-subdivisions-data` (~2 KB), with API fallback for other countries |
+| Holiday country dropdown | `input` in config + native `<select>` in `clay/parts/` | `HolidayCountry`; country list fetched from Nager.Date when settings open (cached in phone `localStorage`); region names from hidden `text` item `argus-holiday-subdivisions-data` (~2 KB), with API fallback for other countries |
+| Weather help tables | `text` items in config (`argus-precipitation-info`, `argus-wind-info`) | Static HTML in `defaultValue`; `applyRowStyles()` adds layout classes only |
 | Boolean toggle | `toggle` + `.argus-inline-control` | `TemperatureDisplay`, `PauseWeatherAtNight`, debug toggles |
 | Text input | `input` | `ManualLocation` (hidden when Location is Auto; GPS frequency hidden when Manual) |
 

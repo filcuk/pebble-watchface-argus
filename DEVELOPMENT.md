@@ -82,7 +82,7 @@ If save opens a broken `$$RETURN_TO$$` URL, re-run `python3 scripts/patch-pebble
 
 Clay config must use built-in types only (`radiogroup`, `toggle`, `input`, `submit`, `text`). Unsupported types (e.g. `select`) break the config page.
 
-**Clay UI sources** — edit [`src/pkjs/clay/`](src/pkjs/clay/) (`theme.css`, `parts/*.js`), not [`src/pkjs/custom-clay.js`](src/pkjs/custom-clay.js) directly. `pebble build` runs `scripts/build-custom-clay.js` (via `wscript`) and regenerates `custom-clay.js`. To rebuild Clay only: `npm run build:clay`. Check URL size: `npm run measure-clay` (fails above 180 KB by default; override with `--max=200000`).
+**Clay UI sources** — edit [`src/pkjs/clay/`](src/pkjs/clay/) (`theme.css`, `parts/*.js`), not [`src/pkjs/custom-clay.js`](src/pkjs/custom-clay.js) directly. `pebble build` regenerates `custom-clay.js` automatically (via `wscript`); you do **not** need `npm run build:clay` before every build. Optional: `npm run build:clay` for a Clay-only rebuild; `npm run measure-clay` to check URL size (limit **180 KB**; override with `--max=200000`).
 
 ### Troubleshooting
 
@@ -132,10 +132,11 @@ Duration formats: `3h`, `90m`, `14d`, `3600s`, or bare minutes. `--no-demo-weath
 ```
 src/c/           Watchface (C)
 src/pkjs/        Phone JS (weather, Clay, release notice)
-scripts/         Emulator reset, capture helpers
+src/pkjs/clay/   Clay UI sources (theme.css, parts/*.js) — see AGENTS.md
+scripts/         build-custom-clay.js, measure-clay-url.js, capture helpers
 release.toml     Release version + update message
-package.json     Manifest and message keys
-wscript          Build config
+package.json     Manifest, message keys, npm scripts (build:clay, measure-clay)
+wscript          Build config (runs Clay + release generators in options())
 ```
 
 Clay UI conventions and phone testing checklist: [AGENTS.md](AGENTS.md).
