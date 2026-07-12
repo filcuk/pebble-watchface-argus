@@ -7,6 +7,9 @@
     "HourFormat": 0,
     "WeekStart": 0,
     "WeekNumberMode": 0,
+    "ShowHolidays": 1,
+    "HolidayCountry": "DE",
+    "HolidayRegion": "",
     "RealtimeSteps": 0,
     "HeaderDisplay": 0,
     "ClockFont": 0,
@@ -62,6 +65,21 @@
       "duration": "6h",
       "settings": {
         "ClockFont": 2
+      }
+    },
+    {
+      "label": "Holidays off",
+      "duration": "6h",
+      "settings": {
+        "ShowHolidays": 0
+      }
+    },
+    {
+      "label": "Regional holidays Bavaria",
+      "duration": "6h",
+      "settings": {
+        "ShowHolidays": 1,
+        "HolidayRegion": "DE-BY"
       }
     },
     {

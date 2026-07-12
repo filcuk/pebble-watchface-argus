@@ -1,6 +1,6 @@
 {
   "name": "pebble-watchface-argus",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "filcuk",
   "private": true,
   "keywords": [
@@ -62,7 +62,12 @@
       "HeaderDisplay",
       "RealtimeSteps",
       "CaptureTimeOffset",
-      "WeatherForEpoch"
+      "WeatherForEpoch",
+      "ShowHolidays",
+      "HolidayCountry",
+      "HolidayRegion",
+      "CalendarHolidayMask",
+      "REQUEST_HOLIDAYS"
     ],
     "resources": {
       "media": []

@@ -111,7 +111,7 @@ static void settings_set_defaults(void) {
   s_settings.forecast_hours = 24;
   s_settings.temperature_fahrenheit = false;
   s_settings.temperature_display = TEMPERATURE_DISPLAY_ACTUAL;
-  s_settings.show_event_indicators = false;
+  s_settings.show_event_indicators = true;
   s_settings.debug_mode = false;
   s_settings.demo_weather = false;
   s_settings.demo_biometrics = false;
@@ -454,6 +454,12 @@ void settings_apply_from_message(DictionaryIterator *iter) {
       s_settings.temperature_display = (TemperatureDisplay)mode;
       changed = true;
     }
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_ShowHolidays);
+  if (t) {
+    s_settings.show_event_indicators = settings_tuple_to_int32(t) != 0;
+    changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_DebugMode);

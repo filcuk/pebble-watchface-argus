@@ -1,7 +1,315 @@
 module.exports = function () {
   var clayConfig = this;
+  var userData = clayConfig.meta.userData || {};
+  var holidaySubdivisions = {};
+  var holidaySubdivisionsCatalog = {};
+  var subdivisionNameLookup = {};
+  var supportedCountryCodes = {};
+  var holidayCountryOptions = [{ label: 'Loading countries…', value: '' }];
+  var NAGER_API_BASE = 'https://date.nager.at/api';
+  var CLAY_COUNTRIES_CACHE_KEY = 'argus-clay-countries-v1';
+  var CLAY_SUBDIVISIONS_CACHE_PREFIX = 'argus-clay-subdivisions-v2:';
 
-  var TAB_GROUPS = ['tabTime', 'tabDisplay', 'tabWeather', 'tabDebug'];
+  function loadSubdivisionCatalogFromConfig() {
+    holidaySubdivisionsCatalog = {};
+    subdivisionNameLookup = {};
+
+    var item = clayConfig.getItemById('argus-holiday-subdivisions-data');
+    var encoded = item ? String(item.get() || '') : '';
+    if (!encoded) {
+      return;
+    }
+
+    encoded.split('\x1d').forEach(function (part) {
+      var colon = part.indexOf(':');
+      if (colon < 0) {
+        return;
+      }
+      var countryCode = part.slice(0, colon);
+      var regions = [];
+
+      part.slice(colon + 1).split('\x1e').forEach(function (regionPart) {
+        var sep = regionPart.indexOf('\x1f');
+        if (sep < 0) {
+          return;
+        }
+        var code = regionPart.slice(0, sep);
+        var name = regionPart.slice(sep + 1);
+        regions.push({ code: code, name: name });
+        subdivisionNameLookup[code] = name;
+      });
+
+      holidaySubdivisionsCatalog[countryCode] = regions;
+    });
+  }
+
+  function xhrGet(url, callback) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.onload = function () {
+      callback(xhr.status >= 200 && xhr.status < 300 ? xhr.responseText : null);
+    };
+    xhr.onerror = function () {
+      callback(null);
+    };
+    xhr.send();
+  }
+
+  function applyHolidayCountries(countries) {
+    holidayCountryOptions = [{ label: 'Select country', value: '' }];
+    supportedCountryCodes = {};
+
+    countries.forEach(function (entry) {
+      if (!entry || !entry.code) {
+        return;
+      }
+      supportedCountryCodes[entry.code] = true;
+      holidayCountryOptions.push({
+        label: entry.name || entry.code,
+        value: entry.code,
+      });
+    });
+  }
+
+  function readCachedHolidayCountries() {
+    try {
+      var raw = localStorage.getItem(CLAY_COUNTRIES_CACHE_KEY);
+      if (!raw) {
+        return null;
+      }
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeCachedHolidayCountries(countries) {
+    try {
+      localStorage.setItem(CLAY_COUNTRIES_CACHE_KEY, JSON.stringify(countries));
+    } catch (e) {
+      // Ignore storage failures in the config page.
+    }
+  }
+
+  function loadHolidayCountries(callback) {
+    var cached = readCachedHolidayCountries();
+    if (cached && cached.length) {
+      applyHolidayCountries(cached);
+      callback(true);
+      return;
+    }
+
+    xhrGet(NAGER_API_BASE + '/v3/AvailableCountries', function (responseText) {
+      if (!responseText) {
+        holidayCountryOptions = [{ label: 'Select country', value: '' }];
+        callback(false);
+        return;
+      }
+
+      try {
+        var raw = JSON.parse(responseText);
+        var countries = raw.map(function (entry) {
+          return {
+            code: entry.countryCode,
+            name: entry.name,
+          };
+        }).sort(function (a, b) {
+          return a.name.localeCompare(b.name);
+        });
+        writeCachedHolidayCountries(countries);
+        applyHolidayCountries(countries);
+        callback(true);
+      } catch (e) {
+        holidayCountryOptions = [{ label: 'Select country', value: '' }];
+        callback(false);
+      }
+    });
+  }
+
+  function subdivisionDisplayName(code) {
+    if (subdivisionNameLookup[code]) {
+      return subdivisionNameLookup[code];
+    }
+
+    var parts = code.split('-');
+    if (parts.length >= 2 && typeof Intl !== 'undefined' && Intl.DisplayNames) {
+      try {
+        var displayNames = new Intl.DisplayNames(['en'], { type: 'region' });
+        var name = displayNames.of(parts[parts.length - 1]);
+        if (name && name !== parts[parts.length - 1]) {
+          return name;
+        }
+      } catch (e) {
+        // Fall back to the raw subdivision code.
+      }
+    }
+    return code;
+  }
+
+  function readCachedSubdivisions(countryCode) {
+    try {
+      var raw = localStorage.getItem(CLAY_SUBDIVISIONS_CACHE_PREFIX + countryCode);
+      if (!raw) {
+        return null;
+      }
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeCachedSubdivisions(countryCode, subdivisions) {
+    try {
+      localStorage.setItem(
+        CLAY_SUBDIVISIONS_CACHE_PREFIX + countryCode,
+        JSON.stringify(subdivisions)
+      );
+    } catch (e) {
+      // Ignore storage failures in the config page.
+    }
+  }
+
+  function extractSubdivisionsFromHolidays(holidays) {
+    var regions = [];
+    var seen = {};
+
+    if (!holidays || !holidays.length) {
+      return regions;
+    }
+
+    holidays.forEach(function (holiday) {
+      if (!holiday || !holiday.subdivisionCodes || !holiday.subdivisionCodes.length) {
+        return;
+      }
+      holiday.subdivisionCodes.forEach(function (code) {
+        if (seen[code]) {
+          return;
+        }
+        seen[code] = true;
+        regions.push({
+          code: code,
+          name: subdivisionDisplayName(code),
+        });
+      });
+    });
+
+    regions.sort(function (a, b) {
+      return a.name.localeCompare(b.name);
+    });
+    return regions;
+  }
+
+  function loadSubdivisionsForCountry(countryCode, callback) {
+    if (!countryCode) {
+      holidaySubdivisions[countryCode] = [];
+      callback([]);
+      return;
+    }
+
+    if (holidaySubdivisionsCatalog[countryCode] && holidaySubdivisionsCatalog[countryCode].length) {
+      var catalogRegions = holidaySubdivisionsCatalog[countryCode].slice();
+      holidaySubdivisions[countryCode] = catalogRegions;
+      callback(catalogRegions);
+      return;
+    }
+
+    var cached = readCachedSubdivisions(countryCode);
+    if (cached) {
+      holidaySubdivisions[countryCode] = cached;
+      callback(cached);
+      return;
+    }
+
+    var year = new Date().getFullYear();
+    xhrGet(
+      NAGER_API_BASE + '/v4/Holidays/' + encodeURIComponent(countryCode) + '/' + year,
+      function (responseText) {
+        var regions = [];
+        if (responseText) {
+          try {
+            regions = extractSubdivisionsFromHolidays(JSON.parse(responseText));
+          } catch (e) {
+            regions = [];
+          }
+        }
+        holidaySubdivisions[countryCode] = regions;
+        writeCachedSubdivisions(countryCode, regions);
+        callback(regions);
+      }
+    );
+  }
+
+  function refreshHolidayCountryDropdown() {
+    var item = clayConfig.getItemByMessageKey('HolidayCountry');
+    if (!item || !item.$element || !item.$element[0]) {
+      return;
+    }
+
+    var select = item.$element[0].querySelector('select.argus-holiday-select');
+    if (!select) {
+      return;
+    }
+
+    var value = ensureHolidayCountryItemValue(item);
+    populateSelectOptions(
+      select,
+      getHolidayCountrySelectOptions(),
+      value
+    );
+  }
+
+  function detectLocaleCountryCode() {
+    var lang = '';
+    if (typeof navigator !== 'undefined') {
+      lang = navigator.language || navigator.userLanguage || '';
+    }
+    if (!lang) {
+      return '';
+    }
+
+    var parts = lang.replace('_', '-').split('-');
+    if (parts.length >= 2) {
+      var region = parts[parts.length - 1].toUpperCase();
+      if (/^[A-Z]{2}$/.test(region) && supportedCountryCodes[region]) {
+        return region;
+      }
+    }
+
+    var language = parts[0].toLowerCase();
+    var languageMap = {
+      de: 'DE',
+      en: 'GB',
+      es: 'ES',
+      fr: 'FR',
+      it: 'IT',
+      ja: 'JP',
+      nl: 'NL',
+      pl: 'PL',
+      pt: 'PT',
+      sv: 'SE',
+    };
+    var mapped = languageMap[language];
+    if (mapped && supportedCountryCodes[mapped]) {
+      return mapped;
+    }
+
+    return '';
+  }
+
+  function getSubdivisionsForCountry(countryCode) {
+    return holidaySubdivisions[countryCode] || [];
+  }
+
+  function countryHasSubdivisions(countryCode) {
+    if (holidaySubdivisionsCatalog[countryCode] && holidaySubdivisionsCatalog[countryCode].length) {
+      return true;
+    }
+    return getSubdivisionsForCountry(countryCode).length > 0;
+  }
+
+  var TAB_GROUPS = ['tabTime', 'tabCalendar', 'tabDisplay', 'tabWeather', 'tabDebug'];
   var SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
@@ -10,7 +318,6 @@ module.exports = function () {
     'LocationMode',
     'ForecastHours',
     'TemperatureUnit',
-    'ReleaseNotification',
   ];
   var LIST_RADIO_KEYS = [
     'HeaderDisplay',
@@ -19,7 +326,9 @@ module.exports = function () {
     'WeatherProvider',
     'GpsMaxAge',
     'WeatherUpdateInterval',
+    'HolidayRegion',
   ];
+  var SELECT_DROPDOWN_KEYS = ['HolidayCountry', 'ReleaseNotification'];
   var TITLE_INLINE_SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
@@ -31,11 +340,11 @@ module.exports = function () {
   }).concat([
     'TemperatureDisplay',
     'PauseWeatherAtNight',
+    'ShowHolidays',
     'DebugMode',
     'DemoWeather',
     'DemoBiometrics',
   ]);
-
   var THEME_CSS = [
     '.hide { display: none !important; }',
     'html.argus-settings { color-scheme: dark; }',
@@ -98,7 +407,6 @@ module.exports = function () {
     '  display: flex;',
     '  -webkit-flex-wrap: nowrap;',
     '  flex-wrap: nowrap;',
-    '  gap: 6px;',
     '  overflow-x: auto;',
     '  overflow-y: hidden;',
     '  -webkit-overflow-scrolling: touch;',
@@ -108,8 +416,8 @@ module.exports = function () {
     '  top: 0;',
     '  z-index: 10;',
     '  background: #1a1d21 !important;',
-    '  padding: 0 0 6px;',
-    '  margin-bottom: 6px;',
+    '  padding: 0 0 8px;',
+    '  margin-bottom: 8px;',
     '}',
     'html.argus-settings .argus-tabs::-webkit-scrollbar {',
     '  display: none;',
@@ -145,6 +453,9 @@ module.exports = function () {
     '  box-shadow: none !important;',
     '  -webkit-tap-highlight-color: transparent;',
     '}',
+    'html.argus-settings .argus-tabs .argus-tab + .argus-tab {',
+    '  margin-left: 8px !important;',
+    '}',
     'html.argus-settings .argus-tabs .argus-tab.active {',
     '  background: #4a6885 !important;',
     '  border-color: #4a6885 !important;',
@@ -156,7 +467,7 @@ module.exports = function () {
     '  border: 1px solid #464d58;',
     '  border-radius: 12px;',
     '  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);',
-    '  margin-bottom: 12px;',
+    '  margin-bottom: 8px;',
     '  overflow: hidden;',
     '}',
     'html.argus-settings .argus-tab-panel.hide {',
@@ -222,6 +533,11 @@ module.exports = function () {
     '  line-height: 1.45;',
     '  margin-top: 8px;',
     '  padding: 0;',
+    '}',
+    'html.argus-settings .argus-field-help strong,',
+    'html.argus-settings .argus-field-help-secondary strong {',
+    '  font-weight: 600;',
+    '  color: #6894b8 !important;',
     '}',
     'html.argus-settings .argus-inline-control {',
     '  display: block;',
@@ -538,6 +854,31 @@ module.exports = function () {
     '  background-color: #ffffff !important;',
     '  color: #1a1d21 !important;',
     '}',
+    'html.argus-settings .argus-holiday-dropdown .radio-group {',
+    '  display: none !important;',
+    '}',
+    'html.argus-settings .argus-holiday-dropdown.component-input input {',
+    '  display: none !important;',
+    '}',
+    'html.argus-settings .argus-holiday-select {',
+    '  width: 100%;',
+    '  max-width: 200px;',
+    '  box-sizing: border-box;',
+    '  min-height: 44px;',
+    '  padding: 10px 12px;',
+    '  border: 1px solid #c5cad1 !important;',
+    '  border-radius: 10px;',
+    '  font-size: 16px;',
+    '  background: #ffffff !important;',
+    '  color: #1a1d21 !important;',
+    '  -webkit-appearance: menulist;',
+    '  appearance: menulist;',
+    '}',
+    'html.argus-settings .argus-holiday-dropdown.disabled .argus-holiday-select,',
+    'html.argus-settings .argus-select-control.disabled .argus-holiday-select {',
+    '  opacity: 0.55;',
+    '  pointer-events: none;',
+    '}',
     'html.argus-settings .argus-row.component-input.disabled input {',
     '  opacity: 0.55;',
     '  background: #e8ebef !important;',
@@ -548,7 +889,11 @@ module.exports = function () {
     '  text-align: center;',
     '  font-size: 13px;',
     '  color: #7a828d !important;',
-    '  padding: 8px 0 16px;',
+    '  padding: 0 0 8px;',
+    '}',
+    'html.argus-settings .argus-footer-row {',
+    '  padding: 8px 16px 4px !important;',
+    '  margin: 0 !important;',
     '}',
     'html.argus-settings .argus-footer a {',
     '  color: #6894b8 !important;',
@@ -679,6 +1024,7 @@ module.exports = function () {
     tabs.className = 'argus-tabs';
     tabs.innerHTML =
       '<button type="button" class="argus-tab active" data-tab="tabTime">General</button>' +
+      '<button type="button" class="argus-tab" data-tab="tabCalendar">Calendar</button>' +
       '<button type="button" class="argus-tab" data-tab="tabDisplay">Display</button>' +
       '<button type="button" class="argus-tab" data-tab="tabWeather">Weather</button>' +
       '<button type="button" class="argus-tab" data-tab="tabDebug">Debug</button>';
@@ -708,7 +1054,7 @@ module.exports = function () {
     );
 
     if (footerItem.$element && footerItem.$element[0]) {
-      footerItem.$element[0].classList.add('argus-row');
+      footerItem.$element[0].classList.add('argus-row', 'argus-footer-row');
     }
   }
 
@@ -798,9 +1144,12 @@ module.exports = function () {
       'ManualLocation',
       'TemperatureDisplay',
       'PauseWeatherAtNight',
+      'ShowHolidays',
       'DebugMode',
       'DemoWeather',
       'DemoBiometrics',
+      'HolidayCountry',
+      'HolidayRegion',
     ]);
 
     allKeys.forEach(function (key) {
@@ -839,6 +1188,13 @@ module.exports = function () {
       var item = clayConfig.getItemByMessageKey(key);
       if (item && item.$element && item.$element[0]) {
         item.$element[0].classList.add('argus-segment-radiogroup');
+      }
+    });
+
+    SELECT_DROPDOWN_KEYS.forEach(function (key) {
+      var item = clayConfig.getItemByMessageKey(key);
+      if (item && item.$element && item.$element[0]) {
+        item.$element[0].classList.add('argus-select-control');
       }
     });
 
@@ -940,15 +1296,15 @@ module.exports = function () {
       return;
     }
 
-    TAB_GROUPS.forEach(function (tab) {
-      var items = clayConfig.getItemsByGroup(tab);
+    function wrapPanelForGroup(tabId, groupId) {
+      var items = clayConfig.getItemsByGroup(groupId);
       if (!items.length) {
         return;
       }
 
       var panel = document.createElement('div');
       panel.className = 'argus-tab-panel hide';
-      panel.setAttribute('data-tab-panel', tab);
+      panel.setAttribute('data-tab-panel', tabId);
 
       var firstEl = items[0].$element[0];
       form.insertBefore(panel, firstEl);
@@ -956,6 +1312,16 @@ module.exports = function () {
       items.forEach(function (item) {
         panel.appendChild(item.$element[0]);
       });
+    }
+
+    TAB_GROUPS.forEach(function (tab) {
+      if (tab === 'tabWeather') {
+        wrapPanelForGroup('tabWeather', 'tabWeather');
+        wrapPanelForGroup('tabWeather', 'tabWeatherHelp');
+        return;
+      }
+
+      wrapPanelForGroup(tab, tab);
     });
   }
 
@@ -979,6 +1345,7 @@ module.exports = function () {
       demoBiometricsToggle.set(false);
       demoBiometricsToggle.disable();
       releaseNotification.set('0');
+      syncHolidayDropdownValue('ReleaseNotification');
       releaseNotification.disable();
     }
   }
@@ -1015,6 +1382,299 @@ module.exports = function () {
         gpsMaxAge.$element[0].classList.remove('hide');
       }
     }
+  }
+
+  function persistClaySetting(key, value) {
+    try {
+      var stored = JSON.parse(localStorage.getItem('clay-settings')) || {};
+      stored[key] = value;
+      localStorage.setItem('clay-settings', JSON.stringify(stored));
+    } catch (e) {
+      // Ignore localStorage errors in the config page.
+    }
+  }
+
+  function readStoredClaySetting(key) {
+    try {
+      var stored = JSON.parse(localStorage.getItem('clay-settings')) || {};
+      var value = stored[key];
+      if (value === undefined || value === null) {
+        return '';
+      }
+      if (value && typeof value === 'object' && 'value' in value) {
+        return value.value;
+      }
+      return value;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function getHolidayCountryValue(countryItem) {
+    var value = normalizeClayValue(countryItem ? countryItem.get() : '');
+    if (value) {
+      return value;
+    }
+
+    if (countryItem && countryItem.$element && countryItem.$element[0]) {
+      var select = countryItem.$element[0].querySelector('select.argus-holiday-select');
+      if (select && select.value) {
+        return select.value;
+      }
+    }
+
+    return readStoredClaySetting('HolidayCountry') || '';
+  }
+
+  function getHolidayRegionValue(regionItem) {
+    var value = normalizeClayValue(regionItem ? regionItem.get() : '');
+    if (value) {
+      return value;
+    }
+    return readStoredClaySetting('HolidayRegion') || '';
+  }
+
+  function ensureHolidayCountryItemValue(countryItem) {
+    var value = getHolidayCountryValue(countryItem);
+    if (!value || !countryItem) {
+      return value || '';
+    }
+    if (normalizeClayValue(countryItem.get()) !== value) {
+      countryItem.set(value);
+    }
+    return value;
+  }
+
+  function normalizeClayValue(value) {
+    if (value && typeof value === 'object' && 'value' in value) {
+      return value.value;
+    }
+    return value || '';
+  }
+
+  function populateSelectOptions(select, options, selectedValue) {
+    select.innerHTML = '';
+    options.forEach(function (option) {
+      var node = document.createElement('option');
+      node.value = option.value;
+      node.textContent = option.label;
+      select.appendChild(node);
+    });
+    select.value = selectedValue || '';
+  }
+
+  function getHolidayCountrySelectOptions() {
+    return holidayCountryOptions;
+  }
+
+  function getSelectOptionsForKey(key, item) {
+    if (key === 'HolidayCountry') {
+      return getHolidayCountrySelectOptions();
+    }
+    return item.config.options || [];
+  }
+
+  function ensureSelectDropdown(key) {
+    var item = clayConfig.getItemByMessageKey(key);
+    if (!item || !item.$element || !item.$element[0]) {
+      return null;
+    }
+
+    var root = item.$element[0];
+    if (key === 'HolidayCountry') {
+      root.classList.add('argus-holiday-dropdown');
+    }
+
+    var radioGroup = root.querySelector('.radio-group');
+    if (radioGroup) {
+      radioGroup.classList.add('hide');
+    }
+
+    var select = root.querySelector('select.argus-holiday-select');
+    if (!select) {
+      select = document.createElement('select');
+      select.className = 'argus-holiday-select';
+
+      var desc = root.querySelector(':scope > .description');
+      if (desc && !root.querySelector(':scope > .argus-control-row')) {
+        var row = document.createElement('div');
+        row.className = 'argus-control-row';
+        root.insertBefore(row, desc);
+        row.appendChild(desc);
+        row.appendChild(select);
+      } else {
+        root.appendChild(select);
+      }
+
+      select.addEventListener('change', function () {
+        item.set(select.value);
+        persistClaySetting(key, select.value);
+      });
+    }
+
+    populateSelectOptions(select, getSelectOptionsForKey(key, item), normalizeClayValue(item.get()));
+    return select;
+  }
+
+  function convertSelectDropdowns() {
+    SELECT_DROPDOWN_KEYS.forEach(ensureSelectDropdown);
+  }
+
+  function syncHolidayDropdownValue(key) {
+    var item = clayConfig.getItemByMessageKey(key);
+    if (!item || !item.$element || !item.$element[0]) {
+      return;
+    }
+
+    var select = item.$element[0].querySelector('select.argus-holiday-select');
+    if (select) {
+      select.value = normalizeClayValue(item.get());
+    }
+  }
+
+  function rebuildRegionOptions(countryCode, selectedRegion, done) {
+    var regionItem = clayConfig.getItemByMessageKey('HolidayRegion');
+    if (!regionItem || !regionItem.$element || !regionItem.$element[0]) {
+      if (done) {
+        done();
+      }
+      return;
+    }
+
+    loadSubdivisionsForCountry(countryCode, function (subdivisions) {
+      var options = [{ label: 'National only', value: '' }];
+      subdivisions.forEach(function (entry) {
+        options.push({ label: entry.name, value: entry.code });
+      });
+
+      var validValues = {};
+      options.forEach(function (option) {
+        validValues[option.value] = true;
+      });
+      if (!validValues[selectedRegion]) {
+        if (selectedRegion) {
+          persistClaySetting('HolidayRegion', '');
+        }
+        selectedRegion = '';
+      }
+
+      regionItem.config.options = options;
+
+      var radioGroup = regionItem.$element[0].querySelector('.radio-group');
+      if (!radioGroup) {
+        if (done) {
+          done();
+        }
+        return;
+      }
+
+      var clayId = regionItem.config.clayId;
+      radioGroup.innerHTML = '';
+      options.forEach(function (option) {
+        var label = document.createElement('label');
+        label.className = 'tap-highlight';
+        if (option.value === selectedRegion) {
+          label.classList.add('active');
+        }
+
+        var span = document.createElement('span');
+        span.className = 'label';
+        span.textContent = option.label;
+
+        var input = document.createElement('input');
+        input.type = 'radio';
+        input.value = option.value;
+        input.name = 'clay-' + clayId;
+        if (option.value === selectedRegion) {
+          input.checked = true;
+        }
+
+        var icon = document.createElement('i');
+
+        label.appendChild(span);
+        label.appendChild(input);
+        label.appendChild(icon);
+        radioGroup.appendChild(label);
+      });
+
+      regionItem.set(selectedRegion);
+      syncRadioLabels('HolidayRegion');
+      if (done) {
+        done();
+      }
+    });
+  }
+
+  function resolveHolidayDefaults() {
+    var countryItem = clayConfig.getItemByMessageKey('HolidayCountry');
+    if (!countryItem) {
+      return;
+    }
+
+    var country = getHolidayCountryValue(countryItem);
+    if (!country) {
+      var detected = detectLocaleCountryCode();
+      if (detected) {
+        countryItem.set(detected);
+        persistClaySetting('HolidayCountry', detected);
+      }
+    } else {
+      ensureHolidayCountryItemValue(countryItem);
+    }
+
+    syncHolidayDropdownValue('HolidayCountry');
+  }
+
+  function syncHolidayRegionVisibility(country, regionItem) {
+    if (!regionItem || !regionItem.$element || !regionItem.$element[0]) {
+      return;
+    }
+
+    var showRegion = country && countryHasSubdivisions(country);
+    if (showRegion) {
+      regionItem.$element[0].classList.remove('hide');
+      regionItem.enable();
+    } else {
+      regionItem.$element[0].classList.add('hide');
+      regionItem.disable();
+      regionItem.set('');
+      persistClaySetting('HolidayRegion', '');
+    }
+  }
+
+  function syncHolidaySettings() {
+    var showHolidays = clayConfig.getItemByMessageKey('ShowHolidays');
+    var countryItem = clayConfig.getItemByMessageKey('HolidayCountry');
+    var regionItem = clayConfig.getItemByMessageKey('HolidayRegion');
+
+    if (!showHolidays || !countryItem || !regionItem) {
+      return;
+    }
+
+    var enabled = !!showHolidays.get();
+    var country = ensureHolidayCountryItemValue(countryItem);
+
+    if (enabled) {
+      countryItem.$element[0].classList.remove('hide');
+      countryItem.enable();
+    } else {
+      countryItem.$element[0].classList.add('hide');
+      countryItem.disable();
+      if (regionItem.$element && regionItem.$element[0]) {
+        regionItem.$element[0].classList.add('hide');
+      }
+      regionItem.disable();
+    }
+
+    if (!enabled) {
+      return;
+    }
+
+    var region = getHolidayRegionValue(regionItem);
+
+    rebuildRegionOptions(country || '', region || '', function () {
+      syncHolidayRegionVisibility(country, regionItem);
+    });
   }
 
   function syncRadioLabels(key) {
@@ -1109,7 +1769,7 @@ module.exports = function () {
 
     var help = document.createElement('div');
     help.className = className;
-    help.textContent = text;
+    help.innerHTML = text;
 
     var primaryHelp = root.querySelector(':scope > .argus-field-help');
     if (primaryHelp) {
@@ -1137,7 +1797,7 @@ module.exports = function () {
 
     var help = document.createElement('div');
     help.className = 'argus-field-help';
-    help.textContent = text;
+    help.innerHTML = text;
 
     var description = root.querySelector(':scope > .description');
     if (description) {
@@ -1165,26 +1825,26 @@ module.exports = function () {
   function injectSettingsFieldHelp() {
     injectFieldHelp(
       'WeekNumberMode',
-      'ISO 8601 is the international standard. Week 1 is determined by the first Thursday ' +
-      'of the year. US traditional style is typically used in North America. US week 1 is ' +
+      '<strong>ISO 8601</strong> is the international standard. Week 1 is determined by the first Thursday ' +
+      'of the year. <strong>US</strong> traditional style is typically used in North America. US week 1 is ' +
       'the week containing 1st of January.'
     );
     injectFieldHelp(
       'HeaderDisplay',
-      'Step count shows your total steps for the day. Temperature shows the current ' +
-      'reading with today\'s minimum and maximum forecasted. Heart rate ' +
+      '<strong>Step count</strong> shows your total steps for the day. <strong>Temperature</strong> shows the current ' +
+      'reading with today\'s minimum and maximum forecasted. <strong>Heart rate</strong> ' +
       'shows your current BPM with today\'s maximum.'
     );
     appendFieldHelp(
       'HeaderDisplay',
-      'Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
+      '<em>Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
       'earlier peaks from today may be included if the watch already stored minute ' +
-      'heart-rate samples.'
+      'heart-rate samples.</em>'
     );
     injectFieldHelp(
       'WeatherProvider',
-      'All models are served by Open-Meteo without an API key. Auto combines the highest-' +
-      'resolution model available for your coordinates.'
+      '<em>All models are served by Open-Meteo. Auto combines the highest-' +
+      'resolution model available for your coordinates.</em>'
     );
     injectFieldHelp(
       'WeatherUpdateInterval',
@@ -1261,6 +1921,8 @@ module.exports = function () {
     injectFooter();
     applyRowStyles();
     wrapTabPanels();
+    loadSubdivisionCatalogFromConfig();
+    convertSelectDropdowns();
     wrapInlineControlBodies();
     injectPrecipitationInfo();
     injectWindInfo();
@@ -1290,6 +1952,21 @@ module.exports = function () {
     syncManualLocationInput();
     if (locationMode) {
       locationMode.on('change', syncManualLocationInput);
+    }
+
+    loadHolidayCountries(function () {
+      refreshHolidayCountryDropdown();
+      resolveHolidayDefaults();
+      syncHolidaySettings();
+    });
+
+    var showHolidays = clayConfig.getItemByMessageKey('ShowHolidays');
+    var holidayCountry = clayConfig.getItemByMessageKey('HolidayCountry');
+    if (showHolidays) {
+      showHolidays.on('change', syncHolidaySettings);
+    }
+    if (holidayCountry) {
+      holidayCountry.on('change', syncHolidaySettings);
     }
 
     injectTheme();

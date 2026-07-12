@@ -1,6 +1,7 @@
 var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
 var customClay = require('./custom-clay');
+var holidays = require('./holidays');
 var pkg = require('../../package.json');
 var release = require('./release');
 var keys = require('message_keys');
@@ -16,6 +17,8 @@ var clay = new Clay(clayConfig, customClay, {
 var weatherFetchInFlight = false;
 var weatherFetchStartedAt = 0;
 var weatherRequestTimer = null;
+var holidayRequestTimer = null;
+var holidayFetchInFlight = false;
 var WEATHER_FETCH_STALE_MS = 30000;
 var weatherFetchCache = null;
 var RELEASE_SEEN_KEY = 'argus-release-seen';
@@ -799,6 +802,77 @@ function getReleaseNotificationMode() {
   return mode;
 }
 
+function showHolidaysEnabled() {
+  return claySettingIsTruthy(getClaySetting('ShowHolidays', true));
+}
+
+function resolveHolidayCountry() {
+  var country = getClaySetting('HolidayCountry', '');
+  if (country) {
+    return country;
+  }
+  return holidays.detectLocaleCountryCode();
+}
+
+function getHolidayRegion() {
+  return getClaySetting('HolidayRegion', '') || '';
+}
+
+function sendHolidayMask(mask) {
+  var dict = {};
+  dict[keys.CalendarHolidayMask] = mask;
+  Pebble.sendAppMessage(
+    dict,
+    function () {
+      console.log('Holiday mask sent to watch: ' + mask);
+    },
+    function (e) {
+      console.log('Holiday mask send failed: ' + JSON.stringify(e));
+    }
+  );
+}
+
+function syncHolidaysToWatch(options) {
+  options = options || {};
+
+  if (!showHolidaysEnabled()) {
+    sendHolidayMask(0);
+    return;
+  }
+
+  var country = resolveHolidayCountry();
+  if (!holidays.isSupportedCountryCode(country)) {
+    sendHolidayMask(0);
+    return;
+  }
+
+  if (holidayFetchInFlight && !options.forceRefresh) {
+    return;
+  }
+
+  holidayFetchInFlight = true;
+  holidays.fetchHolidaysForWindow({
+    countryCode: country,
+    regionCode: getHolidayRegion(),
+    weekStart: String(getClaySetting('WeekStart', '0')),
+    now: new Date(),
+    xhrRequest: xhrRequest,
+  }, function (result) {
+    holidayFetchInFlight = false;
+    sendHolidayMask(result.mask || 0);
+  });
+}
+
+function scheduleHolidaySync(options) {
+  if (holidayRequestTimer) {
+    clearTimeout(holidayRequestTimer);
+  }
+  holidayRequestTimer = setTimeout(function () {
+    holidayRequestTimer = null;
+    syncHolidaysToWatch(options || {});
+  }, 500);
+}
+
 function maybeShowReleaseNotice(options) {
   options = options || {};
   if (releaseNoticeShownThisSession && !options.fromWatch) {
@@ -844,8 +918,8 @@ Pebble.addEventListener('ready', function () {
   console.log('Argus PKJS ready');
   // Push saved Clay settings on launch so the watch does not stay on defaults.
   sendStoredSettings(function () {
-    // Fallback fetch when the watch requested weather before PKJS finished loading.
     scheduleWeatherRequest();
+    scheduleHolidaySync({ forceRefresh: true });
   });
   setTimeout(function () {
     maybeShowReleaseNotice();
@@ -867,6 +941,9 @@ Pebble.addEventListener('appmessage', function (e) {
     }
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
+  if (e.payload && e.payload[keys.REQUEST_HOLIDAYS]) {
+    scheduleHolidaySync({ forceRefresh: true });
+  }
 });
 
 Pebble.addEventListener('showConfiguration', function () {
@@ -883,6 +960,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
     function () {
       console.log('Settings sent to watch');
       getWeather(null, { forceRefresh: true });
+      scheduleHolidaySync({ forceRefresh: true });
     },
     function (err) {
       console.log('Settings send failed: ' + JSON.stringify(err));

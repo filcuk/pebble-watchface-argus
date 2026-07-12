@@ -9,6 +9,7 @@
 
 struct Calendar {
   Layer *layer;
+  Layer *holiday_layer;
   Layer *today_layer;
   int year;
   int month;
@@ -126,6 +127,7 @@ static GRect prv_day_cell_rect(int index, int grid_left, int col_w, const int ro
 
 static void prv_mark_calendar_dirty(Calendar *calendar) {
   layer_mark_dirty(calendar->layer);
+  layer_mark_dirty(calendar->holiday_layer);
   layer_mark_dirty(calendar->today_layer);
 }
 
@@ -146,6 +148,12 @@ static GRect prv_today_pill_rect(GRect text_rect, int text_w, int cell_w) {
   int ink_cy = ink_y + CALENDAR_TODAY_PILL_INK_HEIGHT / 2;
   int y = ink_cy - h / 2 + CALENDAR_TODAY_PILL_Y_OFFSET;
   return GRect(cx - w / 2, y, w, h);
+}
+
+static void prv_draw_holiday_frame(GContext *ctx, GRect pill) {
+  graphics_context_set_stroke_color(ctx, CALENDAR_HOLIDAY_FRAME_COLOR);
+  graphics_context_set_stroke_width(ctx, CALENDAR_HOLIDAY_FRAME_WIDTH);
+  graphics_draw_round_rect(ctx, pill, CALENDAR_TODAY_PILL_CORNER_RADIUS);
 }
 
 static void prv_draw_text(GContext *ctx, const char *text, GFont font, GRect text_rect, GTextAlignment alignment,
@@ -209,7 +217,6 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
   for (int i = 0; i < 14; i++) {
     GRect cell = prv_day_cell_rect(i, grid_left, col_w, row_y);
     bool today = prv_is_today(&calendar->cells[i], &now);
-    bool has_event = settings->show_event_indicators && (calendar->event_mask & (1 << i));
 
     if (today) {
       continue;
@@ -221,14 +228,52 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
     GRect text_rect = prv_row_text_rect(cell, CALENDAR_DAY_LINE_HEIGHT);
     prv_draw_text(ctx, day_buf, day_font, text_rect, GTextAlignmentCenter,
                   prv_is_weekend(calendar->cells[i].tm_wday) ? CALENDAR_WEEKEND_COLOR : GColorWhite);
+  }
+}
 
-    if (has_event) {
-      graphics_context_set_fill_color(ctx, GColorVividCerulean);
-      graphics_fill_circle(ctx,
-                           GPoint(cell.origin.x + cell.size.w / 2,
-                                  cell.origin.y + cell.size.h - CALENDAR_EVENT_DOT_OFFSET_FROM_BOTTOM),
-                           CALENDAR_EVENT_DOT_RADIUS);
+static void prv_holiday_layer_update_proc(Layer *layer, GContext *ctx) {
+  (void)layer;
+  Calendar *calendar = s_calendar;
+  if (!calendar || !calendar->cells_valid) {
+    return;
+  }
+
+  const ArgusSettings *settings = settings_get();
+  if (!settings->show_event_indicators || !calendar->event_mask) {
+    return;
+  }
+
+  GRect bounds = layer_get_bounds(layer);
+
+  struct tm now = {0};
+  now.tm_year = calendar->year;
+  now.tm_mon = calendar->month;
+  now.tm_mday = calendar->day;
+  mktime(&now);
+
+  int grid_left;
+  int col_w;
+  int row_y[2];
+  prv_compute_grid_layout(bounds, &grid_left, &col_w, row_y);
+
+  GFont day_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
+
+  for (int i = 0; i < 14; i++) {
+    if (!(calendar->event_mask & (1 << i))) {
+      continue;
     }
+    if (prv_is_today(&calendar->cells[i], &now)) {
+      continue;
+    }
+
+    GRect cell = prv_day_cell_rect(i, grid_left, col_w, row_y);
+    static char day_buf[4];
+    snprintf(day_buf, sizeof(day_buf), "%d", calendar->cells[i].tm_mday);
+
+    GRect text_rect = prv_row_text_rect(cell, CALENDAR_DAY_LINE_HEIGHT);
+    GSize text_size = prv_text_content_size(day_buf, day_font, text_rect, GTextAlignmentCenter);
+    GRect pill = prv_today_pill_rect(text_rect, text_size.w, cell.size.w);
+    prv_draw_holiday_frame(ctx, pill);
   }
 }
 
@@ -265,7 +310,7 @@ static void prv_today_layer_update_proc(Layer *layer, GContext *ctx) {
   prv_compute_grid_layout(bounds, &grid_left, &col_w, row_y);
 
   GRect cell = prv_day_cell_rect(today_index, grid_left, col_w, row_y);
-  bool has_event = settings->show_event_indicators && (calendar->event_mask & (1 << today_index));
+  bool is_holiday = settings->show_event_indicators && (calendar->event_mask & (1 << today_index));
 
   static char day_buf[4];
   snprintf(day_buf, sizeof(day_buf), "%d", calendar->cells[today_index].tm_mday);
@@ -277,15 +322,10 @@ static void prv_today_layer_update_proc(Layer *layer, GContext *ctx) {
 
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, pill, CALENDAR_TODAY_PILL_CORNER_RADIUS, GCornersAll);
-  prv_draw_text(ctx, day_buf, today_font, text_rect, GTextAlignmentCenter, GColorBlack);
-
-  if (has_event) {
-    graphics_context_set_fill_color(ctx, GColorBlack);
-    graphics_fill_circle(ctx,
-                         GPoint(cell.origin.x + cell.size.w / 2,
-                                cell.origin.y + cell.size.h - CALENDAR_EVENT_DOT_OFFSET_FROM_BOTTOM),
-                         CALENDAR_EVENT_DOT_RADIUS);
+  if (is_holiday) {
+    prv_draw_holiday_frame(ctx, pill);
   }
+  prv_draw_text(ctx, day_buf, today_font, text_rect, GTextAlignmentCenter, GColorBlack);
 }
 
 Calendar *calendar_create(Layer *parent) {
@@ -297,6 +337,10 @@ Calendar *calendar_create(Layer *parent) {
   GRect bounds = layer_get_bounds(parent);
   calendar->layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
   layer_set_update_proc(calendar->layer, prv_calendar_update_proc);
+
+  calendar->holiday_layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
+  layer_set_update_proc(calendar->holiday_layer, prv_holiday_layer_update_proc);
+  layer_add_child(calendar->layer, calendar->holiday_layer);
 
   calendar->today_layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
   layer_set_update_proc(calendar->today_layer, prv_today_layer_update_proc);
@@ -341,7 +385,9 @@ void calendar_set_bounds(Calendar *calendar, GRect frame) {
     return;
   }
   layer_set_frame(calendar->layer, frame);
-  layer_set_frame(calendar->today_layer, GRect(0, 0, frame.size.w, frame.size.h));
+  GRect layer_bounds = GRect(0, 0, frame.size.w, frame.size.h);
+  layer_set_frame(calendar->holiday_layer, layer_bounds);
+  layer_set_frame(calendar->today_layer, layer_bounds);
 }
 
 void calendar_invalidate(Calendar *calendar) {
