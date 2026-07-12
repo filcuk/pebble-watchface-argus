@@ -227,6 +227,14 @@ module.exports = [
     ],
   },
   {
+    type: 'toggle',
+    messageKey: 'QuietModeDisplay',
+    label: 'Quiet mode icon',
+    description: 'Show icon when Do Not Disturb is active.',
+    group: 'tabDisplay',
+    defaultValue: true,
+  },
+  {
     type: 'radiogroup',
     messageKey: 'TemperatureUnit',
     label: 'Temperature scale',

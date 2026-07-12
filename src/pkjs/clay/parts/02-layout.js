@@ -30,6 +30,7 @@
   }).concat([
     'TemperatureDisplay',
     'PauseWeatherAtNight',
+    'QuietModeDisplay',
     'ShowHolidays',
     'DebugMode',
     'DemoWeather',
@@ -85,6 +86,7 @@
       'ManualLocation',
       'TemperatureDisplay',
       'PauseWeatherAtNight',
+      'QuietModeDisplay',
       'ShowHolidays',
       'DebugMode',
       'DemoWeather',

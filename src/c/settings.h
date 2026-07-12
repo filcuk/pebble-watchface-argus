@@ -3,7 +3,7 @@
 #include <pebble.h>
 
 #define SETTINGS_PERSIST_KEY 2
-#define SETTINGS_PERSIST_VERSION 7
+#define SETTINGS_PERSIST_VERSION 8
 
 typedef enum {
   HOUR_FORMAT_SYSTEM = 0,
@@ -83,6 +83,7 @@ typedef struct {
   BiometricUpdateMode biometric_update_mode;
   bool pause_weather_at_night;
   uint8_t weather_update_interval_min;
+  bool quiet_mode_display;
 } ArgusSettings;
 
 void settings_init(void);

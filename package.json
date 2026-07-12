@@ -39,6 +39,7 @@
       "WeekStart",
       "WeekNumberMode",
       "BluetoothDisplay",
+      "QuietModeDisplay",
       "LocationMode",
       "ManualLocation",
       "ForecastHours",
