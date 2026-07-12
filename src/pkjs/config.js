@@ -74,6 +74,14 @@ var windInfoHtml =
   '</p>' +
   '</div>';
 
+var headerDisplayHelpHtml =
+  '<strong>Step count</strong> shows your total steps for the day. <strong>Temperature</strong> shows the current ' +
+  'reading with today\'s minimum and maximum forecasted. <strong>Heart rate</strong> ' +
+  'shows your current BPM with today\'s maximum.<br><br>' +
+  '<em>Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
+  'earlier peaks from today may be included if the watch already stored minute ' +
+  'heart-rate samples.</em>';
+
 module.exports = [
   {
     type: 'radiogroup',
@@ -166,14 +174,7 @@ module.exports = [
     type: 'radiogroup',
     messageKey: 'HeaderDisplay',
     label: 'Header',
-    description:
-      'Choose what appears in the center of the top status bar.<br><br>' +
-      '<strong>Step count</strong> shows your total steps for the day. <strong>Temperature</strong> shows the current ' +
-      'reading with today\'s minimum and maximum forecasted. <strong>Heart rate</strong> ' +
-      'shows your current BPM with today\'s maximum.<br><br>' +
-      '<em>Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
-      'earlier peaks from today may be included if the watch already stored minute ' +
-      'heart-rate samples.</em>',
+    description: 'Choose what appears in the center of the top status bar.',
     group: 'tabDisplay',
     defaultValue: '0',
     options: [
@@ -182,6 +183,12 @@ module.exports = [
       { label: 'Heart rate', value: '3' },
       { label: 'Temperature', value: '2' },
     ],
+  },
+  {
+    type: 'text',
+    id: 'argus-header-display-help',
+    group: 'tabDisplay',
+    defaultValue: headerDisplayHelpHtml,
   },
   {
     type: 'radiogroup',

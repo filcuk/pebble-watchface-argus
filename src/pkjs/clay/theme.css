@@ -240,13 +240,18 @@ html.as .argus-list-radiogroup > .label {
   display: block;
   margin-bottom: 8px !important;
 }
+html.as .argus-list-radiogroup > .radio-group {
+  order: 3;
+}
 html.as .argus-list-radiogroup > .description {
   order: 2;
   margin-top: 0 !important;
   margin-bottom: 10px !important;
 }
-html.as .argus-list-radiogroup > .radio-group {
-  order: 3;
+html.as .argus-list-radiogroup > .argus-list-help-after {
+  order: 4;
+  margin-top: 10px !important;
+  margin-bottom: 0 !important;
 }
 html.as .argus-segment-radiogroup .radio-group {
   display: inline-flex;

@@ -175,6 +175,38 @@
     });
   }
 
+  function injectHeaderDisplayHelp() {
+    var headerItem = clayConfig.getItemByMessageKey('HeaderDisplay');
+    var helpItem = clayConfig.getItemById('argus-header-display-help');
+    if (!headerItem || !headerItem.$element || !headerItem.$element[0] || !helpItem) {
+      return;
+    }
+
+    var root = headerItem.$element[0];
+    if (root.querySelector(':scope > .argus-list-help-after')) {
+      return;
+    }
+
+    var radioGroup = root.querySelector(':scope > .radio-group');
+    if (!radioGroup) {
+      return;
+    }
+
+    var helpHtml = String((helpItem.config && helpItem.config.defaultValue) || helpItem.get() || '');
+    if (!helpHtml) {
+      return;
+    }
+
+    var help = document.createElement('div');
+    help.className = 'description argus-list-help-after';
+    help.innerHTML = helpHtml;
+    radioGroup.parentNode.insertBefore(help, radioGroup.nextSibling);
+
+    if (helpItem.$element && helpItem.$element[0]) {
+      helpItem.$element[0].classList.add('hide');
+    }
+  }
+
   function wrapInlineControlBodies() {
     INLINE_CONTROL_KEYS.forEach(function (key) {
       var item = clayConfig.getItemByMessageKey(key);
