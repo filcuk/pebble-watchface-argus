@@ -249,6 +249,7 @@ static void prv_inbox_dropped(AppMessageResult reason, void *context) {
   (void)context;
   APP_LOG(APP_LOG_LEVEL_WARNING, "Inbox dropped: %d", (int)reason);
   weather_mark_error();
+  weather_schedule_retry();
   weather_chart_refresh(s_weather_chart);
 }
 

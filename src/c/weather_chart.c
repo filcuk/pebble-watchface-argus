@@ -747,8 +747,14 @@ static void prv_decor_layer_update_proc(Layer *layer, GContext *ctx) {
 
   WeatherView view;
   weather_get_view(&view);
-  if (data->state == WEATHER_STATE_ERROR || !weather_view_has_data(&view)) {
+  if (data->state == WEATHER_STATE_ERROR) {
     graphics_draw_text(ctx, "No weather data", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    return;
+  }
+
+  if (!weather_view_has_data(&view)) {
+    graphics_draw_text(ctx, "Loading weather...", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }

@@ -253,8 +253,22 @@ static time_t prv_cache_timestamp(void) {
   return s_weather.fetch_time;
 }
 
-static bool weather_cache_is_valid(void) {
+static bool prv_has_viewable_hours(void) {
   if (s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
+    return false;
+  }
+
+  time_t now_hour = prv_current_hour_start();
+  if (now_hour < s_weather.fetch_time) {
+    return false;
+  }
+
+  int elapsed = (int)((now_hour - s_weather.fetch_time) / 3600);
+  return elapsed < s_weather.hour_count;
+}
+
+static bool weather_cache_is_valid(void) {
+  if (!prv_has_viewable_hours()) {
     return false;
   }
 
@@ -356,6 +370,7 @@ static void prv_timeout_callback(void *context) {
   } else {
     APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — fetch failed");
     weather_mark_error();
+    weather_schedule_retry();
   }
 }
 
@@ -381,13 +396,16 @@ void weather_mark_fetch_failed(void) {
     return;
   }
 
-  prv_cancel_timers();
   s_last_weather_request_at = 0;
   if (weather_cache_is_valid()) {
+    prv_cancel_timers();
     s_weather.state = WEATHER_STATE_READY;
-  } else {
-    s_weather.state = WEATHER_STATE_ERROR;
+    prv_notify_updated();
+    return;
   }
+
+  s_weather.state = WEATHER_STATE_ERROR;
+  weather_schedule_retry();
   prv_notify_updated();
 }
 
@@ -459,6 +477,7 @@ WeatherData *weather_get(void) {
 
 void weather_mark_error(void) {
   s_weather.state = WEATHER_STATE_ERROR;
+  prv_notify_updated();
 }
 
 static int8_t prv_demo_temp_for_clock_hour(int clock_hour) {
@@ -570,9 +589,9 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   Tuple *t = dict_find(iter, MESSAGE_KEY_WeatherTempHourly);
   if (!t || t->type != TUPLE_BYTE_ARRAY) {
     APP_LOG(APP_LOG_LEVEL_WARNING, "Weather: missing or invalid temp array (type %d)", t ? (int)t->type : -1);
-    weather_mark_error();
     prv_cancel_timers();
-    prv_notify_updated();
+    weather_mark_error();
+    weather_schedule_retry();
     return;
   }
 
