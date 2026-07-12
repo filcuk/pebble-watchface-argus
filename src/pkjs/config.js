@@ -17,6 +17,63 @@ function encodeHolidaySubdivisions(map) {
   return parts.join('\x1d');
 }
 
+var precipitationInfoHtml =
+  '<div class="argus-precip-info">' +
+  '<div class="argus-setting-label">Precipitation</div>' +
+  '<p class="argus-precip-intro">' +
+  'Blue bars representing precipitation on the weather chart use a fixed intensity scale. The chart height is split ' +
+  'into five equal bands. Within each band, bar height shows how far the hourly rate falls ' +
+  'within that range.' +
+  '</p>' +
+  '<div class="argus-precip-table-wrap">' +
+  '<table class="argus-precip-table">' +
+  '<thead><tr><th>Intensity</th><th>Rate (mm/h)</th><th>Chart position</th></tr></thead>' +
+  '<tbody>' +
+  '<tr><td>Trace</td><td>< 0.25</td><td>Bottom 1/5</td></tr>' +
+  '<tr><td>Very light</td><td>0.25 – 1</td><td>2nd 1/5</td></tr>' +
+  '<tr><td>Light</td><td>1 – 2.5</td><td>3rd 1/5</td></tr>' +
+  '<tr><td>Moderate</td><td>2.5 – 10</td><td>4th 1/5</td></tr>' +
+  '<tr><td>Heavy</td><td>10 – 25+</td><td>Top 1/5</td></tr>' +
+  '</tbody>' +
+  '</table>' +
+  '</div>' +
+  '</div>';
+
+var windInfoHtml =
+  '<div class="argus-wind-info">' +
+  '<div class="argus-setting-label">Wind</div>' +
+  '<p class="argus-precip-intro">' +
+  'Gray × marks show wind speed on the Beaufort scale. Within each force level, ' +
+  'mark height reflects where the hourly speed falls in that level\'s range. ' +
+  'The chart axis normally spans force 0 to 8. If any visible hour exceeds force 8 ' +
+  '(75&nbsp;km/h or more), the axis extends to force 12.' +
+  '</p>' +
+  '<div class="argus-precip-table-wrap">' +
+  '<table class="argus-precip-table">' +
+  '<thead><tr><th>Force</th><th>Name</th><th>Speed (km/h)</th></tr></thead>' +
+  '<tbody>' +
+  '<tr><td>0</td><td>Calm</td><td>&lt; 1</td></tr>' +
+  '<tr><td>1</td><td>Light air</td><td>1 – 5</td></tr>' +
+  '<tr><td>2</td><td>Light breeze</td><td>6 – 11</td></tr>' +
+  '<tr><td>3</td><td>Gentle breeze</td><td>12 – 19</td></tr>' +
+  '<tr><td>4</td><td>Moderate breeze</td><td>20 – 28</td></tr>' +
+  '<tr><td>5</td><td>Fresh breeze</td><td>29 – 38</td></tr>' +
+  '<tr><td>6</td><td>Strong breeze</td><td>39 – 49</td></tr>' +
+  '<tr><td>7</td><td>Moderate gale</td><td>50 – 61</td></tr>' +
+  '<tr><td>8</td><td>Gale</td><td>62 – 74</td></tr>' +
+  '<tr><td>9</td><td>Strong gale</td><td>75 – 88</td></tr>' +
+  '<tr><td>10</td><td>Storm</td><td>89 – 102</td></tr>' +
+  '<tr><td>11</td><td>Violent storm</td><td>103 – 117</td></tr>' +
+  '<tr><td>12</td><td>Hurricane force</td><td>118+</td></tr>' +
+  '</tbody>' +
+  '</table>' +
+  '</div>' +
+  '<p class="argus-wind-note">' +
+  'Forces 9–12 only appear when the axis extends. Marks above force 8 are drawn in ' +
+  '<em>yellow</em>.' +
+  '</p>' +
+  '</div>';
+
 module.exports = [
   {
     type: 'radiogroup',
@@ -59,7 +116,11 @@ module.exports = [
     type: 'radiogroup',
     messageKey: 'WeekNumberMode',
     label: 'Week numbers',
-    description: 'Type of calendar. This setting affects week numbers.',
+    description:
+      'Type of calendar. This setting affects week numbers.<br><br>' +
+      '<strong>ISO 8601</strong> is the international standard. Week 1 is determined by the first Thursday ' +
+      'of the year. <strong>US</strong> traditional style is typically used in North America. US week 1 is ' +
+      'the week containing 1st of January.',
     group: 'tabCalendar',
     defaultValue: '0',
     options: [
@@ -105,7 +166,14 @@ module.exports = [
     type: 'radiogroup',
     messageKey: 'HeaderDisplay',
     label: 'Header',
-    description: 'Choose what appears in the center of the top status bar.',
+    description:
+      'Choose what appears in the center of the top status bar.<br><br>' +
+      '<strong>Step count</strong> shows your total steps for the day. <strong>Temperature</strong> shows the current ' +
+      'reading with today\'s minimum and maximum forecasted. <strong>Heart rate</strong> ' +
+      'shows your current BPM with today\'s maximum.<br><br>' +
+      '<em>Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
+      'earlier peaks from today may be included if the watch already stored minute ' +
+      'heart-rate samples.</em>',
     group: 'tabDisplay',
     defaultValue: '0',
     options: [
@@ -199,7 +267,7 @@ module.exports = [
     type: 'radiogroup',
     messageKey: 'GpsMaxAge',
     label: 'GPS update frequency',
-    description: 'How long a GPS fix is reused.',
+    description: 'How long a GPS fix is reused. This setting affects battery life.',
     group: 'tabWeather',
     defaultValue: '30',
     options: [
@@ -214,7 +282,10 @@ module.exports = [
     type: 'radiogroup',
     messageKey: 'WeatherProvider',
     label: 'Weather model',
-    description: 'Open-Meteo forecast source. Auto picks the best model for your location.',
+    description:
+      'Open-Meteo forecast source. Auto picks the best model for your location.<br><br>' +
+      '<em>All models are served by Open-Meteo. Auto combines the highest-' +
+      'resolution model available for your coordinates.</em>',
     group: 'tabWeather',
     defaultValue: '0',
     options: [
@@ -240,7 +311,9 @@ module.exports = [
     type: 'radiogroup',
     messageKey: 'WeatherUpdateInterval',
     label: 'Update interval',
-    description: 'How often the watch requests fresh weather data from the phone.',
+    description:
+      'How often the watch requests fresh weather data from the phone. ' +
+      'Shorter intervals keep data fresher but use more phone and watch battery.',
     group: 'tabWeather',
     defaultValue: '30',
     options: [
@@ -254,13 +327,13 @@ module.exports = [
     type: 'text',
     id: 'argus-precipitation-info',
     group: 'tabWeatherHelp',
-    defaultValue: '',
+    defaultValue: precipitationInfoHtml,
   },
   {
     type: 'text',
     id: 'argus-wind-info',
     group: 'tabWeatherHelp',
-    defaultValue: '',
+    defaultValue: windInfoHtml,
   },
   {
     type: 'toggle',

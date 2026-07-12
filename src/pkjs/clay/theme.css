@@ -168,6 +168,13 @@ html.argus-settings .argus-row .description {
   margin-top: 10px;
   padding: 0;
 }
+html.argus-settings .argus-row .description strong {
+  font-weight: 600;
+  color: #6894b8 !important;
+}
+html.argus-settings .argus-row .description em {
+  font-style: italic;
+}
 html.argus-settings .argus-field-help {
   display: block;
   width: 100%;

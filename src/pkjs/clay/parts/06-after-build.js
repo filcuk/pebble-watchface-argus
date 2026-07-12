@@ -9,9 +9,6 @@
     loadSubdivisionCatalogFromConfig();
     convertSelectDropdowns();
     wrapInlineControlBodies();
-    injectPrecipitationInfo();
-    injectWindInfo();
-    injectSettingsFieldHelp();
     hideHeaderHeartRateIfNeeded();
     normalizeRealtimeStepsDefault();
     bindSegmentSync();
