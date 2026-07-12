@@ -2,6 +2,7 @@
 
 #include "argus_time.h"
 #include "formatting.h"
+#include "bt_icon.h"
 #include "heart_icon.h"
 #include "hr_day.h"
 #include "steps_icon.h"
@@ -258,26 +259,19 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
 }
 
 static void prv_bt_update_proc(Layer *layer, GContext *ctx) {
-  (void)layer;
   Header *header = s_header;
   if (!header) {
     return;
   }
 
   GRect bounds = layer_get_bounds(layer);
-  graphics_context_set_stroke_color(ctx, GColorWhite);
-  graphics_context_set_fill_color(ctx, header->bt_connected ? GColorWhite : GColorRed);
+  int x = (bounds.size.w - BT_ICON_WIDTH) / 2;
+  int y = (bounds.size.h - BT_ICON_HEIGHT) / 2;
 
-  int cx = bounds.size.w / 2;
-  int cy = bounds.size.h / 2;
   if (header->bt_connected) {
-    graphics_draw_circle(ctx, GPoint(cx, cy), 4);
-    graphics_draw_line(ctx, GPoint(cx - 2, cy + 2), GPoint(cx + 2, cy - 2));
+    bt_icon_draw_connected(ctx, x, y);
   } else {
-    graphics_fill_circle(ctx, GPoint(cx, cy), 5);
-    graphics_context_set_stroke_color(ctx, GColorBlack);
-    graphics_draw_line(ctx, GPoint(cx - 3, cy - 3), GPoint(cx + 3, cy + 3));
-    graphics_draw_line(ctx, GPoint(cx - 3, cy + 3), GPoint(cx + 3, cy - 3));
+    bt_icon_draw_lost(ctx, x, y);
   }
 }
 
