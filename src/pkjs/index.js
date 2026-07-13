@@ -595,6 +595,7 @@ function injectWeatherLogForClayConfig() {
 }
 
 function injectAboutStatusForClayConfig() {
+  var weatherCache = readWeatherFetchCache();
   setClayConfigDefaultById(
     'argus-about-status',
     aboutStatus.formatPanelHtml({
@@ -605,7 +606,8 @@ function injectAboutStatusForClayConfig() {
       countryCode: String(getClaySetting('HolidayCountry', '') || ''),
       regionCode: String(getClaySetting('HolidayRegion', '') || ''),
       weekStart: String(getClaySetting('WeekStart', '0')),
-      pauseAtNight: pauseWeatherAtNightEnabled(),
+      pauseAtNight:
+        pauseWeatherAtNightEnabled() && !!weatherCache && weatherIsNightNow(weatherCache),
     })
   );
 }

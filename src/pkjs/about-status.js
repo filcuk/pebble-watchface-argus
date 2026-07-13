@@ -312,30 +312,22 @@ function weatherSectionHtml(options) {
   var gps = readJson(LAST_GPS_FIX_KEY);
   var apiMs = cacheApiFetchedAt(cache);
   var intervalMs = options.intervalMs || 60 * 60 * 1000;
+  var pausedAtNight = !!options.pauseAtNight;
   var lines = [];
+  var ageMs = apiMs ? Date.now() - apiMs : 0;
+  var stale = apiMs && ageMs > intervalMs;
+  var critical = apiMs && ageMs > intervalMs * 3;
   var warnClass = '';
 
   lines.push('<div class="argus-setting-label">Weather</div>');
 
-  if (locationPending(cache, gps, options)) {
-    lines.push(
-      '<p class="argus-about-note argus-about-critical">Location changed since last weather update.</p>'
-    );
-  }
-
-  if (options.pauseAtNight) {
-    lines.push(
-      '<p class="argus-about-note">Weather updates paused - nighttime setting.</p>'
-    );
-  }
-
   if (!apiMs) {
     lines.push('<p class="argus-about-line">No weather fetch yet.</p>');
   } else {
-    var ageMs = Date.now() - apiMs;
-    var stale = ageMs > intervalMs;
-    var critical = ageMs > intervalMs * 3;
-    warnClass = critical ? ' argus-about-critical' : stale ? ' argus-about-warn' : '';
+    /* Night pause makes interval age expected — don't color the API line as stale. */
+    if (!pausedAtNight) {
+      warnClass = critical ? ' argus-about-critical' : stale ? ' argus-about-warn' : '';
+    }
     lines.push(
       '<p class="argus-about-line' +
         warnClass +
@@ -345,19 +337,30 @@ function weatherSectionHtml(options) {
         escapeHtml(weatherDebugLog.formatAgeMinutes(ageMs)) +
         ' ago</p>'
     );
-    if (critical) {
-      lines.push(
-        '<p class="argus-about-note argus-about-critical">Past 3× update interval (' +
-          Math.round(intervalMs / 60000) +
-          'm).</p>'
-      );
-    } else if (stale) {
-      lines.push(
-        '<p class="argus-about-note argus-about-warn">Past update interval (' +
-          Math.round(intervalMs / 60000) +
-          'm).</p>'
-      );
-    }
+  }
+
+  if (locationPending(cache, gps, options)) {
+    lines.push(
+      '<p class="argus-about-note argus-about-critical">Location changed since last weather update.</p>'
+    );
+  }
+
+  if (pausedAtNight) {
+    lines.push(
+      '<p class="argus-about-note">Weather updates paused - nighttime setting.</p>'
+    );
+  } else if (critical) {
+    lines.push(
+      '<p class="argus-about-note argus-about-critical">Past 3× update interval (' +
+        Math.round(intervalMs / 60000) +
+        'm).</p>'
+    );
+  } else if (stale) {
+    lines.push(
+      '<p class="argus-about-note argus-about-warn">Past update interval (' +
+        Math.round(intervalMs / 60000) +
+        'm).</p>'
+    );
   }
 
   var sunLine = sunTimesLineHtml(cache, gps);
