@@ -674,6 +674,20 @@ function weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch) {
   );
 }
 
+function cacheCoversHour(cache, epochSeconds) {
+  if (!cache || !cache.payload) {
+    return false;
+  }
+  var fetchTime = cache.payload.fetchTime || cache.fetchTime;
+  var count = cache.payload.count || cache.count;
+  if (!fetchTime || !count) {
+    return false;
+  }
+  var hourStart = hourStartEpoch(epochSeconds || Math.floor(Date.now() / 1000));
+  var index = Math.floor((hourStart - fetchTime) / 3600);
+  return index >= 0 && index < count;
+}
+
 function shouldUseFetchCache(latitude, longitude, model, hours, startEpoch) {
   var cache = readWeatherFetchCache();
   if (!cache) {
@@ -682,7 +696,11 @@ function shouldUseFetchCache(latitude, longitude, model, hours, startEpoch) {
   if (cache.key !== weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch)) {
     return false;
   }
-  return Date.now() - cacheApiFetchedAt(cache) < getWeatherUpdateIntervalMs();
+  if (Date.now() - cacheApiFetchedAt(cache) >= getWeatherUpdateIntervalMs()) {
+    return false;
+  }
+  /* Age alone is not enough — reused payloads must still cover "now" (or forEpoch). */
+  return cacheCoversHour(cache, startEpoch || Math.floor(Date.now() / 1000));
 }
 
 function weatherIsNightNow(cache) {
@@ -722,7 +740,7 @@ function packUint8Array(values, count) {
   return arr;
 }
 
-function parseOpenMeteoTime(iso) {
+function parseOpenMeteoTime(iso, utcOffsetSeconds) {
   if (!iso) {
     return Math.floor(Date.now() / 1000);
   }
@@ -730,14 +748,18 @@ function parseOpenMeteoTime(iso) {
   if (!parts) {
     return Math.floor(Date.now() / 1000);
   }
-  var date = new Date(
-    parseInt(parts[1], 10),
-    parseInt(parts[2], 10) - 1,
-    parseInt(parts[3], 10),
-    parseInt(parts[4], 10),
-    parseInt(parts[5], 10)
-  );
-  return Math.floor(date.getTime() / 1000);
+  var offsetSec = typeof utcOffsetSeconds === 'number' ? utcOffsetSeconds : 0;
+  /* Open-Meteo hourly times are wall-clock in the forecast timezone, not the phone's. */
+  var utcMs =
+    Date.UTC(
+      parseInt(parts[1], 10),
+      parseInt(parts[2], 10) - 1,
+      parseInt(parts[3], 10),
+      parseInt(parts[4], 10),
+      parseInt(parts[5], 10)
+    ) -
+    offsetSec * 1000;
+  return Math.floor(utcMs / 1000);
 }
 
 function formatDateYYYYMMDD(epochSeconds) {
@@ -761,14 +783,20 @@ function packWeatherPayload(json, hours, startEpoch) {
   var precips = json.hourly.precipitation;
   var winds = json.hourly.wind_speed_10m || [];
   var isDay = json.hourly.is_day || [];
+  var utcOffset =
+    typeof json.utc_offset_seconds === 'number' ? json.utc_offset_seconds : 0;
 
   var startIndex = 0;
   if (startEpoch) {
+    startIndex = -1;
     for (var i = 0; i < times.length; i++) {
-      if (parseOpenMeteoTime(times[i]) >= startEpoch) {
+      if (parseOpenMeteoTime(times[i], utcOffset) >= startEpoch) {
         startIndex = i;
         break;
       }
+    }
+    if (startIndex < 0) {
+      return null;
     }
   }
 
@@ -863,7 +891,7 @@ function packWeatherPayload(json, hours, startEpoch) {
     ),
     windBytes: packUint8Array(winds.slice(startIndex, startIndex + count), count),
     isDayBytes: packUint8Array(isDay.slice(startIndex, startIndex + count), count),
-    fetchTime: parseOpenMeteoTime(times[startIndex]),
+    fetchTime: parseOpenMeteoTime(times[startIndex], utcOffset),
   };
 }
 
@@ -1357,6 +1385,12 @@ Pebble.addEventListener('appmessage', function (e) {
     if (e.payload[keys.ManualLocation]) {
       weatherOptions.manualLocation = e.payload[keys.ManualLocation];
     }
+    var reqKind = e.payload[keys.WeatherRequestKind];
+    var reqKindKey = String(reqKind);
+    /* Watch force/stale means coverage or freshness failed — bypass phone age cache. */
+    if (reqKindKey === '1' || reqKindKey === '2') {
+      weatherOptions.forceRefresh = true;
+    }
     var reqDetail = 'watch';
     if (forEpoch) {
       reqDetail += ' t=' + forEpoch;
@@ -1366,7 +1400,7 @@ Pebble.addEventListener('appmessage', function (e) {
     } else if (weatherOptions.locationMode === '0' || weatherOptions.locationMode === 0) {
       reqDetail += ' gps';
     }
-    wlogWeatherRequestKind(e.payload[keys.WeatherRequestKind], reqDetail);
+    wlogWeatherRequestKind(reqKind, reqDetail);
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
   if (e.payload && e.payload[keys.REQUEST_HOLIDAYS]) {
