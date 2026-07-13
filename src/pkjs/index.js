@@ -363,13 +363,53 @@ var WEATHER_WATCH_SKIP_LABELS = {
   '4': 'throttle 60s',
 };
 
+var LAST_GPS_FIX_KEY = 'argus-last-gps-fix';
+
+function quantizeCoord(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function writeLastGpsFix(latitude, longitude, timestamp) {
+  try {
+    localStorage.setItem(
+      LAST_GPS_FIX_KEY,
+      JSON.stringify({
+        lat: quantizeCoord(latitude),
+        lon: quantizeCoord(longitude),
+        t: timestamp || Date.now(),
+      })
+    );
+  } catch (e) {
+    // Ignore storage errors.
+  }
+}
+
+function wlogGpsPosition(pos) {
+  var latitude = quantizeCoord(pos.coords.latitude);
+  var longitude = quantizeCoord(pos.coords.longitude);
+  var fixTime = pos.timestamp || Date.now();
+  writeLastGpsFix(latitude, longitude, fixTime);
+  wlog(
+    'GPS',
+    latitude.toFixed(2) +
+      ',' +
+      longitude.toFixed(2) +
+      ' fix ' +
+      weatherDebugLog.formatAgeMinutes(Date.now() - fixTime)
+  );
+}
+
 function wlogWeatherRequestKind(kind, reqDetail) {
   var kindKey = String(kind);
   var label = WEATHER_REQ_KINDS[kindKey];
   if (!label) {
     label = kind === undefined || kind === null ? 'watch' : 'kind' + kindKey;
   }
-  wlog('REQ', label + ' ' + reqDetail);
+  if (reqDetail) {
+    wlog('REQ', label + ' ' + reqDetail);
+  } else {
+    wlog('REQ', label);
+  }
 }
 
 function wlogWeatherWatchSkip(code) {
@@ -401,18 +441,42 @@ function injectWeatherLogForClayConfig() {
   }
 }
 
+function parseWeatherCacheKey(key) {
+  if (!key) {
+    return null;
+  }
+  var parts = String(key).split(',');
+  if (parts.length < 5) {
+    return null;
+  }
+  return {
+    lat: parseFloat(parts[0]),
+    lon: parseFloat(parts[1]),
+    model: parts[2],
+    hours: parseInt(parts[3], 10),
+    startEpoch: parseInt(parts[4], 10) || 0,
+  };
+}
+
 function wlogCacheMiss(latitude, longitude, model, hours, startEpoch) {
   var cache = readWeatherFetchCache();
   var expectedKey = weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch);
   if (!cache) {
-    wlog('C-', 'phone empty');
+    wlog('C-', 'empty');
     return;
   }
   if (cache.key !== expectedKey) {
-    wlog('C-', 'phone key≠');
+    var cachedKey = parseWeatherCacheKey(cache.key);
+    var qLat = quantizeCoord(latitude);
+    var qLon = quantizeCoord(longitude);
+    if (cachedKey && (cachedKey.lat !== qLat || cachedKey.lon !== qLon)) {
+      wlog('C-', 'pos change');
+      return;
+    }
+    wlog('C-', 'settings');
     return;
   }
-  wlog('C-', 'phone expired ' + weatherDebugLog.formatAgeMs(Date.now() - cache.fetchedAt));
+  wlog('C-', 'expired ' + weatherDebugLog.formatAgeMs(Date.now() - cache.fetchedAt));
 }
 
 function readWeatherFetchCache() {
@@ -442,9 +506,9 @@ function writeWeatherFetchCache(entry) {
 
 function weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch) {
   return (
-    latitude.toFixed(4) +
+    quantizeCoord(latitude).toFixed(2) +
     ',' +
-    longitude.toFixed(4) +
+    quantizeCoord(longitude).toFixed(2) +
     ',' +
     (model || 'auto') +
     ',' +
@@ -649,7 +713,6 @@ function packWeatherPayload(json, hours, startEpoch) {
 
 function notifyWeatherFetchFailed(reason) {
   clearWeatherFetchInFlight();
-  wlog('W!', reason || 'fail→watch');
   var dict = {};
   dict[keys.WeatherHourCount] = 0;
   Pebble.sendAppMessage(
@@ -736,9 +799,9 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
   var url =
     'https://api.open-meteo.com/v1/forecast?' +
     'latitude=' +
-    latitude +
+    quantizeCoord(latitude) +
     '&longitude=' +
-    longitude +
+    quantizeCoord(longitude) +
     '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day&timezone=auto';
 
   if (model) {
@@ -760,9 +823,9 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
   );
   wlog(
     'API',
-    latitude.toFixed(2) +
+    quantizeCoord(latitude).toFixed(2) +
       ',' +
-      longitude.toFixed(2) +
+      quantizeCoord(longitude).toFixed(2) +
       ' ' +
       (model || 'auto') +
       ' ' +
@@ -912,7 +975,7 @@ function getWeather(forEpoch, options) {
 
   navigator.geolocation.getCurrentPosition(
     function (pos) {
-      wlog('GPS', pos.coords.latitude.toFixed(2) + ',' + pos.coords.longitude.toFixed(2));
+      wlogGpsPosition(pos);
       fetchForecast(pos.coords.latitude, pos.coords.longitude, forEpoch, options);
     },
     function (err) {
@@ -1074,10 +1137,9 @@ function maybeShowReleaseNotice(options) {
 
 Pebble.addEventListener('ready', function () {
   console.log('Argus PKJS ready');
-  wlog('BOOT', 'pkjs ready');
   // Push saved Clay settings on launch so the watch does not stay on defaults.
   sendStoredSettings(function () {
-    wlog('REQ', 'force pkjs ready');
+    wlog('REQ', 'boot');
     scheduleWeatherRequest();
     scheduleHolidaySync({ forceRefresh: true });
   });
@@ -1144,7 +1206,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
     Clay.prepareSettingsForAppMessage(raw),
     function () {
       console.log('Settings sent to watch');
-      wlog('REQ', 'force settings save');
+      wlog('REQ', 'settings save');
       getWeather(null, { forceRefresh: true });
       scheduleHolidaySync({ forceRefresh: true });
     },

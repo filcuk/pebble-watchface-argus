@@ -62,8 +62,8 @@ function formatPanelHtml(entries) {
   }
 
   var legend =
-    '<div class="argus-wlog-legend">REQ watch→phone (periodic/force/stale) · SND phone→watch (+ ok, ! fail) · W-SKIP watch skipped<br>' +
-    'C+/C- phone fetch cache · API Open-Meteo · GEO/GPS location · reopen settings to refresh</div>';
+    '<div class="argus-wlog-legend">REQ watch request · SND phone→watch · W-SKIP watch skipped<br>' +
+    'C+/C- cache (expired/pos change/settings) · API Open-Meteo · GPS fix age · reopen settings to refresh</div>';
 
   return legend + '<div class="argus-weather-log">' + lines.join('') + '</div>';
 }
@@ -117,11 +117,19 @@ function formatAgeMs(ms) {
   return Math.round(ms / 60000) + 'm';
 }
 
+function formatAgeMinutes(ms) {
+  if (ms < 0) {
+    ms = 0;
+  }
+  return Math.round(ms / 60000) + 'm';
+}
+
 module.exports = {
   LOG_KEY: LOG_KEY,
   LOG_MAX: LOG_MAX,
   append: appendLog,
   read: readLog,
   formatAgeMs: formatAgeMs,
+  formatAgeMinutes: formatAgeMinutes,
   formatPanelHtml: formatPanelHtml,
 };
