@@ -6,6 +6,30 @@
 #include <string.h>
 #include <time.h>
 
+#define WEATHER_PERSIST_FLAG_IS_DAY 0x01
+#define WEATHER_PERSIST_FLAG_WIND 0x02
+#define WEATHER_PERSIST_FLAG_FEELS 0x04
+
+/* Compact meta blob — must stay under PERSIST_DATA_MAX_LENGTH (256). */
+typedef struct {
+  uint8_t version;
+  uint8_t state;
+  uint8_t hour_count;
+  uint8_t flags;
+  int8_t temp_min;
+  int8_t temp_max;
+  int8_t feels_temp_min;
+  int8_t feels_temp_max;
+  uint8_t precip_max;
+  uint8_t wind_max;
+  int32_t fetch_time;
+  int32_t cached_at;
+  int32_t api_fetched_at;
+  int32_t api_lat_e4;
+  int32_t api_lon_e4;
+  uint8_t status_flags;
+} WeatherPersistMeta;
+
 #define WEATHER_RETRY_BASE_MS (30 * 1000)
 #define WEATHER_RETRY_CAP_MS (30 * 60 * 1000)
 #define WEATHER_RESPONSE_TIMEOUT_MS (30 * 1000)
@@ -415,6 +439,166 @@ static void prv_sanitize_persisted_weather(void) {
   }
 }
 
+static void prv_persist_delete_all(void) {
+  persist_delete(WEATHER_PERSIST_KEY_META);
+  persist_delete(WEATHER_PERSIST_KEY_TEMPS);
+  persist_delete(WEATHER_PERSIST_KEY_FEELS);
+  persist_delete(WEATHER_PERSIST_KEY_PRECIP);
+  persist_delete(WEATHER_PERSIST_KEY_WIND);
+  persist_delete(WEATHER_PERSIST_KEY_IS_DAY);
+}
+
+static bool prv_persist_write_blob(uint32_t key, const void *data, size_t size) {
+  if (size == 0 || size > PERSIST_DATA_MAX_LENGTH) {
+    return false;
+  }
+  int written = persist_write_data(key, data, size);
+  return written == (int)size;
+}
+
+static void prv_persist_save(void) {
+  if (s_weather.hour_count == 0 || s_weather.hour_count > WEATHER_MAX_HOURS) {
+    prv_persist_delete_all();
+    return;
+  }
+
+  WeatherPersistMeta meta;
+  memset(&meta, 0, sizeof(meta));
+  meta.version = WEATHER_PERSIST_VERSION;
+  meta.state = (uint8_t)s_weather.state;
+  meta.hour_count = s_weather.hour_count;
+  meta.flags = 0;
+  if (s_weather.has_is_day) {
+    meta.flags |= WEATHER_PERSIST_FLAG_IS_DAY;
+  }
+  if (s_weather.has_wind) {
+    meta.flags |= WEATHER_PERSIST_FLAG_WIND;
+  }
+  if (s_weather.has_feels_temps) {
+    meta.flags |= WEATHER_PERSIST_FLAG_FEELS;
+  }
+  meta.temp_min = s_weather.temp_min;
+  meta.temp_max = s_weather.temp_max;
+  meta.feels_temp_min = s_weather.feels_temp_min;
+  meta.feels_temp_max = s_weather.feels_temp_max;
+  meta.precip_max = s_weather.precip_max;
+  meta.wind_max = s_weather.wind_max;
+  meta.fetch_time = (int32_t)s_weather.fetch_time;
+  meta.cached_at = (int32_t)s_weather.cached_at;
+  meta.api_fetched_at = (int32_t)s_weather.api_fetched_at;
+  meta.api_lat_e4 = s_weather.api_lat_e4;
+  meta.api_lon_e4 = s_weather.api_lon_e4;
+  meta.status_flags = s_weather.status_flags;
+
+  uint8_t count = s_weather.hour_count;
+  bool ok = prv_persist_write_blob(WEATHER_PERSIST_KEY_META, &meta, sizeof(meta));
+  ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_TEMPS, s_weather.temps, count);
+  ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_PRECIP, s_weather.precips, count);
+
+  if (s_weather.has_feels_temps) {
+    ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_FEELS, s_weather.feels_temps, count);
+  } else {
+    persist_delete(WEATHER_PERSIST_KEY_FEELS);
+  }
+  if (s_weather.has_wind) {
+    ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_WIND, s_weather.winds, count);
+  } else {
+    persist_delete(WEATHER_PERSIST_KEY_WIND);
+  }
+  if (s_weather.has_is_day) {
+    ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_IS_DAY, s_weather.is_day, count);
+  } else {
+    persist_delete(WEATHER_PERSIST_KEY_IS_DAY);
+  }
+
+  if (!ok) {
+    APP_LOG(APP_LOG_LEVEL_WARNING, "Weather persist write failed");
+    prv_persist_delete_all();
+  }
+}
+
+static bool prv_persist_load(void) {
+  if (!persist_exists(WEATHER_PERSIST_KEY_META)) {
+    return false;
+  }
+  if (persist_get_size(WEATHER_PERSIST_KEY_META) != sizeof(WeatherPersistMeta)) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Weather persist size mismatch — starting fresh");
+    prv_persist_delete_all();
+    return false;
+  }
+
+  WeatherPersistMeta meta;
+  if (persist_read_data(WEATHER_PERSIST_KEY_META, &meta, sizeof(meta)) != (int)sizeof(meta)) {
+    prv_persist_delete_all();
+    return false;
+  }
+  if (meta.version != WEATHER_PERSIST_VERSION || meta.hour_count == 0 ||
+      meta.hour_count > WEATHER_MAX_HOURS) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Weather persist version/count invalid — starting fresh");
+    prv_persist_delete_all();
+    return false;
+  }
+
+  uint8_t count = meta.hour_count;
+  if (persist_get_size(WEATHER_PERSIST_KEY_TEMPS) != count ||
+      persist_get_size(WEATHER_PERSIST_KEY_PRECIP) != count) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Weather persist arrays incomplete — starting fresh");
+    prv_persist_delete_all();
+    return false;
+  }
+
+  memset(&s_weather, 0, sizeof(s_weather));
+  memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
+  s_weather.version = meta.version;
+  s_weather.state = (WeatherState)meta.state;
+  s_weather.hour_count = count;
+  s_weather.has_is_day = (meta.flags & WEATHER_PERSIST_FLAG_IS_DAY) != 0;
+  s_weather.has_wind = (meta.flags & WEATHER_PERSIST_FLAG_WIND) != 0;
+  s_weather.has_feels_temps = (meta.flags & WEATHER_PERSIST_FLAG_FEELS) != 0;
+  s_weather.temp_min = meta.temp_min;
+  s_weather.temp_max = meta.temp_max;
+  s_weather.feels_temp_min = meta.feels_temp_min;
+  s_weather.feels_temp_max = meta.feels_temp_max;
+  s_weather.precip_max = meta.precip_max;
+  s_weather.wind_max = meta.wind_max;
+  s_weather.fetch_time = (time_t)meta.fetch_time;
+  s_weather.cached_at = (time_t)meta.cached_at;
+  s_weather.api_fetched_at = (time_t)meta.api_fetched_at;
+  s_weather.api_lat_e4 = meta.api_lat_e4;
+  s_weather.api_lon_e4 = meta.api_lon_e4;
+  s_weather.status_flags = meta.status_flags;
+
+  if (persist_read_data(WEATHER_PERSIST_KEY_TEMPS, s_weather.temps, count) != (int)count ||
+      persist_read_data(WEATHER_PERSIST_KEY_PRECIP, s_weather.precips, count) != (int)count) {
+    prv_persist_delete_all();
+    memset(&s_weather, 0, sizeof(s_weather));
+    return false;
+  }
+
+  if (s_weather.has_feels_temps) {
+    if (persist_get_size(WEATHER_PERSIST_KEY_FEELS) != count ||
+        persist_read_data(WEATHER_PERSIST_KEY_FEELS, s_weather.feels_temps, count) != (int)count) {
+      s_weather.has_feels_temps = false;
+    }
+  }
+  if (s_weather.has_wind) {
+    if (persist_get_size(WEATHER_PERSIST_KEY_WIND) != count ||
+        persist_read_data(WEATHER_PERSIST_KEY_WIND, s_weather.winds, count) != (int)count) {
+      s_weather.has_wind = false;
+    }
+  }
+  if (s_weather.has_is_day) {
+    if (persist_get_size(WEATHER_PERSIST_KEY_IS_DAY) != count ||
+        persist_read_data(WEATHER_PERSIST_KEY_IS_DAY, s_weather.is_day, count) != (int)count) {
+      s_weather.has_is_day = false;
+      memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
+    }
+  }
+
+  prv_sanitize_persisted_weather();
+  return s_weather.hour_count > 0;
+}
+
 static void prv_reset_retry_backoff(void) {
   s_retry_delay_ms = 0;
 }
@@ -572,32 +756,19 @@ void weather_init(void) {
   s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.state = WEATHER_STATE_LOADING;
   memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
-  if (persist_exists(WEATHER_PERSIST_KEY)) {
-    if (persist_get_size(WEATHER_PERSIST_KEY) != sizeof(WeatherData)) {
-      APP_LOG(APP_LOG_LEVEL_INFO, "Weather persist size mismatch — starting fresh");
-    } else {
-      persist_read_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
-      if (s_weather.version != WEATHER_PERSIST_VERSION) {
-        APP_LOG(APP_LOG_LEVEL_INFO, "Weather persist version mismatch — starting fresh");
-        memset(&s_weather, 0, sizeof(s_weather));
-        s_weather.version = WEATHER_PERSIST_VERSION;
-        s_weather.state = WEATHER_STATE_LOADING;
-        memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
-      } else {
-        prv_sanitize_persisted_weather();
-        if (s_weather.hour_count > 0 && !s_weather.has_is_day) {
-          memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
-        }
-        if (s_weather.api_fetched_at == 0 && s_weather.cached_at > 0) {
-          s_weather.api_fetched_at = s_weather.cached_at;
-        }
-        prv_sync_ready_state_from_view();
-        weather_slide_stale_hours();
-        if (s_weather.cached_at == 0 && s_weather.hour_count > 0 && s_weather.state == WEATHER_STATE_READY) {
-          s_weather.cached_at = argus_time_now();
-          persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
-        }
-      }
+
+  if (prv_persist_load()) {
+    if (s_weather.hour_count > 0 && !s_weather.has_is_day) {
+      memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
+    }
+    if (s_weather.api_fetched_at == 0 && s_weather.cached_at > 0) {
+      s_weather.api_fetched_at = s_weather.cached_at;
+    }
+    prv_sync_ready_state_from_view();
+    weather_slide_stale_hours();
+    if (s_weather.cached_at == 0 && s_weather.hour_count > 0 && s_weather.state == WEATHER_STATE_READY) {
+      s_weather.cached_at = argus_time_now();
+      prv_persist_save();
     }
   }
 
@@ -729,7 +900,7 @@ void weather_apply_demo_data(void) {
   s_weather.api_lon_e4 = 0;
   s_weather.status_flags = 0;
   s_weather.state = WEATHER_STATE_READY;
-  persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+  prv_persist_save();
   prv_reset_retry_backoff();
   prv_cancel_timers();
   prv_notify_updated();
@@ -882,7 +1053,7 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   }
   s_weather.state = WEATHER_STATE_READY;
   s_last_weather_request_at = 0;
-  persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+  prv_persist_save();
   prv_reset_retry_backoff();
   prv_cancel_timers();
   prv_notify_updated();
