@@ -75,6 +75,7 @@
       "WeatherIsDayHourly",
       "WindMax",
       "HeaderDisplay",
+      "FullDateFormat",
       "RealtimeSteps",
       "CaptureTimeOffset",
       "WeatherForEpoch",

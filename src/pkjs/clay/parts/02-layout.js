@@ -10,6 +10,7 @@
   ];
   var LIST_RADIO_KEYS = [
     'HeaderDisplay',
+    'FullDateFormat',
     'ClockFont',
     'RealtimeSteps',
     'WeatherProvider',

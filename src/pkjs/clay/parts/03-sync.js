@@ -67,6 +67,21 @@
     }
   }
 
+  function syncFullDateFormatVisibility() {
+    var headerDisplay = clayConfig.getItemByMessageKey('HeaderDisplay');
+    var fullDateFormat = clayConfig.getItemByMessageKey('FullDateFormat');
+
+    if (!headerDisplay || !fullDateFormat || !fullDateFormat.$element || !fullDateFormat.$element[0]) {
+      return;
+    }
+
+    if (headerDisplay.get() === '0') {
+      fullDateFormat.$element[0].classList.remove('hide');
+    } else {
+      fullDateFormat.$element[0].classList.add('hide');
+    }
+  }
+
   function persistClaySetting(key, value) {
     try {
       if (typeof window !== 'undefined') {
