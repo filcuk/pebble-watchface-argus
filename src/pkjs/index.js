@@ -415,10 +415,10 @@ var WEATHER_REQ_KINDS = {
 };
 
 var WEATHER_WATCH_SKIP_LABELS = {
-  '1': 'night pause',
-  '2': 'offline+cache',
-  '3': 'offline no data',
-  '4': 'throttle 60s',
+  '1': 'watch night pause',
+  '2': 'watch offline+cache',
+  '3': 'watch offline no data',
+  '4': 'watch throttle 60s',
 };
 
 var LAST_GPS_FIX_KEY = 'argus-last-gps-fix';
@@ -525,7 +525,7 @@ function wlogGpsPosition(pos) {
   var nowMs = Date.now();
   writeLastGpsFix(latitude, longitude, fixTime || nowMs);
   var ageLabel = fixTime != null ? weatherDebugLog.formatAgeMs(nowMs - fixTime) : '?';
-  wlog('GPS', latitude.toFixed(2) + ',' + longitude.toFixed(2) + ' fix ' + ageLabel);
+  wlog('GPS', latitude.toFixed(2) + ',' + longitude.toFixed(2) + ' ' + ageLabel);
 }
 
 function wlogWeatherRequestKind(kind, reqDetail) {
@@ -542,8 +542,8 @@ function wlogWeatherRequestKind(kind, reqDetail) {
 }
 
 function wlogWeatherWatchSkip(code) {
-  var label = WEATHER_WATCH_SKIP_LABELS[String(code)] || 'code ' + code;
-  wlog('W-SKIP', label);
+  var label = WEATHER_WATCH_SKIP_LABELS[String(code)] || 'watch code ' + code;
+  wlog('SKIP', label);
 }
 
 function prepareClayUserData() {
@@ -924,7 +924,7 @@ function sendWeatherPayload(payload, sendMeta, sendOptions) {
     dict,
     function () {
       console.log('Weather sent to watch (' + payload.count + 'h)');
-      wlog('SND+', payload.count + 'h');
+      wlog('SND+', '');
       if (!sendOptions.keepInFlight) {
         clearWeatherFetchInFlight();
       }
@@ -1014,10 +1014,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
       ',' +
       quantizeCoord(longitude).toFixed(2) +
       ' ' +
-      (model || 'auto') +
-      ' ' +
-      hours +
-      'h'
+      (model || 'auto')
   );
 
   xhrRequest(url, function (responseText) {
@@ -1049,7 +1046,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
         payload: payload,
       };
       writeWeatherFetchCache(cacheEntry);
-      wlog('API+', payload.count + 'h ' + (model || 'auto'));
+      wlog('API+', model || 'auto');
       resetWeatherRetryBackoff();
       sendWeatherPayload(payload, buildSendMeta(latitude, longitude, cacheEntry, 0));
     } catch (e) {

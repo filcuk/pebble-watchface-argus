@@ -29,7 +29,7 @@ function entryClass(tag) {
   if (tag === 'C+' || tag === 'GEO+' || tag === 'NIGHT') {
     return 'argus-wlog-cache';
   }
-  if (tag === 'C-' || tag === 'SKIP' || tag === 'STALE' || tag === 'W-SKIP' || tag === 'RETRY') {
+  if (tag === 'C-' || tag === 'SKIP' || tag === 'STALE' || tag === 'RETRY') {
     return 'argus-wlog-warn';
   }
   return 'argus-wlog-ok';
@@ -62,8 +62,9 @@ function formatPanelHtml(entries) {
   }
 
   var legend =
-    '<div class="argus-wlog-legend">REQ watch request · SND phone→watch · W-SKIP watch skipped<br>' +
-    'C+/C- cache · API Open-Meteo · RETRY phone backoff · GPS fix age · reopen settings to refresh</div>';
+    '<div class="argus-wlog-legend">REQ watch request · SND phone send · SKIP skip<br>' +
+    'C cache · API Open-Meteo · RETRY phone backoff · GPS fix<br>' + 
+    'reopen settings to refresh</div>';
 
   return legend + '<div class="argus-weather-log">' + lines.join('') + '</div>';
 }
