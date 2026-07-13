@@ -201,6 +201,21 @@ module.exports = [
     ],
   },
   {
+    type: 'radiogroup',
+    messageKey: 'FullDateFormat',
+    label: 'Date format',
+    description: 'How the full date is shown in the header.',
+    group: 'tabDisplay',
+    defaultValue: '0',
+    options: [
+      { label: 'd mmm yyyy', value: '0' },
+      { label: 'mmm d yyyy', value: '1' },
+      { label: 'dd-mm-yyyy', value: '2' },
+      { label: 'mm-dd-yyyy', value: '3' },
+      { label: 'yyyy-mm-dd', value: '4' },
+    ],
+  },
+  {
     type: 'text',
     id: 'argus-header-display-help',
     group: 'tabDisplay',

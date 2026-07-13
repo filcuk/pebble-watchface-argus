@@ -4,8 +4,7 @@
 version = "1.2.0"
 
 message = """
-Public holidays are now available on the calendar. 
-Weather chart chaching and persistance were improved.
+Weather chart loading was improved, and public holidays are now available on the calendar. 
 
 Thanks for your patronage <3
 """

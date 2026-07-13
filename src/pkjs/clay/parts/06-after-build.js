@@ -42,6 +42,12 @@
       locationMode.on('change', syncManualLocationInput);
     }
 
+    syncFullDateFormatVisibility();
+    var headerDisplay = clayConfig.getItemByMessageKey('HeaderDisplay');
+    if (headerDisplay) {
+      headerDisplay.on('change', syncFullDateFormatVisibility);
+    }
+
     loadHolidayCountries(function () {
       refreshHolidayCountryDropdown();
       resolveHolidayDefaults();

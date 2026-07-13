@@ -3,7 +3,7 @@
 #include <pebble.h>
 
 #define SETTINGS_PERSIST_KEY 2
-#define SETTINGS_PERSIST_VERSION 8
+#define SETTINGS_PERSIST_VERSION 9
 
 typedef enum {
   HOUR_FORMAT_SYSTEM = 0,
@@ -44,6 +44,14 @@ typedef enum {
 } HeaderDisplayMode;
 
 typedef enum {
+  FULL_DATE_FORMAT_D_MMM_YYYY = 0,
+  FULL_DATE_FORMAT_MMM_D_YYYY = 1,
+  FULL_DATE_FORMAT_DD_MM_YYYY = 2,
+  FULL_DATE_FORMAT_MM_DD_YYYY = 3,
+  FULL_DATE_FORMAT_YYYY_MM_DD = 4,
+} FullDateFormat;
+
+typedef enum {
   CLOCK_FONT_LECO = 0,
   CLOCK_FONT_ROBOTO = 1,
   CLOCK_FONT_BITHAM_BOLD = 2,
@@ -74,6 +82,7 @@ typedef struct {
   BluetoothDisplay bluetooth_display;
   LocationMode location_mode;
   HeaderDisplayMode header_display_mode;
+  FullDateFormat full_date_format;
   char manual_location[48];
   uint8_t forecast_hours;
   bool temperature_fahrenheit;

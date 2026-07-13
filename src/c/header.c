@@ -115,9 +115,34 @@ static void prv_heart_rate_readings(HeartRateReadings *out) {
 #endif
 
 static void prv_format_full_date(char *buffer, size_t len, struct tm *now) {
-  static char month_buf[8];
-  strftime(month_buf, sizeof(month_buf), "%b", now);
-  snprintf(buffer, len, "%d %s %d", now->tm_mday, month_buf, now->tm_year + 1900);
+  uint16_t year = (uint16_t)(now->tm_year + 1900);
+  uint8_t month = (uint8_t)(now->tm_mon + 1);
+  uint8_t day = (uint8_t)now->tm_mday;
+
+  switch (settings_get()->full_date_format) {
+    case FULL_DATE_FORMAT_MMM_D_YYYY: {
+      char month_buf[8];
+      strftime(month_buf, sizeof(month_buf), "%b", now);
+      snprintf(buffer, len, "%s %u %u", month_buf, (unsigned)day, (unsigned)year);
+      break;
+    }
+    case FULL_DATE_FORMAT_DD_MM_YYYY:
+      snprintf(buffer, len, "%02u-%02u-%u", (unsigned)day, (unsigned)month, (unsigned)year);
+      break;
+    case FULL_DATE_FORMAT_MM_DD_YYYY:
+      snprintf(buffer, len, "%02u-%02u-%u", (unsigned)month, (unsigned)day, (unsigned)year);
+      break;
+    case FULL_DATE_FORMAT_YYYY_MM_DD:
+      snprintf(buffer, len, "%u-%02u-%02u", (unsigned)year, (unsigned)month, (unsigned)day);
+      break;
+    case FULL_DATE_FORMAT_D_MMM_YYYY:
+    default: {
+      char month_buf[8];
+      strftime(month_buf, sizeof(month_buf), "%b", now);
+      snprintf(buffer, len, "%u %s %u", (unsigned)day, month_buf, (unsigned)year);
+      break;
+    }
+  }
 }
 
 static void prv_format_steps(char *buffer, size_t len, int *steps_out) {
