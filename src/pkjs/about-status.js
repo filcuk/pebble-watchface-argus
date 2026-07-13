@@ -234,7 +234,7 @@ function sunTimesLineHtml(cache, gps) {
   if (times.sundown) {
     parts.push('Sunset ' + escapeHtml(times.sundown));
   }
-  return '<p class="argus-about-line">' + parts.join(' · ') + '</p>';
+  return '<p class="argus-about-muted argus-about-line">' + parts.join(' · ') + '</p>';
 }
 
 function cacheApiFetchedAt(cache) {
@@ -278,6 +278,18 @@ function weatherSectionHtml(options) {
 
   lines.push('<div class="argus-setting-label">Weather</div>');
 
+  if (locationPending(cache, gps)) {
+    lines.push(
+      '<p class="argus-about-note argus-about-critical">Location changed since last weather update.</p>'
+    );
+  }
+
+  if (options.pauseAtNight) {
+    lines.push(
+      '<p class="argus-about-note">Weather updates paused - nighttime setting.</p>'
+    );
+  }
+
   if (!apiMs) {
     lines.push('<p class="argus-about-line">No weather fetch yet.</p>');
   } else {
@@ -309,28 +321,6 @@ function weatherSectionHtml(options) {
     }
   }
 
-  if (locationPending(cache, gps)) {
-    lines.push(
-      '<p class="argus-about-note argus-about-critical">Location changed since last weather update.</p>'
-    );
-  }
-
-  if (options.pauseAtNight) {
-    lines.push(
-      '<p class="argus-about-note">Weather updates are set to pause during the night.</p>'
-    );
-  }
-
-  if (cache && cache.latQ != null && cache.lonQ != null) {
-    lines.push(
-      '<p class="argus-about-muted">Forecast for ' +
-        escapeHtml(Number(cache.latQ).toFixed(2)) +
-        ', ' +
-        escapeHtml(Number(cache.lonQ).toFixed(2)) +
-        '</p>'
-    );
-  }
-
   var sunLine = sunTimesLineHtml(cache, gps);
   if (sunLine) {
     lines.push(sunLine);
@@ -346,18 +336,36 @@ function weatherSectionHtml(options) {
   return '<div class="argus-about-section">' + lines.join('') + '</div>';
 }
 
+function forecastCoordsLineHtml(cache) {
+  if (!cache || cache.latQ == null || cache.lonQ == null) {
+    return '';
+  }
+  return (
+    '<p class="argus-about-muted">' +
+    escapeHtml(Number(cache.latQ).toFixed(2)) +
+    ', ' +
+    escapeHtml(Number(cache.lonQ).toFixed(2)) +
+    '</p>'
+  );
+}
+
 function gpsSectionHtml(options) {
   var gps = readJson(LAST_GPS_FIX_KEY);
+  var cache = readJson(WEATHER_FETCH_CACHE_KEY);
   var lines = [];
   lines.push('<div class="argus-setting-label">GPS</div>');
 
   if (options.locationMode === 'manual') {
     var city = (options.manualLocation || '').trim();
     lines.push(
-      '<p class="argus-about-line">Manual location mode: ' +
+      '<p class="argus-about-line">Manual location: ' +
         escapeHtml(city || '—') +
         '</p>'
     );
+    var manualCoords = forecastCoordsLineHtml(cache);
+    if (manualCoords) {
+      lines.push(manualCoords);
+    }
   } else if (!gps || !gps.t) {
     lines.push('<p class="argus-about-line">No GPS fix stored yet.</p>');
   } else {
