@@ -111,6 +111,12 @@ function appendLog(tag, msg) {
 }
 
 function formatAgeMs(ms) {
+  if (!isFinite(ms)) {
+    return '?';
+  }
+  if (ms < 0) {
+    ms = 0;
+  }
   if (ms < 60000) {
     return Math.round(ms / 1000) + 's';
   }

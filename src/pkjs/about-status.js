@@ -164,7 +164,7 @@ function gpsSectionHtml(options) {
       '<p class="argus-about-line">Last fix ' +
         escapeHtml(formatClock(gps.t)) +
         ' · ' +
-        escapeHtml(weatherDebugLog.formatAgeMinutes(Date.now() - gps.t)) +
+        escapeHtml(weatherDebugLog.formatAgeMs(Date.now() - gps.t)) +
         ' ago</p>'
     );
     if (gps.lat != null && gps.lon != null) {

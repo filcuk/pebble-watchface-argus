@@ -496,19 +496,36 @@ function writeLastGpsFix(latitude, longitude, timestamp) {
   }
 }
 
+function normalizeGpsTimestamp(pos) {
+  var raw = pos && pos.timestamp;
+  if ((raw === undefined || raw === null) && pos && pos.coords) {
+    raw = pos.coords.timestamp;
+  }
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+  if (typeof raw === 'object' && typeof raw.getTime === 'function') {
+    raw = raw.getTime();
+  }
+  var n = Number(raw);
+  if (!isFinite(n) || n <= 0) {
+    return null;
+  }
+  /* Some WebViews report seconds since epoch instead of ms. */
+  if (n < 1e12) {
+    n *= 1000;
+  }
+  return n;
+}
+
 function wlogGpsPosition(pos) {
   var latitude = quantizeCoord(pos.coords.latitude);
   var longitude = quantizeCoord(pos.coords.longitude);
-  var fixTime = pos.timestamp || Date.now();
-  writeLastGpsFix(latitude, longitude, fixTime);
-  wlog(
-    'GPS',
-    latitude.toFixed(2) +
-      ',' +
-      longitude.toFixed(2) +
-      ' fix ' +
-      weatherDebugLog.formatAgeMinutes(Date.now() - fixTime)
-  );
+  var fixTime = normalizeGpsTimestamp(pos);
+  var nowMs = Date.now();
+  writeLastGpsFix(latitude, longitude, fixTime || nowMs);
+  var ageLabel = fixTime != null ? weatherDebugLog.formatAgeMs(nowMs - fixTime) : '?';
+  wlog('GPS', latitude.toFixed(2) + ',' + longitude.toFixed(2) + ' fix ' + ageLabel);
 }
 
 function wlogWeatherRequestKind(kind, reqDetail) {
