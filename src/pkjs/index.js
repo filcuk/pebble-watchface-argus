@@ -776,6 +776,17 @@ function hourStartEpoch(epochSeconds) {
   return Math.floor(d.getTime() / 1000);
 }
 
+function extractDailySunTimes(json) {
+  var daily = json && json.daily;
+  if (!daily || !daily.sunrise || !daily.sunset) {
+    return null;
+  }
+  return {
+    sunrise: daily.sunrise.slice(),
+    sunset: daily.sunset.slice(),
+  };
+}
+
 function packWeatherPayload(json, hours, startEpoch) {
   var times = json.hourly.time || [];
   var temps = json.hourly.temperature_2m;
@@ -1018,7 +1029,8 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
     quantizeCoord(latitude) +
     '&longitude=' +
     quantizeCoord(longitude) +
-    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day&timezone=auto';
+    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day' +
+    '&daily=sunrise,sunset&timezone=auto';
 
   if (model) {
     url += '&models=' + encodeURIComponent(model);
@@ -1063,6 +1075,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
         return;
       }
       var nowMs = Date.now();
+      var sunTimes = extractDailySunTimes(json);
       var cacheEntry = {
         key: weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch),
         fetchedAt: nowMs,
@@ -1072,8 +1085,14 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
         fetchTime: payload.fetchTime,
         count: payload.count,
         isDayBytes: payload.isDayBytes,
+        utcOffsetSeconds:
+          typeof json.utc_offset_seconds === 'number' ? json.utc_offset_seconds : 0,
         payload: payload,
       };
+      if (sunTimes) {
+        cacheEntry.dailySunrise = sunTimes.sunrise;
+        cacheEntry.dailySunset = sunTimes.sunset;
+      }
       writeWeatherFetchCache(cacheEntry);
       wlog('API+', model || 'auto');
       resetWeatherRetryBackoff();
