@@ -483,16 +483,13 @@ void header_update(Header *header, struct tm *now) {
       new_text[sizeof(new_text) - 1] = '\0';
       break;
     case HEADER_DISPLAY_TEMP_RANGE: {
-      const WeatherData *data = weather_get();
-      if (data && data->state == WEATHER_STATE_READY) {
-        WeatherView view;
-        weather_get_view(&view);
-        if (weather_view_has_data(&view)) {
-          temp_ready = true;
-          temp_current = formatting_display_temp(weather_display_temp_at(view.start_index));
-          temp_min = formatting_display_temp(weather_display_temp_min_for_view(&view));
-          temp_max = formatting_display_temp(weather_display_temp_max_for_view(&view));
-        }
+      WeatherView view;
+      weather_get_view(&view);
+      if (weather_view_has_data(&view)) {
+        temp_ready = true;
+        temp_current = formatting_display_temp(weather_display_temp_at(view.start_index));
+        temp_min = formatting_display_temp(weather_display_temp_min_for_view(&view));
+        temp_max = formatting_display_temp(weather_display_temp_max_for_view(&view));
       }
       break;
     }

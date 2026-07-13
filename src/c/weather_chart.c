@@ -673,11 +673,6 @@ static void prv_plot_layer_update_proc(Layer *layer, GContext *ctx) {
   }
 
   WeatherData *data = weather_get();
-  if (data->state == WEATHER_STATE_LOADING || data->state == WEATHER_STATE_ERROR ||
-      data->state == WEATHER_STATE_UNAVAILABLE) {
-    return;
-  }
-
   WeatherView view;
   weather_get_view(&view);
   if (!weather_view_has_data(&view)) {
@@ -731,30 +726,17 @@ static void prv_decor_layer_update_proc(Layer *layer, GContext *ctx) {
 
   GRect bounds = layer_get_bounds(layer);
   WeatherData *data = weather_get();
-
-  graphics_context_set_text_color(ctx, CHART_STATUS_TEXT_COLOR);
-  if (data->state == WEATHER_STATE_LOADING) {
-    graphics_draw_text(ctx, "Loading weather...", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    return;
-  }
-
-  if (data->state == WEATHER_STATE_UNAVAILABLE) {
-    graphics_draw_text(ctx, "Weather unavailable", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    return;
-  }
-
   WeatherView view;
   weather_get_view(&view);
-  if (data->state == WEATHER_STATE_ERROR) {
-    graphics_draw_text(ctx, "No weather data", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    return;
-  }
 
+  graphics_context_set_text_color(ctx, CHART_STATUS_TEXT_COLOR);
   if (!weather_view_has_data(&view)) {
-    graphics_draw_text(ctx, "Loading weather...", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
+    if (data->hour_count == 0) {
+      graphics_draw_text(ctx, "Loading weather...", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
+                         GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+      return;
+    }
+    graphics_draw_text(ctx, "No weather data", fonts_get_system_font(FONT_KEY_GOTHIC_18), bounds,
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }

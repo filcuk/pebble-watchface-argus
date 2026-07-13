@@ -223,7 +223,7 @@ void weather_get_view(WeatherView *view) {
   view->start_index = 0;
   view->hour_count = 0;
 
-  if (s_weather.state != WEATHER_STATE_READY || s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
+  if (s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
     return;
   }
 
@@ -333,6 +333,73 @@ static bool prv_should_pause_periodic_refresh(void) {
   return weather_is_night_now();
 }
 
+bool weather_is_night_pause_active(void) {
+  return prv_should_pause_periodic_refresh();
+}
+
+static uint8_t prv_weather_update_interval_minutes(void) {
+  uint8_t minutes = settings_get()->weather_update_interval_min;
+  if (minutes != WEATHER_UPDATE_INTERVAL_5_MIN && minutes != WEATHER_UPDATE_INTERVAL_15_MIN &&
+      minutes != WEATHER_UPDATE_INTERVAL_30_MIN && minutes != WEATHER_UPDATE_INTERVAL_60_MIN &&
+      minutes != WEATHER_UPDATE_INTERVAL_120_MIN && minutes != WEATHER_UPDATE_INTERVAL_180_MIN) {
+    return WEATHER_UPDATE_INTERVAL_60_MIN;
+  }
+  return minutes;
+}
+
+static time_t prv_update_interval_seconds(void) {
+  return (time_t)prv_weather_update_interval_minutes() * 60;
+}
+
+bool weather_is_refresh_due(void) {
+  if (weather_use_demo_data()) {
+    return false;
+  }
+  if (s_weather.api_fetched_at <= 0) {
+    return s_weather.hour_count == 0;
+  }
+  return (argus_time_now() - s_weather.api_fetched_at) >= prv_update_interval_seconds();
+}
+
+WeatherFreshness weather_get_freshness(void) {
+  if (weather_use_demo_data()) {
+    return WEATHER_FRESHNESS_OK;
+  }
+  if (s_weather.status_flags & WEATHER_STATUS_LOCATION_PENDING) {
+    return WEATHER_FRESHNESS_CRITICAL;
+  }
+  if (s_weather.api_fetched_at <= 0) {
+    if (s_weather.hour_count > 0) {
+      return WEATHER_FRESHNESS_STALE;
+    }
+    return WEATHER_FRESHNESS_OK;
+  }
+
+  time_t age = argus_time_now() - s_weather.api_fetched_at;
+  time_t interval_s = prv_update_interval_seconds();
+  if (age > interval_s * 3) {
+    return WEATHER_FRESHNESS_CRITICAL;
+  }
+  if (age > interval_s) {
+    return WEATHER_FRESHNESS_STALE;
+  }
+  return WEATHER_FRESHNESS_OK;
+}
+
+static void prv_sync_ready_state_from_view(void) {
+  WeatherView view;
+  weather_get_view(&view);
+  if (weather_view_has_data(&view)) {
+    if (s_weather.state != WEATHER_STATE_READY) {
+      s_weather.state = WEATHER_STATE_READY;
+    }
+    return;
+  }
+  if (s_weather.hour_count == 0 && s_weather.state == WEATHER_STATE_READY) {
+    s_weather.state = WEATHER_STATE_LOADING;
+  }
+}
+
 static void prv_sanitize_persisted_weather(void) {
   if (s_weather.hour_count > WEATHER_MAX_HOURS) {
     s_weather.hour_count = 0;
@@ -372,7 +439,9 @@ static void prv_timeout_callback(void *context) {
     return;
   }
 
-  if (weather_cache_is_valid()) {
+  WeatherView view;
+  weather_get_view(&view);
+  if (weather_view_has_data(&view) || weather_cache_is_valid()) {
     APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — keeping cached forecast");
     s_weather.state = WEATHER_STATE_READY;
     prv_cancel_timers();
@@ -469,6 +538,10 @@ void weather_init(void) {
         if (s_weather.hour_count > 0 && !s_weather.has_is_day) {
           memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
         }
+        if (s_weather.api_fetched_at == 0 && s_weather.cached_at > 0) {
+          s_weather.api_fetched_at = s_weather.cached_at;
+        }
+        prv_sync_ready_state_from_view();
         weather_slide_stale_hours();
         if (s_weather.cached_at == 0 && s_weather.hour_count > 0 && s_weather.state == WEATHER_STATE_READY) {
           s_weather.cached_at = argus_time_now();
@@ -478,12 +551,14 @@ void weather_init(void) {
     }
   }
 
+  prv_sync_ready_state_from_view();
+
   if (!connection_service_peek_pebble_app_connection()) {
     weather_refresh_for_connection(false);
   } else {
     WeatherView view;
     weather_get_view(&view);
-    if (!weather_view_has_data(&view) && s_weather.state == WEATHER_STATE_READY) {
+    if (!weather_view_has_data(&view) && s_weather.hour_count == 0) {
       prv_request_refresh(prv_current_hour_start());
     }
   }
@@ -494,6 +569,12 @@ WeatherData *weather_get(void) {
 }
 
 void weather_mark_error(void) {
+  WeatherView view;
+  weather_get_view(&view);
+  if (weather_view_has_data(&view)) {
+    return;
+  }
+
   s_weather.state = WEATHER_STATE_ERROR;
   prv_notify_updated();
 }
@@ -593,6 +674,10 @@ void weather_apply_demo_data(void) {
 
   s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.cached_at = argus_time_now();
+  s_weather.api_fetched_at = s_weather.cached_at;
+  s_weather.api_lat_e4 = 0;
+  s_weather.api_lon_e4 = 0;
+  s_weather.status_flags = 0;
   s_weather.state = WEATHER_STATE_READY;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
   prv_cancel_timers();
@@ -718,9 +803,32 @@ void weather_apply_from_message(DictionaryIterator *iter) {
     s_weather.fetch_time = (time_t)t->value->int32;
   }
 
+  t = dict_find(iter, MESSAGE_KEY_WeatherApiFetchedAt);
+  if (t) {
+    s_weather.api_fetched_at = (time_t)t->value->int32;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_WeatherApiLatE4);
+  if (t) {
+    s_weather.api_lat_e4 = t->value->int32;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_WeatherApiLonE4);
+  if (t) {
+    s_weather.api_lon_e4 = t->value->int32;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_WeatherStatusFlags);
+  if (t) {
+    s_weather.status_flags = (uint8_t)t->value->int32;
+  }
+
   s_weather.hour_count = count;
   s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.cached_at = argus_time_now();
+  if (s_weather.api_fetched_at <= 0) {
+    s_weather.api_fetched_at = s_weather.cached_at;
+  }
   s_weather.state = WEATHER_STATE_READY;
   s_last_weather_request_at = 0;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
@@ -780,8 +888,9 @@ static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
 
   time_t request_hour = when_hour > 0 ? when_hour : prv_current_hour_start();
   time_t now = argus_time_now();
-  if (s_weather.state == WEATHER_STATE_LOADING && s_last_weather_request_at > 0 &&
-      (now - s_last_weather_request_at) < 60) {
+  WeatherView view;
+  weather_get_view(&view);
+  if (s_last_weather_request_at > 0 && (now - s_last_weather_request_at) < 60 && weather_view_has_data(&view)) {
     prv_send_weather_debug_skip(WEATHER_DBG_THROTTLE);
     return;
   }
@@ -808,17 +917,8 @@ static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
     weather_schedule_retry();
     return;
   }
-  if (s_weather.hour_count == 0 || s_weather.state == WEATHER_STATE_ERROR ||
-      s_weather.state == WEATHER_STATE_UNAVAILABLE) {
-    if (!weather_cache_is_valid()) {
-      s_weather.state = WEATHER_STATE_LOADING;
-    }
-  } else {
-    WeatherView view;
-    weather_get_view(&view);
-    if (!weather_view_has_data(&view)) {
-      s_weather.state = WEATHER_STATE_LOADING;
-    }
+  if (!weather_view_has_data(&view) && s_weather.hour_count == 0 && !weather_cache_is_valid()) {
+    s_weather.state = WEATHER_STATE_LOADING;
   }
   weather_schedule_retry();
 }
@@ -829,8 +929,6 @@ void weather_request_for_time(time_t when_hour) {
 
 static void prv_request_refresh(time_t when_hour) {
   if (connection_service_peek_pebble_app_connection()) {
-    s_weather.state = WEATHER_STATE_LOADING;
-    prv_notify_updated();
     weather_request_for_time(when_hour);
   } else if (!weather_cache_is_valid()) {
     weather_mark_unavailable();
@@ -841,7 +939,7 @@ static void prv_request_refresh(time_t when_hour) {
 }
 
 void weather_slide_stale_hours(void) {
-  if (s_weather.state != WEATHER_STATE_READY || s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
+  if (s_weather.hour_count == 0 || s_weather.fetch_time <= 0) {
     return;
   }
 
@@ -864,14 +962,18 @@ void weather_request(void) {
     prv_send_weather_debug_skip(WEATHER_DBG_NIGHT_PAUSE);
     return;
   }
+
+  bool due = weather_is_refresh_due();
   if (!connection_service_peek_pebble_app_connection()) {
-    if (weather_cache_is_valid()) {
+    if (!due && weather_cache_is_valid()) {
       prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_CACHE);
       return;
     }
-    weather_mark_unavailable();
-    prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_NONE);
-    return;
+    if (!due && !weather_cache_is_valid()) {
+      weather_mark_unavailable();
+      prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_NONE);
+      return;
+    }
   }
   prv_send_weather_request(0, WEATHER_REQ_PERIODIC);
 }

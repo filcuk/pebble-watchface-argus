@@ -4,8 +4,9 @@
 
 #define WEATHER_MAX_HOURS 72
 #define WEATHER_PERSIST_KEY 3
-#define WEATHER_PERSIST_VERSION 2
+#define WEATHER_PERSIST_VERSION 3
 #define WEATHER_CACHE_MAX_AGE_S (12 * 3600)
+#define WEATHER_STATUS_LOCATION_PENDING 0x01
 
 typedef enum {
   WEATHER_STATE_LOADING = 0,
@@ -13,6 +14,12 @@ typedef enum {
   WEATHER_STATE_ERROR = 2,
   WEATHER_STATE_UNAVAILABLE = 3,
 } WeatherState;
+
+typedef enum {
+  WEATHER_FRESHNESS_OK = 0,
+  WEATHER_FRESHNESS_STALE = 1,
+  WEATHER_FRESHNESS_CRITICAL = 2,
+} WeatherFreshness;
 
 typedef struct {
   uint8_t version;
@@ -34,6 +41,10 @@ typedef struct {
   uint8_t wind_max;
   time_t fetch_time;
   time_t cached_at;
+  time_t api_fetched_at;
+  int32_t api_lat_e4;
+  int32_t api_lon_e4;
+  uint8_t status_flags;
 } WeatherData;
 
 typedef void (*WeatherUpdatedHandler)(void);
@@ -50,6 +61,9 @@ void weather_apply_demo_data(void);
 void weather_request(void);
 void weather_request_force(void);
 bool weather_is_night_now(void);
+bool weather_is_night_pause_active(void);
+bool weather_is_refresh_due(void);
+WeatherFreshness weather_get_freshness(void);
 void weather_mark_error(void);
 void weather_mark_unavailable(void);
 void weather_mark_fetch_failed(void);
