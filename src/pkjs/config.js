@@ -88,6 +88,12 @@ var realtimeStepsHelpHtml =
 
 module.exports = [
   {
+    type: 'text',
+    id: 'argus-about-status',
+    group: 'tabAbout',
+    defaultValue: '',
+  },
+  {
     type: 'radiogroup',
     messageKey: 'HourFormat',
     label: 'Time format',
@@ -282,12 +288,14 @@ module.exports = [
       'How often the watch requests fresh weather data from the phone. ' +
       'Shorter intervals keep data fresher but use more phone and watch battery.',
     group: 'tabWeather',
-    defaultValue: '30',
+    defaultValue: '60',
     options: [
       { label: '5 minutes', value: '5' },
       { label: '15 minutes', value: '15' },
       { label: '30 minutes', value: '30' },
       { label: '1 hour', value: '60' },
+      { label: '2 hours', value: '120' },
+      { label: '3 hours', value: '180' },
     ],
   },
   {

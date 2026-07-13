@@ -29,7 +29,7 @@ function entryClass(tag) {
   if (tag === 'C+' || tag === 'GEO+' || tag === 'NIGHT') {
     return 'argus-wlog-cache';
   }
-  if (tag === 'C-' || tag === 'SKIP' || tag === 'STALE' || tag === 'W-SKIP') {
+  if (tag === 'C-' || tag === 'SKIP' || tag === 'STALE' || tag === 'RETRY') {
     return 'argus-wlog-warn';
   }
   return 'argus-wlog-ok';
@@ -62,8 +62,9 @@ function formatPanelHtml(entries) {
   }
 
   var legend =
-    '<div class="argus-wlog-legend">REQ watch→phone (periodic/force/stale) · SND phone→watch (+ ok, ! fail) · W-SKIP watch skipped<br>' +
-    'C+/C- phone fetch cache · API Open-Meteo · GEO/GPS location · reopen settings to refresh</div>';
+    '<div class="argus-wlog-legend">REQ watch request · SND phone send · SKIP skip · ' +
+    'C cache · API Open-Meteo · RETRY phone backoff · GPS fix<br>' + 
+    'Reopen settings to refresh</div>';
 
   return legend + '<div class="argus-weather-log">' + lines.join('') + '</div>';
 }
@@ -111,8 +112,21 @@ function appendLog(tag, msg) {
 }
 
 function formatAgeMs(ms) {
+  if (!isFinite(ms)) {
+    return '?';
+  }
+  if (ms < 0) {
+    ms = 0;
+  }
   if (ms < 60000) {
     return Math.round(ms / 1000) + 's';
+  }
+  return Math.round(ms / 60000) + 'm';
+}
+
+function formatAgeMinutes(ms) {
+  if (ms < 0) {
+    ms = 0;
   }
   return Math.round(ms / 60000) + 'm';
 }
@@ -123,5 +137,6 @@ module.exports = {
   append: appendLog,
   read: readLog,
   formatAgeMs: formatAgeMs,
+  formatAgeMinutes: formatAgeMinutes,
   formatPanelHtml: formatPanelHtml,
 };

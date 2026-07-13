@@ -651,3 +651,63 @@ html.as .argus-wlog-legend {
   font-size: 10px;
   line-height: 1.35;
 }
+
+html.as .argus-about-row .description {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+html.as .argus-about {
+  color: #c5ccd6;
+  font-size: 13px;
+  line-height: 1.4;
+}
+html.as .argus-about-section {
+  margin: 0 0 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #2f353d;
+}
+html.as .argus-about-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+html.as .argus-about-section > .argus-setting-label {
+  margin-bottom: 0.4rem;
+}
+html.as .argus-about-line,
+html.as .argus-about-note,
+html.as .argus-about-muted {
+  margin: 0.2rem 0 0;
+  padding: 0;
+}
+html.as .argus-about-muted {
+  color: #7a8494;
+  font-size: 12px;
+}
+html.as .argus-about-icons-heading {
+  margin-top: 0.75rem;
+}
+html.as .argus-about-warn {
+  color: #d4b86a;
+}
+html.as .argus-about-critical {
+  color: #d07070;
+}
+html.as .argus-about-swatch {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.4em;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+html.as .argus-about-swatch-purple {
+  background: #9b59b6;
+}
+html.as .argus-about-swatch-orange {
+  background: #e67e22;
+}
+html.as .argus-about-swatch-red {
+  background: #e74c3c;
+}
+

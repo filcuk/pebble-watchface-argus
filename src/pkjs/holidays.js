@@ -93,8 +93,20 @@ function holidayApplies(holiday, regionCode) {
 
 function filterHolidayDates(holidays, regionCode) {
   var dates = [];
+  filterHolidayEntries(holidays, regionCode).forEach(function (entry) {
+    dates.push({
+      year: entry.year,
+      month: entry.month,
+      day: entry.day,
+    });
+  });
+  return dates;
+}
+
+function filterHolidayEntries(holidays, regionCode) {
+  var entries = [];
   if (!holidays || !holidays.length) {
-    return dates;
+    return entries;
   }
 
   holidays.forEach(function (holiday) {
@@ -102,12 +114,67 @@ function filterHolidayDates(holidays, regionCode) {
       return;
     }
     var parsed = parseHolidayDate(holiday.date);
-    if (parsed) {
-      dates.push(parsed);
+    if (!parsed) {
+      return;
+    }
+    entries.push({
+      year: parsed.year,
+      month: parsed.month,
+      day: parsed.day,
+      name: holiday.localName || holiday.name || 'Holiday',
+      national: !!holiday.nationalHoliday,
+    });
+  });
+
+  return entries;
+}
+
+function readCachedHolidaysForWindow(countryCode, now, weekStart) {
+  if (!isSupportedCountryCode(countryCode)) {
+    return [];
+  }
+  var windowDates = buildCalendarWindow(now || new Date(), weekStart || '0');
+  var years = yearsForWindow(windowDates);
+  var combined = [];
+  years.forEach(function (year) {
+    var cached = readHolidayCache(countryCode, year);
+    if (cached && cached.length) {
+      combined = combined.concat(cached);
+    }
+  });
+  return combined;
+}
+
+function listHolidaysInCalendarWindow(holidays, regionCode, now, weekStart) {
+  now = now || new Date();
+  var windowDates = buildCalendarWindow(now, weekStart || '0');
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  var entries = filterHolidayEntries(holidays, regionCode);
+  var result = [];
+
+  entries.forEach(function (entry) {
+    var candidate = new Date(entry.year, entry.month, entry.day, 12, 0, 0, 0);
+    var i;
+    for (i = 0; i < windowDates.length; i += 1) {
+      if (sameCalendarDay(windowDates[i], candidate)) {
+        result.push({
+          name: entry.name,
+          year: entry.year,
+          month: entry.month,
+          day: entry.day,
+          national: entry.national,
+          dateMs: candidate.getTime(),
+          isPast: candidate.getTime() < today.getTime(),
+        });
+        break;
+      }
     }
   });
 
-  return dates;
+  result.sort(function (a, b) {
+    return a.dateMs - b.dateMs;
+  });
+  return result;
 }
 
 function daysSinceWeekStart(wday, weekStart) {
@@ -271,6 +338,9 @@ module.exports = {
   countryHasSubdivisions: countryHasSubdivisions,
   holidayApplies: holidayApplies,
   filterHolidayDates: filterHolidayDates,
+  filterHolidayEntries: filterHolidayEntries,
+  listHolidaysInCalendarWindow: listHolidaysInCalendarWindow,
+  readCachedHolidaysForWindow: readCachedHolidaysForWindow,
   buildCalendarWindow: buildCalendarWindow,
   packHolidayMask: packHolidayMask,
   fetchHolidaysForWindow: fetchHolidaysForWindow,
