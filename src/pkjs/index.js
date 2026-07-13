@@ -581,6 +581,7 @@ function injectAboutStatusForClayConfig() {
     aboutStatus.formatPanelHtml({
       intervalMs: getWeatherUpdateIntervalMs(),
       locationMode: getLocationMode(),
+      manualLocation: getManualLocation(),
       showHolidays: claySettingIsTruthy(getClaySetting('ShowHolidays', true)),
       countryCode: String(getClaySetting('HolidayCountry', '') || ''),
       regionCode: String(getClaySetting('HolidayRegion', '') || ''),

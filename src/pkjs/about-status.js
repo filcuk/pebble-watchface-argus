@@ -97,7 +97,7 @@ function weatherSectionHtml(options) {
     lines.push(
       '<p class="argus-about-line' +
         warnClass +
-        '">Last API ' +
+        '">Last API call at ' +
         escapeHtml(formatClock(apiMs)) +
         ' · ' +
         escapeHtml(weatherDebugLog.formatAgeMinutes(ageMs)) +
@@ -141,10 +141,10 @@ function weatherSectionHtml(options) {
   }
 
   lines.push(
-    '<p class="argus-about-muted argus-about-icons-heading">Header weather icons</p>' +
-      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-purple"></span> Purple — pause at night</p>' +
-      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-orange"></span> Orange — past update interval</p>' +
-      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-red"></span> Red — location pending or &gt;3× interval</p>'
+    '<p class="argus-about-icons-heading">Weather status</p>' +
+      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-purple"></span> Purple:  updates paused</p>' +
+      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-orange"></span> Orange: older than set interval</p>' +
+      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-red"></span> Red: pending or age &gt; 3× interval</p>'
   );
 
   return '<div class="argus-about-section">' + lines.join('') + '</div>';
@@ -156,7 +156,12 @@ function gpsSectionHtml(options) {
   lines.push('<div class="argus-setting-label">GPS</div>');
 
   if (options.locationMode === 'manual') {
-    lines.push('<p class="argus-about-line">Manual location mode (GPS not used).</p>');
+    var city = (options.manualLocation || '').trim();
+    lines.push(
+      '<p class="argus-about-line">Manual location mode: ' +
+        escapeHtml(city || '—') +
+        '</p>'
+    );
   } else if (!gps || !gps.t) {
     lines.push('<p class="argus-about-line">No GPS fix stored yet.</p>');
   } else {
@@ -246,7 +251,7 @@ function holidaySectionHtml(options) {
       lines.push(
         '<p class="argus-about-line">' +
           escapeHtml(formatHolidayDate(entry)) +
-          ' — ' +
+          ' - ' +
           escapeHtml(entry.name) +
           (entry.national ? '' : ' <span class="argus-about-muted">(regional)</span>') +
           '</p>'

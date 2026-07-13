@@ -62,9 +62,9 @@ function formatPanelHtml(entries) {
   }
 
   var legend =
-    '<div class="argus-wlog-legend">REQ watch request · SND phone send · SKIP skip<br>' +
+    '<div class="argus-wlog-legend">REQ watch request · SND phone send · SKIP skip · ' +
     'C cache · API Open-Meteo · RETRY phone backoff · GPS fix<br>' + 
-    'reopen settings to refresh</div>';
+    'Reopen settings to refresh</div>';
 
   return legend + '<div class="argus-weather-log">' + lines.join('') + '</div>';
 }
