@@ -2,6 +2,7 @@ var Clay = require('@rebble/clay');
 var clayConfig = require('./config');
 var customClay = require('./custom-clay');
 var holidays = require('./holidays');
+var aboutStatus = require('./about-status');
 var pkg = require('../../package.json');
 var release = require('./release');
 var keys = require('message_keys');
@@ -528,12 +529,7 @@ function wlogWeatherWatchSkip(code) {
   wlog('W-SKIP', label);
 }
 
-function injectWeatherLogForClayConfig() {
-  var html = '';
-  if (claySettingIsTruthy(getClaySetting('DebugWeatherLog', false))) {
-    html = weatherDebugLog.formatPanelHtml(weatherDebugLog.read());
-  }
-
+function prepareClayUserData() {
   if (!clay.meta) {
     clay.meta = {};
   }
@@ -541,15 +537,46 @@ function injectWeatherLogForClayConfig() {
     version: clayUserData.version,
     githubUrl: clayUserData.githubUrl,
   };
+}
 
+function setClayConfigDefaultById(id, html) {
   var config = clay.config;
   var i;
   for (i = 0; i < config.length; i += 1) {
-    if (config[i].id === 'argus-weather-debug-log') {
+    if (config[i].id === id) {
       config[i].defaultValue = html;
-      break;
+      return;
     }
   }
+}
+
+function injectWeatherLogForClayConfig() {
+  var html = '';
+  if (claySettingIsTruthy(getClaySetting('DebugWeatherLog', false))) {
+    html = weatherDebugLog.formatPanelHtml(weatherDebugLog.read());
+  }
+  setClayConfigDefaultById('argus-weather-debug-log', html);
+}
+
+function injectAboutStatusForClayConfig() {
+  setClayConfigDefaultById(
+    'argus-about-status',
+    aboutStatus.formatPanelHtml({
+      intervalMs: getWeatherUpdateIntervalMs(),
+      locationMode: getLocationMode(),
+      showHolidays: claySettingIsTruthy(getClaySetting('ShowHolidays', true)),
+      countryCode: String(getClaySetting('HolidayCountry', '') || ''),
+      regionCode: String(getClaySetting('HolidayRegion', '') || ''),
+      weekStart: String(getClaySetting('WeekStart', '0')),
+      pauseAtNight: pauseWeatherAtNightEnabled(),
+    })
+  );
+}
+
+function injectClayConfigPanels() {
+  prepareClayUserData();
+  injectAboutStatusForClayConfig();
+  injectWeatherLogForClayConfig();
 }
 
 function parseWeatherCacheKey(key) {
@@ -1333,7 +1360,7 @@ Pebble.addEventListener('appmessage', function (e) {
 });
 
 Pebble.addEventListener('showConfiguration', function () {
-  injectWeatherLogForClayConfig();
+  injectClayConfigPanels();
   Pebble.openURL(clay.generateUrl());
 });
 

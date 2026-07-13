@@ -88,6 +88,12 @@ var realtimeStepsHelpHtml =
 
 module.exports = [
   {
+    type: 'text',
+    id: 'argus-about-status',
+    group: 'tabAbout',
+    defaultValue: '',
+  },
+  {
     type: 'radiogroup',
     messageKey: 'HourFormat',
     label: 'Time format',

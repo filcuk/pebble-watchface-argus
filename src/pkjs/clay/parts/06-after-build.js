@@ -23,7 +23,7 @@
           showTab(btn.getAttribute('data-tab'), tabsRoot);
         }
       });
-      showTab('tabTime', tabsRoot);
+      showTab('tabAbout', tabsRoot);
     }
 
     syncDebugToggles();

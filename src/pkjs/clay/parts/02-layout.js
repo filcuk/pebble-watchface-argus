@@ -1,4 +1,4 @@
-  var TAB_GROUPS = ['tabTime', 'tabDisplay', 'tabCalendar', 'tabWeather', 'tabDebug'];
+  var TAB_GROUPS = ['tabAbout', 'tabTime', 'tabDisplay', 'tabCalendar', 'tabWeather', 'tabDebug'];
   var SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
@@ -47,7 +47,8 @@
     var tabs = document.createElement('div');
     tabs.className = 'argus-tabs';
     tabs.innerHTML =
-      '<button type="button" class="argus-tab active" data-tab="tabTime">General</button>' +
+      '<button type="button" class="argus-tab active" data-tab="tabAbout">About</button>' +
+      '<button type="button" class="argus-tab" data-tab="tabTime">General</button>' +
       '<button type="button" class="argus-tab" data-tab="tabDisplay">Display</button>' +
       '<button type="button" class="argus-tab" data-tab="tabCalendar">Calendar</button>' +
       '<button type="button" class="argus-tab" data-tab="tabWeather">Weather</button>' +
@@ -118,6 +119,11 @@
     var weatherLog = clayConfig.getItemById('argus-weather-debug-log');
     if (weatherLog && weatherLog.$element && weatherLog.$element[0]) {
       weatherLog.$element[0].classList.add('hide');
+    }
+
+    var aboutStatus = clayConfig.getItemById('argus-about-status');
+    if (aboutStatus && aboutStatus.$element && aboutStatus.$element[0]) {
+      aboutStatus.$element[0].classList.add('argus-row', 'argus-about-row');
     }
 
     var manualLocation = clayConfig.getItemByMessageKey('ManualLocation');
