@@ -501,11 +501,21 @@ function normalizeGpsTimestamp(pos) {
   if ((raw === undefined || raw === null) && pos && pos.coords) {
     raw = pos.coords.timestamp;
   }
-  if (raw === undefined || raw === null) {
+  if (raw === undefined || raw === null || raw === '') {
     return null;
   }
   if (typeof raw === 'object' && typeof raw.getTime === 'function') {
     raw = raw.getTime();
+  } else if (typeof raw === 'string') {
+    var asNum = Number(raw);
+    if (isFinite(asNum) && asNum > 0) {
+      raw = asNum;
+    } else {
+      raw = Date.parse(raw);
+      if (!isFinite(raw)) {
+        return null;
+      }
+    }
   }
   var n = Number(raw);
   if (!isFinite(n) || n <= 0) {
@@ -523,9 +533,18 @@ function wlogGpsPosition(pos) {
   var longitude = quantizeCoord(pos.coords.longitude);
   var fixTime = normalizeGpsTimestamp(pos);
   var nowMs = Date.now();
-  writeLastGpsFix(latitude, longitude, fixTime || nowMs);
-  var ageLabel = fixTime != null ? weatherDebugLog.formatAgeMs(nowMs - fixTime) : '?';
-  wlog('GPS', latitude.toFixed(2) + ',' + longitude.toFixed(2) + ' ' + ageLabel);
+  /* Phone/emulator geolocation often omits a fix timestamp; fall back to now
+     (same as About) so the log shows 0s instead of "?". */
+  var recordedAt = fixTime != null ? fixTime : nowMs;
+  writeLastGpsFix(latitude, longitude, recordedAt);
+  wlog(
+    'GPS',
+    latitude.toFixed(2) +
+      ',' +
+      longitude.toFixed(2) +
+      ' ' +
+      weatherDebugLog.formatAgeMs(nowMs - recordedAt)
+  );
 }
 
 function wlogWeatherRequestKind(kind, reqDetail) {
