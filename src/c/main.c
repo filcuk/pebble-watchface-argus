@@ -172,6 +172,7 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   header_update(s_header, &tick_copy);
   calendar_update(s_calendar, &tick_copy);
   header_refresh_quiet_time(s_header, quiet_time_is_active());
+  header_refresh_weather_status(s_header);
 
 #if defined(PBL_HEALTH)
   if (settings_get()->biometric_update_mode == BIOMETRIC_UPDATE_EVERY_MINUTE &&
@@ -343,6 +344,7 @@ static void prv_window_load(Window *window) {
 
   header_refresh_bt(s_header, connection_service_peek_pebble_app_connection());
   header_refresh_quiet_time(s_header, quiet_time_is_active());
+  header_refresh_weather_status(s_header);
   header_refresh_battery(s_header, battery_state_service_peek());
 
   prv_update_layout();
@@ -365,6 +367,7 @@ static void prv_window_unload(Window *window) {
 
 static void prv_weather_updated(void) {
   weather_chart_refresh(s_weather_chart);
+  header_refresh_weather_status(s_header);
   if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
     header_invalidate(s_header);
     time_t now = argus_time_now();

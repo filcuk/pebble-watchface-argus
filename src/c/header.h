@@ -15,4 +15,5 @@ void header_apply_settings(Header *header);
 void header_set_bounds(Header *header, GRect frame);
 void header_refresh_bt(Header *header, bool connected);
 void header_refresh_quiet_time(Header *header, bool active);
+void header_refresh_weather_status(Header *header);
 void header_refresh_battery(Header *header, BatteryChargeState state);

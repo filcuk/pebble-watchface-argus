@@ -8,6 +8,7 @@
 #include "quiet_mode_icon.h"
 #include "steps_icon.h"
 #include "temp_icon.h"
+#include "weather_status_icon.h"
 #include "settings.h"
 #include "weather.h"
 
@@ -19,6 +20,7 @@ struct Header {
   Layer *container;
   Layer *bt_layer;
   Layer *quiet_layer;
+  Layer *weather_layer;
   Layer *battery_layer;
   Layer *status_layer;
   char status_text[24];
@@ -33,6 +35,7 @@ struct Header {
   int battery_percent;
   bool bt_connected;
   bool quiet_time_active;
+  WeatherStatusIconKind weather_status_kind;
   bool force_dirty;
   int last_year;
   int last_mon;
@@ -140,7 +143,7 @@ static void prv_format_steps(char *buffer, size_t len, int *steps_out) {
 #define HEADER_ICON_H (HEADER_HEIGHT - 4)
 #define HEADER_ICONS_LEFT 4
 #define HEADER_ICON_GAP 2
-#define HEADER_STATUS_MIN_LEFT 24
+#define HEADER_STATUS_MIN_LEFT 28
 #define HEADER_BATTERY_WIDTH 28
 
 static GFont prv_status_font_bold(void) {
@@ -184,6 +187,7 @@ static bool prv_quiet_should_show(const Header *header) {
 static void prv_layout_header_icons(Header *header, int header_width) {
   bool show_bt = prv_bt_should_show(header);
   bool show_quiet = prv_quiet_should_show(header);
+  bool show_weather = header->weather_status_kind != WEATHER_STATUS_ICON_NONE;
   int x = HEADER_ICONS_LEFT;
 
   if (show_bt) {
@@ -202,7 +206,16 @@ static void prv_layout_header_icons(Header *header, int header_width) {
     layer_set_hidden(header->quiet_layer, true);
   }
 
-  int status_left = (show_bt || show_quiet) ? x + 2 : HEADER_STATUS_MIN_LEFT;
+  if (show_weather) {
+    layer_set_hidden(header->weather_layer, false);
+    layer_set_frame(header->weather_layer,
+                    GRect(x, HEADER_ICON_Y, WEATHER_STATUS_ICON_WIDTH, HEADER_ICON_H));
+    x += WEATHER_STATUS_ICON_WIDTH + HEADER_ICON_GAP;
+  } else {
+    layer_set_hidden(header->weather_layer, true);
+  }
+
+  int status_left = (show_bt || show_quiet || show_weather) ? x + 2 : HEADER_STATUS_MIN_LEFT;
   layer_set_frame(header->status_layer,
                   GRect(status_left, 0, header_width - status_left - HEADER_BATTERY_WIDTH, HEADER_HEIGHT));
 }
@@ -328,6 +341,19 @@ static void prv_quiet_update_proc(Layer *layer, GContext *ctx) {
   quiet_mode_icon_draw(ctx, x, y);
 }
 
+static void prv_weather_status_update_proc(Layer *layer, GContext *ctx) {
+  (void)layer;
+  Header *header = s_header;
+  if (!header) {
+    return;
+  }
+
+  GRect bounds = layer_get_bounds(layer);
+  int x = (bounds.size.w - WEATHER_STATUS_ICON_WIDTH) / 2;
+  int y = (bounds.size.h - WEATHER_STATUS_ICON_HEIGHT) / 2;
+  weather_status_icon_draw(ctx, x, y, header->weather_status_kind);
+}
+
 static void prv_battery_update_proc(Layer *layer, GContext *ctx) {
   (void)layer;
   Header *header = s_header;
@@ -372,6 +398,12 @@ Header *header_create(Layer *parent) {
   layer_set_update_proc(header->quiet_layer, prv_quiet_update_proc);
   layer_add_child(header->container, header->quiet_layer);
 
+  header->weather_layer =
+      layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, WEATHER_STATUS_ICON_WIDTH, HEADER_ICON_H));
+  layer_set_update_proc(header->weather_layer, prv_weather_status_update_proc);
+  layer_set_hidden(header->weather_layer, true);
+  layer_add_child(header->container, header->weather_layer);
+
   header->battery_layer = layer_create(GRect(bounds.size.w - HEADER_BATTERY_WIDTH, 2, 24, HEADER_HEIGHT - 4));
   layer_set_update_proc(header->battery_layer, prv_battery_update_proc);
   layer_add_child(header->container, header->battery_layer);
@@ -384,6 +416,7 @@ Header *header_create(Layer *parent) {
   header->battery_percent = 100;
   header->bt_connected = true;
   header->quiet_time_active = false;
+  header->weather_status_kind = WEATHER_STATUS_ICON_NONE;
   header->force_dirty = true;
   header->last_year = -1;
   header->last_mon = -1;
@@ -411,6 +444,7 @@ void header_destroy(Header *header) {
     s_header = NULL;
   }
   layer_destroy(header->status_layer);
+  layer_destroy(header->weather_layer);
   layer_destroy(header->quiet_layer);
   layer_destroy(header->bt_layer);
   layer_destroy(header->battery_layer);
@@ -438,12 +472,16 @@ void header_apply_settings(Header *header) {
   if (!header) {
     return;
   }
+  header_refresh_weather_status(header);
   prv_sync_bt_visibility(header);
   if (!layer_get_hidden(header->bt_layer)) {
     layer_mark_dirty(header->bt_layer);
   }
   if (!layer_get_hidden(header->quiet_layer)) {
     layer_mark_dirty(header->quiet_layer);
+  }
+  if (!layer_get_hidden(header->weather_layer)) {
+    layer_mark_dirty(header->weather_layer);
   }
 }
 
@@ -604,6 +642,22 @@ void header_refresh_quiet_time(Header *header, bool active) {
   prv_sync_bt_visibility(header);
   if (was_visible != is_visible || is_visible) {
     layer_mark_dirty(header->quiet_layer);
+  }
+}
+
+void header_refresh_weather_status(Header *header) {
+  if (!header) {
+    return;
+  }
+
+  WeatherStatusIconKind kind = weather_status_icon_kind();
+  bool was_visible = header->weather_status_kind != WEATHER_STATUS_ICON_NONE;
+  bool changed = header->weather_status_kind != kind;
+  header->weather_status_kind = kind;
+  bool is_visible = kind != WEATHER_STATUS_ICON_NONE;
+  prv_sync_bt_visibility(header);
+  if (changed || was_visible != is_visible || is_visible) {
+    layer_mark_dirty(header->weather_layer);
   }
 }
 
