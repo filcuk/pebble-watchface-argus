@@ -326,9 +326,10 @@ function getWeatherProviderModel() {
 }
 
 function getWeatherUpdateIntervalMs() {
-  var minutes = parseInt(getClaySetting('WeatherUpdateInterval', '30'), 10);
-  if (minutes !== 5 && minutes !== 15 && minutes !== 30 && minutes !== 60) {
-    minutes = 30;
+  var minutes = parseInt(getClaySetting('WeatherUpdateInterval', '60'), 10);
+  if (minutes !== 5 && minutes !== 15 && minutes !== 30 && minutes !== 60 && minutes !== 120 &&
+      minutes !== 180) {
+    minutes = 60;
   }
   return minutes * 60 * 1000;
 }

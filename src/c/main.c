@@ -68,8 +68,9 @@ static bool prv_should_run_hr_backfill(void);
 static uint8_t prv_weather_update_interval_minutes(void) {
   uint8_t minutes = settings_get()->weather_update_interval_min;
   if (minutes != WEATHER_UPDATE_INTERVAL_5_MIN && minutes != WEATHER_UPDATE_INTERVAL_15_MIN &&
-      minutes != WEATHER_UPDATE_INTERVAL_30_MIN && minutes != WEATHER_UPDATE_INTERVAL_60_MIN) {
-    return WEATHER_UPDATE_INTERVAL_30_MIN;
+      minutes != WEATHER_UPDATE_INTERVAL_30_MIN && minutes != WEATHER_UPDATE_INTERVAL_60_MIN &&
+      minutes != WEATHER_UPDATE_INTERVAL_120_MIN && minutes != WEATHER_UPDATE_INTERVAL_180_MIN) {
+    return WEATHER_UPDATE_INTERVAL_60_MIN;
   }
   return minutes;
 }

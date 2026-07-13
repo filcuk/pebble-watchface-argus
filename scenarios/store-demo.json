@@ -20,7 +20,7 @@
     "LocationMode": 1,
     "ManualLocation": "Singapore",
     "PauseWeatherAtNight": 0,
-    "WeatherUpdateInterval": 30,
+    "WeatherUpdateInterval": 60,
     "DebugMode": 1,
     "DemoWeather": 0,
     "DemoBiometrics": 1

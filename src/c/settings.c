@@ -139,13 +139,14 @@ static void settings_set_defaults(void) {
   s_settings.demo_biometrics = false;
   s_settings.biometric_update_mode = BIOMETRIC_UPDATE_OPTIMISED;
   s_settings.pause_weather_at_night = false;
-  s_settings.weather_update_interval_min = WEATHER_UPDATE_INTERVAL_30_MIN;
+  s_settings.weather_update_interval_min = WEATHER_UPDATE_INTERVAL_60_MIN;
   s_settings.quiet_mode_display = true;
 }
 
 static bool settings_is_valid_weather_update_interval(uint8_t minutes) {
   return minutes == WEATHER_UPDATE_INTERVAL_5_MIN || minutes == WEATHER_UPDATE_INTERVAL_15_MIN ||
-         minutes == WEATHER_UPDATE_INTERVAL_30_MIN || minutes == WEATHER_UPDATE_INTERVAL_60_MIN;
+         minutes == WEATHER_UPDATE_INTERVAL_30_MIN || minutes == WEATHER_UPDATE_INTERVAL_60_MIN ||
+         minutes == WEATHER_UPDATE_INTERVAL_120_MIN || minutes == WEATHER_UPDATE_INTERVAL_180_MIN;
 }
 
 static void settings_validate(void) {
@@ -168,7 +169,7 @@ static void settings_validate(void) {
     s_settings.biometric_update_mode = BIOMETRIC_UPDATE_OPTIMISED;
   }
   if (!settings_is_valid_weather_update_interval(s_settings.weather_update_interval_min)) {
-    s_settings.weather_update_interval_min = WEATHER_UPDATE_INTERVAL_30_MIN;
+    s_settings.weather_update_interval_min = WEATHER_UPDATE_INTERVAL_60_MIN;
   }
 }
 
