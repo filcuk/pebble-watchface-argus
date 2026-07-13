@@ -817,7 +817,7 @@ void weather_chart_refresh(WeatherChart *chart) {
   if (!chart) {
     return;
   }
-  weather_slide_stale_hours();
+  /* Do not request weather here — apply→refresh→slide used to storm AppMessage. */
   layer_mark_dirty(chart->plot_layer);
   layer_mark_dirty(chart->decor_layer);
 }

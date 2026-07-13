@@ -259,12 +259,24 @@ void weather_get_view(WeatherView *view) {
 
   time_t now_hour = prv_current_hour_start();
   if (now_hour < s_weather.fetch_time) {
+    /* Mild future skew (phone TZ vs forecast TZ) — still show from hour 0. */
+    time_t ahead = s_weather.fetch_time - now_hour;
+    if (ahead <= (time_t)14 * 3600) {
+      uint8_t want = prv_forecast_display_hours();
+      view->start_index = 0;
+      view->hour_count = s_weather.hour_count < want ? s_weather.hour_count : want;
+      return;
+    }
+    APP_LOG(APP_LOG_LEVEL_INFO, "Weather view empty: now=%ld fetch=%ld (future)",
+            (long)now_hour, (long)s_weather.fetch_time);
     return;
   }
 
   int elapsed = (int)((now_hour - s_weather.fetch_time) / 3600);
 
   if (elapsed >= s_weather.hour_count) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Weather view empty: now=%ld fetch=%ld hours=%u elapsed=%d",
+            (long)now_hour, (long)s_weather.fetch_time, (unsigned)s_weather.hour_count, elapsed);
     return;
   }
 
@@ -306,7 +318,7 @@ static bool prv_has_viewable_hours(void) {
 
   time_t now_hour = prv_current_hour_start();
   if (now_hour < s_weather.fetch_time) {
-    return false;
+    return (s_weather.fetch_time - now_hour) <= (time_t)14 * 3600;
   }
 
   int elapsed = (int)((now_hour - s_weather.fetch_time) / 3600);
@@ -398,6 +410,13 @@ WeatherFreshness weather_get_freshness(void) {
   if (s_weather.status_flags & WEATHER_STATUS_LOCATION_PENDING) {
     return WEATHER_FRESHNESS_CRITICAL;
   }
+
+  WeatherView view;
+  weather_get_view(&view);
+  if (s_weather.hour_count > 0 && !weather_view_has_data(&view)) {
+    return WEATHER_FRESHNESS_CRITICAL;
+  }
+
   if (s_weather.api_fetched_at <= 0) {
     if (s_weather.hour_count > 0) {
       return WEATHER_FRESHNESS_STALE;
@@ -1052,10 +1071,23 @@ void weather_apply_from_message(DictionaryIterator *iter) {
     s_weather.api_fetched_at = s_weather.cached_at;
   }
   s_weather.state = WEATHER_STATE_READY;
-  s_last_weather_request_at = 0;
+  {
+    WeatherView applied_view;
+    weather_get_view(&applied_view);
+    if (weather_view_has_data(&applied_view)) {
+      s_last_weather_request_at = 0;
+      prv_reset_retry_backoff();
+      prv_cancel_timers();
+    } else {
+      /* Stored hours don't cover this hour — stop waiting on this response; retry later. */
+      if (s_timeout_timer) {
+        app_timer_cancel(s_timeout_timer);
+        s_timeout_timer = NULL;
+      }
+      weather_schedule_retry();
+    }
+  }
   prv_persist_save();
-  prv_reset_retry_backoff();
-  prv_cancel_timers();
   prv_notify_updated();
 }
 
@@ -1113,8 +1145,12 @@ static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
   time_t now = argus_time_now();
   WeatherView view;
   weather_get_view(&view);
-  if (s_last_weather_request_at > 0 && (now - s_last_weather_request_at) < 60 && weather_view_has_data(&view)) {
+  /* Throttle even with an empty view — otherwise slide/refresh storms AppMessage. */
+  if (s_last_weather_request_at > 0 && (now - s_last_weather_request_at) < 60) {
     prv_send_weather_debug_skip(WEATHER_DBG_THROTTLE);
+    if (!weather_view_has_data(&view)) {
+      weather_schedule_retry();
+    }
     return;
   }
   s_last_weather_request_at = now;
@@ -1126,9 +1162,7 @@ static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
   }
   dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
   dict_write_uint8(iter, MESSAGE_KEY_WeatherRequestKind, kind);
-  if (argus_time_get_offset() != 0) {
-    dict_write_int32(iter, MESSAGE_KEY_WeatherForEpoch, (int32_t)request_hour);
-  }
+  dict_write_int32(iter, MESSAGE_KEY_WeatherForEpoch, (int32_t)request_hour);
   const ArgusSettings *settings = settings_get();
   dict_write_int32(iter, MESSAGE_KEY_LocationMode, (int32_t)settings->location_mode);
   if (settings->location_mode == LOCATION_MODE_MANUAL && settings->manual_location[0] != '\0') {
