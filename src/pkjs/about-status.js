@@ -258,14 +258,53 @@ function regionDisplayName(countryCode, regionCode) {
   return regionCode;
 }
 
-function locationPending(cache, gps) {
-  if (!cache || gps == null || gps.lat == null || gps.lon == null) {
+function quantizeCoord(value) {
+  return Math.round(Number(value) * 100) / 100;
+}
+
+function readGeocodeCache(city) {
+  if (!city) {
+    return null;
+  }
+  try {
+    var raw = localStorage.getItem('geocode:' + String(city).toLowerCase());
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+/* Desired forecast coords vs last successful weather fetch (GPS fix or geocode). */
+function locationPending(cache, gps, options) {
+  options = options || {};
+  if (!cache || cache.latQ == null || cache.lonQ == null) {
     return false;
   }
-  if (cache.latQ == null || cache.lonQ == null) {
-    return false;
+
+  var wantLat = null;
+  var wantLon = null;
+  if (options.locationMode === 'manual') {
+    var geo = readGeocodeCache((options.manualLocation || '').trim());
+    if (!geo || geo.lat == null || geo.lon == null) {
+      return false;
+    }
+    wantLat = geo.lat;
+    wantLon = geo.lon;
+  } else {
+    if (gps == null || gps.lat == null || gps.lon == null) {
+      return false;
+    }
+    wantLat = gps.lat;
+    wantLon = gps.lon;
   }
-  return Number(cache.latQ) !== Number(gps.lat) || Number(cache.lonQ) !== Number(gps.lon);
+
+  return (
+    quantizeCoord(cache.latQ) !== quantizeCoord(wantLat) ||
+    quantizeCoord(cache.lonQ) !== quantizeCoord(wantLon)
+  );
 }
 
 function weatherSectionHtml(options) {
@@ -278,7 +317,7 @@ function weatherSectionHtml(options) {
 
   lines.push('<div class="argus-setting-label">Weather</div>');
 
-  if (locationPending(cache, gps)) {
+  if (locationPending(cache, gps, options)) {
     lines.push(
       '<p class="argus-about-note argus-about-critical">Location changed since last weather update.</p>'
     );
