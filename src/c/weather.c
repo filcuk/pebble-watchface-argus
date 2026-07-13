@@ -6,11 +6,16 @@
 #include <string.h>
 #include <time.h>
 
+#define WEATHER_RETRY_BASE_MS (30 * 1000)
+#define WEATHER_RETRY_CAP_MS (30 * 60 * 1000)
+#define WEATHER_RESPONSE_TIMEOUT_MS (30 * 1000)
+
 static WeatherData s_weather;
 static AppTimer *s_retry_timer;
 static AppTimer *s_timeout_timer;
 static WeatherUpdatedHandler s_updated_handler;
 static time_t s_last_weather_request_at;
+static uint32_t s_retry_delay_ms;
 
 static void prv_notify_updated(void) {
   if (s_updated_handler) {
@@ -35,6 +40,7 @@ typedef enum {
 
 static void prv_send_weather_debug_skip(uint8_t skip_code);
 static void prv_send_weather_request(time_t when_hour, uint8_t kind);
+static void prv_timeout_callback(void *context);
 
 static time_t prv_current_hour_start(void) {
   time_t now = argus_time_now();
@@ -409,6 +415,34 @@ static void prv_sanitize_persisted_weather(void) {
   }
 }
 
+static void prv_reset_retry_backoff(void) {
+  s_retry_delay_ms = 0;
+}
+
+static uint32_t prv_retry_cap_ms(void) {
+  uint32_t interval_ms = (uint32_t)prv_weather_update_interval_minutes() * 60 * 1000;
+  uint32_t cap = interval_ms < WEATHER_RETRY_CAP_MS ? interval_ms : WEATHER_RETRY_CAP_MS;
+  if (cap < WEATHER_RETRY_BASE_MS) {
+    cap = WEATHER_RETRY_BASE_MS;
+  }
+  return cap;
+}
+
+static uint32_t prv_consume_retry_delay_ms(void) {
+  uint32_t cap = prv_retry_cap_ms();
+  uint32_t delay = s_retry_delay_ms == 0 ? WEATHER_RETRY_BASE_MS : s_retry_delay_ms;
+  if (delay > cap) {
+    delay = cap;
+  }
+
+  if (delay <= cap / 2) {
+    s_retry_delay_ms = delay * 2;
+  } else {
+    s_retry_delay_ms = cap;
+  }
+  return delay;
+}
+
 static void prv_cancel_timers(void) {
   if (s_retry_timer) {
     app_timer_cancel(s_retry_timer);
@@ -420,6 +454,13 @@ static void prv_cancel_timers(void) {
   }
 }
 
+static void prv_schedule_response_timeout(void) {
+  if (s_timeout_timer) {
+    return;
+  }
+  s_timeout_timer = app_timer_register(WEATHER_RESPONSE_TIMEOUT_MS, prv_timeout_callback, NULL);
+}
+
 static void prv_retry_callback(void *context) {
   (void)context;
   s_retry_timer = NULL;
@@ -429,9 +470,6 @@ static void prv_retry_callback(void *context) {
 static void prv_timeout_callback(void *context) {
   (void)context;
   s_timeout_timer = NULL;
-  if (s_weather.state != WEATHER_STATE_LOADING) {
-    return;
-  }
 
   if (weather_use_demo_data()) {
     APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — using demo data");
@@ -443,15 +481,24 @@ static void prv_timeout_callback(void *context) {
   weather_get_view(&view);
   if (weather_view_has_data(&view) || weather_cache_is_valid()) {
     APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — keeping cached forecast");
-    s_weather.state = WEATHER_STATE_READY;
-    prv_cancel_timers();
-    prv_notify_updated();
+    if (s_weather.state == WEATHER_STATE_LOADING) {
+      s_weather.state = WEATHER_STATE_READY;
+      prv_notify_updated();
+    }
+    if (weather_is_refresh_due()) {
+      weather_schedule_retry();
+    }
+    return;
+  }
+
+  if (s_weather.state != WEATHER_STATE_LOADING) {
     return;
   }
 
   if (!connection_service_peek_pebble_app_connection()) {
     APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — phone unavailable");
     weather_mark_unavailable();
+    weather_schedule_retry();
   } else {
     APP_LOG(APP_LOG_LEVEL_INFO, "Weather timeout — fetch failed");
     weather_mark_error();
@@ -486,6 +533,9 @@ void weather_mark_fetch_failed(void) {
     prv_cancel_timers();
     s_weather.state = WEATHER_STATE_READY;
     prv_notify_updated();
+    if (weather_is_refresh_due()) {
+      weather_schedule_retry();
+    }
     return;
   }
 
@@ -680,6 +730,7 @@ void weather_apply_demo_data(void) {
   s_weather.status_flags = 0;
   s_weather.state = WEATHER_STATE_READY;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+  prv_reset_retry_backoff();
   prv_cancel_timers();
   prv_notify_updated();
 }
@@ -832,17 +883,18 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   s_weather.state = WEATHER_STATE_READY;
   s_last_weather_request_at = 0;
   persist_write_data(WEATHER_PERSIST_KEY, &s_weather, sizeof(s_weather));
+  prv_reset_retry_backoff();
   prv_cancel_timers();
   prv_notify_updated();
 }
 
 void weather_schedule_retry(void) {
-  if (!s_retry_timer) {
-    s_retry_timer = app_timer_register(3000, prv_retry_callback, NULL);
+  if (s_retry_timer) {
+    return;
   }
-  if (!s_timeout_timer) {
-    s_timeout_timer = app_timer_register(30000, prv_timeout_callback, NULL);
-  }
+  uint32_t delay_ms = prv_consume_retry_delay_ms();
+  APP_LOG(APP_LOG_LEVEL_INFO, "Weather retry in %lu ms", (unsigned long)delay_ms);
+  s_retry_timer = app_timer_register(delay_ms, prv_retry_callback, NULL);
 }
 
 void weather_set_updated_handler(WeatherUpdatedHandler handler) {
@@ -920,7 +972,7 @@ static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
   if (!weather_view_has_data(&view) && s_weather.hour_count == 0 && !weather_cache_is_valid()) {
     s_weather.state = WEATHER_STATE_LOADING;
   }
-  weather_schedule_retry();
+  prv_schedule_response_timeout();
 }
 
 void weather_request_for_time(time_t when_hour) {

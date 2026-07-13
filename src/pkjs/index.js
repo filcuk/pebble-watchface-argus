@@ -21,9 +21,14 @@ var clay = new Clay(clayConfig, customClay, {
 var weatherFetchInFlight = false;
 var weatherFetchStartedAt = 0;
 var weatherRequestTimer = null;
+var weatherRetryTimer = null;
+var weatherRetryDelayMs = 0;
+var weatherRetryContext = null;
 var holidayRequestTimer = null;
 var holidayFetchInFlight = false;
 var WEATHER_FETCH_STALE_MS = 30000;
+var WEATHER_RETRY_BASE_MS = 30 * 1000;
+var WEATHER_RETRY_CAP_MS = 30 * 60 * 1000;
 var weatherFetchCache = null;
 var RELEASE_SEEN_KEY = 'argus-release-seen';
 var RELEASE_NOTIFICATION_NORMAL = '0';
@@ -59,6 +64,57 @@ function clearWeatherFetchInFlight() {
 
 function weatherFetchIsStale() {
   return weatherFetchInFlight && Date.now() - weatherFetchStartedAt >= WEATHER_FETCH_STALE_MS;
+}
+
+function getWeatherRetryCapMs() {
+  var intervalMs = getWeatherUpdateIntervalMs();
+  var cap = Math.min(intervalMs, WEATHER_RETRY_CAP_MS);
+  return Math.max(cap, WEATHER_RETRY_BASE_MS);
+}
+
+function resetWeatherRetryBackoff() {
+  weatherRetryDelayMs = 0;
+  weatherRetryContext = null;
+  if (weatherRetryTimer) {
+    clearTimeout(weatherRetryTimer);
+    weatherRetryTimer = null;
+  }
+}
+
+function cancelWeatherApiRetryTimer() {
+  if (weatherRetryTimer) {
+    clearTimeout(weatherRetryTimer);
+    weatherRetryTimer = null;
+  }
+}
+
+function scheduleWeatherApiRetry() {
+  if (weatherRetryTimer) {
+    return;
+  }
+
+  var cap = getWeatherRetryCapMs();
+  var delay = weatherRetryDelayMs === 0 ? WEATHER_RETRY_BASE_MS : weatherRetryDelayMs;
+  if (delay > cap) {
+    delay = cap;
+  }
+  weatherRetryDelayMs = Math.min(delay * 2, cap);
+
+  var context = weatherRetryContext || {};
+  var retryOptions = {};
+  var key;
+  var sourceOptions = context.options || {};
+  for (key in sourceOptions) {
+    if (Object.prototype.hasOwnProperty.call(sourceOptions, key)) {
+      retryOptions[key] = sourceOptions[key];
+    }
+  }
+  retryOptions.forceRefresh = true;
+  wlog('RETRY', Math.round(delay / 1000) + 's');
+  weatherRetryTimer = setTimeout(function () {
+    weatherRetryTimer = null;
+    getWeather(context.forEpoch || null, retryOptions);
+  }, delay);
 }
 
 function normalizeStoredClaySettings(settings) {
@@ -779,6 +835,7 @@ function notifyWeatherFetchFailed(reason) {
       console.log('Weather fetch failure send failed: ' + JSON.stringify(e));
     }
   );
+  scheduleWeatherApiRetry();
 }
 
 function sendWeatherPayload(payload, sendMeta, sendOptions) {
@@ -949,6 +1006,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
       };
       writeWeatherFetchCache(cacheEntry);
       wlog('API+', payload.count + 'h ' + (model || 'auto'));
+      resetWeatherRetryBackoff();
       sendWeatherPayload(payload, buildSendMeta(latitude, longitude, cacheEntry, 0));
     } catch (e) {
       console.log('Weather parse error: ' + e);
@@ -1020,6 +1078,7 @@ function geocodeCity(city, callback) {
 
 function getWeather(forEpoch, options) {
   options = options || {};
+  weatherRetryContext = { forEpoch: forEpoch || null, options: options };
 
   if (!options.forceRefresh && pauseWeatherAtNightEnabled()) {
     var nightCache = readWeatherFetchCache();
@@ -1079,6 +1138,7 @@ function getWeather(forEpoch, options) {
 }
 
 function scheduleWeatherRequest(forEpoch, options) {
+  cancelWeatherApiRetryTimer();
   if (weatherRequestTimer) {
     clearTimeout(weatherRequestTimer);
   }
