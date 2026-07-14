@@ -425,7 +425,7 @@ module.exports = [
     type: 'toggle',
     messageKey: 'DebugWeatherLog',
     label: 'Weather updates',
-    description: 'Show recent weather fetch, cache, and send activity (keeps last 85 events).',
+    description: 'Show recent weather fetch, cache, and send activity.',
     group: 'tabDebug',
     defaultValue: false,
   },
