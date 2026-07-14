@@ -17,6 +17,9 @@ static TimeDisplay *s_time_display;
 static WeatherChart *s_weather_chart;
 static UnobstructedAreaHandlers s_unobstructed_handlers;
 static time_t s_last_periodic_weather_refresh;
+static AppTimer *s_holiday_request_timer;
+static int s_last_holiday_yday = -1;
+static int s_last_holiday_year = -1;
 
 static void prv_holidays_request(void) {
   if (!settings_get()->show_event_indicators) {
@@ -31,8 +34,40 @@ static void prv_holidays_request(void) {
     return;
   }
 
-  dict_write_uint8(iter, MESSAGE_KEY_REQUEST_HOLIDAYS, 1);
-  app_message_outbox_send();
+  time_t now = argus_time_now();
+  /* Value is Unix epoch so PKJS packs the mask for simulated/capture time. */
+  dict_write_int32(iter, MESSAGE_KEY_REQUEST_HOLIDAYS, (int32_t)now);
+  if (app_message_outbox_send() != APP_MSG_OK) {
+    return;
+  }
+
+  struct tm *tm_now = localtime(&now);
+  if (tm_now) {
+    s_last_holiday_yday = tm_now->tm_yday;
+    s_last_holiday_year = tm_now->tm_year;
+  }
+}
+
+static void prv_holiday_request_timer_cb(void *context) {
+  (void)context;
+  s_holiday_request_timer = NULL;
+  prv_holidays_request();
+}
+
+static void prv_schedule_holidays_request(void) {
+  if (s_holiday_request_timer) {
+    app_timer_cancel(s_holiday_request_timer);
+  }
+  s_holiday_request_timer = app_timer_register(500, prv_holiday_request_timer_cb, NULL);
+}
+
+static bool prv_holiday_day_changed(void) {
+  time_t now = argus_time_now();
+  struct tm *tm_now = localtime(&now);
+  if (!tm_now) {
+    return true;
+  }
+  return tm_now->tm_yday != s_last_holiday_yday || tm_now->tm_year != s_last_holiday_year;
 }
 
 static void prv_apply_holiday_mask(uint16_t mask) {
@@ -277,6 +312,10 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     struct tm *tm_now = localtime(&now);
     if (tm_now) {
       prv_refresh_all_modules(tm_now);
+    }
+    if (prv_holiday_day_changed()) {
+      /* Delay so a weather outbox send from coverage refresh can finish first. */
+      prv_schedule_holidays_request();
     }
     return;
   }
@@ -575,6 +614,10 @@ static void init(void) {
 }
 
 static void deinit(void) {
+  if (s_holiday_request_timer) {
+    app_timer_cancel(s_holiday_request_timer);
+    s_holiday_request_timer = NULL;
+  }
   if (s_check_release_notice_timer) {
     app_timer_cancel(s_check_release_notice_timer);
     s_check_release_notice_timer = NULL;

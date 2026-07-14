@@ -1397,6 +1397,16 @@ function sendHolidayMask(mask) {
   );
 }
 
+function holidayNowFromOptions(options) {
+  if (options && options.now instanceof Date && !isNaN(options.now.getTime())) {
+    return options.now;
+  }
+  if (options && typeof options.nowEpoch === 'number' && options.nowEpoch > 1000000000) {
+    return new Date(options.nowEpoch * 1000);
+  }
+  return new Date();
+}
+
 function syncHolidaysToWatch(options) {
   options = options || {};
 
@@ -1420,7 +1430,7 @@ function syncHolidaysToWatch(options) {
     countryCode: country,
     regionCode: getHolidayRegion(),
     weekStart: String(getClaySetting('WeekStart', '0')),
-    now: new Date(),
+    now: holidayNowFromOptions(options),
     xhrRequest: xhrRequest,
   }, function (result) {
     holidayFetchInFlight = false;
@@ -1524,7 +1534,13 @@ Pebble.addEventListener('appmessage', function (e) {
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
   if (appMessagePayloadHas(payload, 'REQUEST_HOLIDAYS')) {
-    scheduleHolidaySync({ forceRefresh: true });
+    var holidayOptions = { forceRefresh: true };
+    var holidayEpoch = Number(appMessagePayloadGet(payload, 'REQUEST_HOLIDAYS'));
+    /* Watch sends Unix seconds (simulated via CaptureTimeOffset when capturing). */
+    if (holidayEpoch > 1000000000) {
+      holidayOptions.nowEpoch = holidayEpoch;
+    }
+    scheduleHolidaySync(holidayOptions);
   }
 });
 
