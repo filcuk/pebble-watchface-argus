@@ -8,6 +8,35 @@ var release = require('./release');
 var keys = require('message_keys');
 var weatherDebugLog = require('./weather-debug-log');
 
+/**
+ * Read a field from a watch→phone AppMessage payload.
+ * rePebble may deliver keys as message_keys numeric ids and/or package.json
+ * string names — never use payload[keys.Foo] alone when reading.
+ */
+function appMessagePayloadGet(payload, keyName) {
+  if (!payload || !keyName) {
+    return undefined;
+  }
+  var id = keys[keyName];
+  if (id !== undefined && id !== null && payload[id] !== undefined && payload[id] !== null) {
+    return payload[id];
+  }
+  if (payload[keyName] !== undefined && payload[keyName] !== null) {
+    return payload[keyName];
+  }
+  if (id !== undefined && id !== null) {
+    var asString = String(id);
+    if (payload[asString] !== undefined && payload[asString] !== null) {
+      return payload[asString];
+    }
+  }
+  return undefined;
+}
+
+function appMessagePayloadHas(payload, keyName) {
+  return appMessagePayloadGet(payload, keyName) !== undefined;
+}
+
 var clayUserData = {
   version: pkg.version,
   githubUrl: 'https://github.com/filcuk/pebble-watchface-argus',
@@ -1410,73 +1439,27 @@ Pebble.addEventListener('ready', function () {
 });
 
 Pebble.addEventListener('appmessage', function (e) {
-  /* TEMP DIAG: phase-2a — remove after testing why watch→phone is mute */
   var payload = e && e.payload ? e.payload : null;
-  var reqWeatherVal = payload ? payload[keys.REQUEST_WEATHER] : undefined;
-  var reqKindVal = payload ? payload[keys.WeatherRequestKind] : undefined;
-  var skipVal = payload ? payload[keys.WeatherDebugSkip] : undefined;
-  var reqHolidaysVal = payload ? payload[keys.REQUEST_HOLIDAYS] : undefined;
-  try {
-    console.log(
-      'WxDiag appmessage payload=' +
-        JSON.stringify(payload) +
-        ' keys.REQUEST_WEATHER=' +
-        keys.REQUEST_WEATHER +
-        ' keys.WeatherRequestKind=' +
-        keys.WeatherRequestKind +
-        ' keys.WeatherDebugSkip=' +
-        keys.WeatherDebugSkip
-    );
-  } catch (stringifyErr) {
-    console.log('WxDiag appmessage payload stringify failed: ' + stringifyErr);
-  }
-  console.log(
-    'WxDiag appmessage values REQUEST_WEATHER=' +
-      reqWeatherVal +
-      ' (' +
-      typeof reqWeatherVal +
-      ') WeatherRequestKind=' +
-      reqKindVal +
-      ' (' +
-      typeof reqKindVal +
-      ') WeatherDebugSkip=' +
-      skipVal +
-      ' (' +
-      typeof skipVal +
-      ') REQUEST_HOLIDAYS=' +
-      reqHolidaysVal +
-      ' (' +
-      typeof reqHolidaysVal +
-      ')'
-  );
-  if (reqWeatherVal) {
-    console.log('WxDiag got REQUEST_WEATHER');
-  } else if (skipVal !== undefined && skipVal !== null) {
-    console.log('WxDiag got WeatherDebugSkip');
-  } else if (reqHolidaysVal) {
-    console.log('WxDiag got REQUEST_HOLIDAYS');
-  } else if (payload && payload[keys.CheckReleaseNotice]) {
-    console.log('WxDiag got CheckReleaseNotice');
-  } else {
-    console.log('WxDiag appmessage with none of the expected watch keys');
+  if (!payload) {
+    return;
   }
 
-  if (payload && payload[keys.CheckReleaseNotice]) {
+  if (appMessagePayloadHas(payload, 'CheckReleaseNotice')) {
     maybeShowReleaseNotice({ fromWatch: true });
   }
-  if (payload && payload[keys.WeatherDebugSkip] !== undefined && payload[keys.WeatherDebugSkip] !== null) {
-    wlogWeatherWatchSkip(payload[keys.WeatherDebugSkip]);
+  if (appMessagePayloadHas(payload, 'WeatherDebugSkip')) {
+    wlogWeatherWatchSkip(appMessagePayloadGet(payload, 'WeatherDebugSkip'));
   }
-  if (payload && payload[keys.REQUEST_WEATHER]) {
-    var forEpoch = payload[keys.WeatherForEpoch];
+  if (appMessagePayloadHas(payload, 'REQUEST_WEATHER')) {
+    var forEpoch = appMessagePayloadGet(payload, 'WeatherForEpoch');
     var weatherOptions = {};
-    if (payload[keys.LocationMode] !== undefined && payload[keys.LocationMode] !== null) {
-      weatherOptions.locationMode = payload[keys.LocationMode];
+    if (appMessagePayloadHas(payload, 'LocationMode')) {
+      weatherOptions.locationMode = appMessagePayloadGet(payload, 'LocationMode');
     }
-    if (payload[keys.ManualLocation]) {
-      weatherOptions.manualLocation = payload[keys.ManualLocation];
+    if (appMessagePayloadHas(payload, 'ManualLocation')) {
+      weatherOptions.manualLocation = appMessagePayloadGet(payload, 'ManualLocation');
     }
-    var reqKind = payload[keys.WeatherRequestKind];
+    var reqKind = appMessagePayloadGet(payload, 'WeatherRequestKind');
     var reqKindKey = String(reqKind);
     /* Watch force/stale means coverage or freshness failed — bypass phone age cache. */
     if (reqKindKey === '1' || reqKindKey === '2') {
@@ -1494,7 +1477,7 @@ Pebble.addEventListener('appmessage', function (e) {
     wlogWeatherRequestKind(reqKind, reqDetail);
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
-  if (payload && payload[keys.REQUEST_HOLIDAYS]) {
+  if (appMessagePayloadHas(payload, 'REQUEST_HOLIDAYS')) {
     scheduleHolidaySync({ forceRefresh: true });
   }
 });
