@@ -334,7 +334,7 @@ function weatherSectionHtml(options) {
         '">Last API call at ' +
         escapeHtml(formatClock(apiMs)) +
         ' · ' +
-        escapeHtml(weatherDebugLog.formatAgeMinutes(ageMs)) +
+        escapeHtml(weatherDebugLog.formatAgeMs(ageMs)) +
         ' ago</p>'
     );
   }
