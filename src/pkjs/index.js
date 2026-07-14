@@ -421,8 +421,14 @@ function getWeatherUpdateIntervalMs() {
 }
 
 function getGpsMaxAgeMs() {
-  var value = String(getClaySetting('GpsMaxAge', '30'));
-  return GPS_MAX_AGE_MS[value] || GPS_MAX_AGE_MS['30'];
+  var value = String(getClaySetting('GpsMaxAge', '60'));
+  return GPS_MAX_AGE_MS[value] || GPS_MAX_AGE_MS['60'];
+}
+
+function gpsCacheExpiryMs() {
+  /* Near-miss gate: same 80% threshold as weatherFetchCacheExpiryMs(), so a
+   * periodic weather check near the end of GpsMaxAge still forces a fresh fix. */
+  return (getGpsMaxAgeMs() * 4) / 5;
 }
 
 function claySettingIsTruthy(value) {
@@ -1279,7 +1285,7 @@ function getWeather(forEpoch, options) {
       wlog('GPS!', err && err.message ? err.message : 'unknown');
       notifyWeatherFetchFailed('gps');
     },
-    { timeout: 15000, maximumAge: getGpsMaxAgeMs() }
+    { timeout: 15000, maximumAge: gpsCacheExpiryMs() }
   );
 }
 

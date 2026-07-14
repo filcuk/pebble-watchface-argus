@@ -32,7 +32,7 @@ Display and location (in order):
 | Feels-like temperature | Off | Actual vs apparent temperature on chart |
 | Location | Auto | Auto uses phone GPS; Manual uses city geocoding |
 | City name | — | Shown only when Location is Manual |
-| GPS update frequency | 30 min | How long a GPS fix is reused (Auto only) |
+| GPS update frequency | 1 hour | How long a GPS fix is reused (Auto only) |
 
 Fetch behaviour:
 
