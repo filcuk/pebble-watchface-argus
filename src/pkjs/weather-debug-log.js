@@ -124,19 +124,11 @@ function formatAgeMs(ms) {
   return Math.round(ms / 60000) + 'm';
 }
 
-function formatAgeMinutes(ms) {
-  if (ms < 0) {
-    ms = 0;
-  }
-  return Math.round(ms / 60000) + 'm';
-}
-
 module.exports = {
   LOG_KEY: LOG_KEY,
   LOG_MAX: LOG_MAX,
   append: appendLog,
   read: readLog,
   formatAgeMs: formatAgeMs,
-  formatAgeMinutes: formatAgeMinutes,
   formatPanelHtml: formatPanelHtml,
 };
