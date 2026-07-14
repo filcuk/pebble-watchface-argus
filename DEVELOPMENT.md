@@ -98,6 +98,21 @@ Edit [`release.toml`](release.toml) (`version`, `message`) before each release. 
 
 The update notice is shown via `Pebble.showSimpleNotificationOnPebble` on the phone. It is skipped when `argus-release-seen` in phone storage matches the release version (unless Debug → **Always**).
 
+### Dual-store `.pbw` (temporary)
+
+Until the Rebble listing is rebound to the canonical UUID, build both store packages (needs `pebble` on `PATH`, usually WSL):
+
+```bash
+npm run build:store
+```
+
+| Output | Upload to | UUID |
+|--------|-----------|------|
+| `build/store/argus-<ver>-repebble.pbw` | Core / rePebble | `7b435c75-…` (canonical) |
+| `build/store/argus-<ver>-rebble.pbw` | Rebble community | `f8c3a2b1-…` (legacy listing) |
+
+`package.json` is restored to the canonical UUID after the run. Normal `pebble build` / day-to-day work stays on `7b435c75-…`.
+
 ## Screenshots and store assets
 
 **Timed capture** — emulator must already be running; do not pass `--emulator` to the script:

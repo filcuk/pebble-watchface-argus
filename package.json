@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build:clay": "node scripts/build-custom-clay.js",
+    "build:store": "node scripts/build-store-pbws.js",
     "measure-clay": "node scripts/measure-clay-url.js --max=180000"
   },
   "dependencies": {
