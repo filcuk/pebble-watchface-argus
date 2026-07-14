@@ -421,8 +421,14 @@ function getWeatherUpdateIntervalMs() {
 }
 
 function getGpsMaxAgeMs() {
-  var value = String(getClaySetting('GpsMaxAge', '30'));
-  return GPS_MAX_AGE_MS[value] || GPS_MAX_AGE_MS['30'];
+  var value = String(getClaySetting('GpsMaxAge', '60'));
+  return GPS_MAX_AGE_MS[value] || GPS_MAX_AGE_MS['60'];
+}
+
+function gpsCacheExpiryMs() {
+  /* Near-miss gate: same 80% threshold as weatherFetchCacheExpiryMs(), so a
+   * periodic weather check near the end of GpsMaxAge still forces a fresh fix. */
+  return (getGpsMaxAgeMs() * 4) / 5;
 }
 
 function claySettingIsTruthy(value) {
@@ -525,6 +531,28 @@ function writeLastGpsFix(latitude, longitude, timestamp) {
   }
 }
 
+function readLastGpsFix() {
+  try {
+    var raw = localStorage.getItem(LAST_GPS_FIX_KEY);
+    if (!raw) {
+      return null;
+    }
+    var parsed = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed.lat !== 'number' ||
+      typeof parsed.lon !== 'number' ||
+      typeof parsed.t !== 'number' ||
+      !isFinite(parsed.t)
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
 function normalizeGpsTimestamp(pos) {
   var raw = pos && pos.timestamp;
   if ((raw === undefined || raw === null) && pos && pos.coords) {
@@ -557,30 +585,37 @@ function normalizeGpsTimestamp(pos) {
   return n;
 }
 
+function formatGpsLogMsg(latitude, longitude, recordedAt, nowMs) {
+  return (
+    Number(latitude).toFixed(2) +
+    ',' +
+    Number(longitude).toFixed(2) +
+    ' ' +
+    weatherDebugLog.formatAgeMs(nowMs - recordedAt)
+  );
+}
+
 function wlogGpsPosition(pos) {
   var latitude = quantizeCoord(pos.coords.latitude);
   var longitude = quantizeCoord(pos.coords.longitude);
   var fixTime = normalizeGpsTimestamp(pos);
   var nowMs = Date.now();
-  /* Phone/emulator geolocation often omits a fix timestamp; fall back to now
-     (same as About) so the log shows 0s instead of "?". */
+  /* Prefer OS fix time when present; otherwise stamp receive time so later
+     phone-side reuse can log a real age (many WebViews omit timestamps). */
   var recordedAt = fixTime != null ? fixTime : nowMs;
   writeLastGpsFix(latitude, longitude, recordedAt);
-  wlog(
-    'GPS',
-    latitude.toFixed(2) +
-      ',' +
-      longitude.toFixed(2) +
-      ' ' +
-      weatherDebugLog.formatAgeMs(nowMs - recordedAt)
-  );
+  wlog('GPS', formatGpsLogMsg(latitude, longitude, recordedAt, nowMs));
+}
+
+function wlogGpsCacheReuse(last) {
+  wlog('GPS', formatGpsLogMsg(last.lat, last.lon, last.t, Date.now()));
 }
 
 function wlogWeatherRequestKind(kind, reqDetail) {
   var kindKey = String(kind);
   var label = WEATHER_REQ_KINDS[kindKey];
   if (!label) {
-    label = kind === undefined || kind === null ? 'watch' : 'kind' + kindKey;
+    label = kind === undefined || kind === null ? 'request' : 'kind' + kindKey;
   }
   if (reqDetail) {
     wlog('REQ', label + ' ' + reqDetail);
@@ -738,6 +773,13 @@ function cacheCoversHour(cache, epochSeconds) {
   return index >= 0 && index < count;
 }
 
+function weatherFetchCacheExpiryMs() {
+  /* Near-miss gate: treat cache as expired once age reaches 80% of the update
+   * interval (within 20% of expiring). Periodic watch checks a few seconds early
+   * then still refresh instead of serving a nearly-stale cache for another cycle. */
+  return (getWeatherUpdateIntervalMs() * 4) / 5;
+}
+
 function shouldUseFetchCache(latitude, longitude, model, hours, startEpoch) {
   var cache = readWeatherFetchCache();
   if (!cache) {
@@ -746,7 +788,7 @@ function shouldUseFetchCache(latitude, longitude, model, hours, startEpoch) {
   if (cache.key !== weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch)) {
     return false;
   }
-  if (Date.now() - cacheApiFetchedAt(cache) >= getWeatherUpdateIntervalMs()) {
+  if (Date.now() - cacheApiFetchedAt(cache) >= weatherFetchCacheExpiryMs()) {
     return false;
   }
   /* Age alone is not enough — reused payloads must still cover "now" (or forEpoch). */
@@ -1262,6 +1304,18 @@ function getWeather(forEpoch, options) {
     return;
   }
 
+  /* Reuse our last fix within GpsMaxAge (with near-miss gate). Phone WebViews
+     often omit Position.timestamp or stamp "now", so OS maximumAge alone made
+     every GPS log line show 0s even when the fix was cached. */
+  if (!options.forceRefresh) {
+    var lastGps = readLastGpsFix();
+    if (lastGps && Date.now() - lastGps.t < gpsCacheExpiryMs()) {
+      wlogGpsCacheReuse(lastGps);
+      fetchForecast(lastGps.lat, lastGps.lon, forEpoch, options);
+      return;
+    }
+  }
+
   navigator.geolocation.getCurrentPosition(
     function (pos) {
       wlogGpsPosition(pos);
@@ -1272,7 +1326,7 @@ function getWeather(forEpoch, options) {
       wlog('GPS!', err && err.message ? err.message : 'unknown');
       notifyWeatherFetchFailed('gps');
     },
-    { timeout: 15000, maximumAge: getGpsMaxAgeMs() }
+    { timeout: 15000, maximumAge: options.forceRefresh ? 0 : gpsCacheExpiryMs() }
   );
 }
 
@@ -1465,15 +1519,7 @@ Pebble.addEventListener('appmessage', function (e) {
     if (reqKindKey === '1' || reqKindKey === '2') {
       weatherOptions.forceRefresh = true;
     }
-    var reqDetail = 'watch';
-    if (forEpoch) {
-      reqDetail += ' t=' + forEpoch;
-    }
-    if (weatherOptions.locationMode === '1' || weatherOptions.locationMode === 1) {
-      reqDetail += ' manual';
-    } else if (weatherOptions.locationMode === '0' || weatherOptions.locationMode === 0) {
-      reqDetail += ' gps';
-    }
+    var reqDetail = forEpoch ? 't=' + forEpoch : '';
     wlogWeatherRequestKind(reqKind, reqDetail);
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }

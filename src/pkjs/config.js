@@ -341,7 +341,7 @@ module.exports = [
     label: 'GPS update frequency',
     description: 'How long a GPS fix is reused. This setting affects battery life.',
     group: 'tabWeather',
-    defaultValue: '30',
+    defaultValue: '60',
     options: [
       { label: '15 minutes', value: '15' },
       { label: '30 minutes', value: '30' },
@@ -425,7 +425,7 @@ module.exports = [
     type: 'toggle',
     messageKey: 'DebugWeatherLog',
     label: 'Weather updates',
-    description: 'Show recent weather fetch, cache, and send activity (keeps last 85 events).',
+    description: 'Show recent weather fetch, cache, and send activity.',
     group: 'tabDebug',
     defaultValue: false,
   },
