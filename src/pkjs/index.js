@@ -738,6 +738,13 @@ function cacheCoversHour(cache, epochSeconds) {
   return index >= 0 && index < count;
 }
 
+function weatherFetchCacheExpiryMs() {
+  /* Near-miss gate: treat cache as expired once age reaches 80% of the update
+   * interval (within 20% of expiring). Periodic watch checks a few seconds early
+   * then still refresh instead of serving a nearly-stale cache for another cycle. */
+  return (getWeatherUpdateIntervalMs() * 4) / 5;
+}
+
 function shouldUseFetchCache(latitude, longitude, model, hours, startEpoch) {
   var cache = readWeatherFetchCache();
   if (!cache) {
@@ -746,7 +753,7 @@ function shouldUseFetchCache(latitude, longitude, model, hours, startEpoch) {
   if (cache.key !== weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch)) {
     return false;
   }
-  if (Date.now() - cacheApiFetchedAt(cache) >= getWeatherUpdateIntervalMs()) {
+  if (Date.now() - cacheApiFetchedAt(cache) >= weatherFetchCacheExpiryMs()) {
     return false;
   }
   /* Age alone is not enough — reused payloads must still cover "now" (or forEpoch). */

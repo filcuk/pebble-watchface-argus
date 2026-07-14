@@ -400,7 +400,10 @@ bool weather_is_refresh_due(void) {
   if (s_weather.api_fetched_at <= 0) {
     return s_weather.hour_count == 0;
   }
-  return (argus_time_now() - s_weather.api_fetched_at) >= prv_update_interval_seconds();
+  /* Near-miss gate: due once age reaches 80% of the interval (within 20% of
+   * expiry), matching phone-side weatherFetchCacheExpiryMs(). */
+  time_t interval_s = prv_update_interval_seconds();
+  return (argus_time_now() - s_weather.api_fetched_at) >= (interval_s * 4) / 5;
 }
 
 WeatherFreshness weather_get_freshness(void) {
