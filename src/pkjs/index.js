@@ -580,7 +580,7 @@ function wlogWeatherRequestKind(kind, reqDetail) {
   var kindKey = String(kind);
   var label = WEATHER_REQ_KINDS[kindKey];
   if (!label) {
-    label = kind === undefined || kind === null ? 'watch' : 'kind' + kindKey;
+    label = kind === undefined || kind === null ? 'request' : 'kind' + kindKey;
   }
   if (reqDetail) {
     wlog('REQ', label + ' ' + reqDetail);
@@ -1472,15 +1472,7 @@ Pebble.addEventListener('appmessage', function (e) {
     if (reqKindKey === '1' || reqKindKey === '2') {
       weatherOptions.forceRefresh = true;
     }
-    var reqDetail = 'watch';
-    if (forEpoch) {
-      reqDetail += ' t=' + forEpoch;
-    }
-    if (weatherOptions.locationMode === '1' || weatherOptions.locationMode === 1) {
-      reqDetail += ' manual';
-    } else if (weatherOptions.locationMode === '0' || weatherOptions.locationMode === 0) {
-      reqDetail += ' gps';
-    }
+    var reqDetail = forEpoch ? 't=' + forEpoch : '';
     wlogWeatherRequestKind(reqKind, reqDetail);
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
