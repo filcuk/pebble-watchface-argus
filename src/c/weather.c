@@ -1147,6 +1147,9 @@ static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
   weather_get_view(&view);
   /* Throttle even with an empty view — otherwise slide/refresh storms AppMessage. */
   if (s_last_weather_request_at > 0 && (now - s_last_weather_request_at) < 60) {
+    /* TEMP DIAG: phase-1 weather sync stall — remove after testing */
+    APP_LOG(APP_LOG_LEVEL_INFO, "WxDiag send kind=%u throttled last=%ld", (unsigned)kind,
+            (long)s_last_weather_request_at);
     prv_send_weather_debug_skip(WEATHER_DBG_THROTTLE);
     if (!weather_view_has_data(&view)) {
       weather_schedule_retry();
@@ -1156,7 +1159,10 @@ static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
   s_last_weather_request_at = now;
 
   DictionaryIterator *iter;
-  if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
+  AppMessageResult begin = app_message_outbox_begin(&iter);
+  if (begin != APP_MSG_OK) {
+    /* TEMP DIAG: phase-1 weather sync stall — remove after testing */
+    APP_LOG(APP_LOG_LEVEL_WARNING, "WxDiag send kind=%u outbox_begin=%d", (unsigned)kind, (int)begin);
     weather_schedule_retry();
     return;
   }
@@ -1169,6 +1175,9 @@ static void prv_send_weather_request(time_t when_hour, uint8_t kind) {
     dict_write_cstring(iter, MESSAGE_KEY_ManualLocation, settings->manual_location);
   }
   AppMessageResult result = app_message_outbox_send();
+  /* TEMP DIAG: phase-1 weather sync stall — remove after testing */
+  APP_LOG(APP_LOG_LEVEL_INFO, "WxDiag send kind=%u hour=%ld outbox_send=%d", (unsigned)kind,
+          (long)request_hour, (int)result);
   if (result != APP_MSG_OK) {
     APP_LOG(APP_LOG_LEVEL_WARNING, "Weather request send failed: %d", (int)result);
     weather_schedule_retry();
@@ -1216,12 +1225,17 @@ void weather_slide_stale_hours(void) {
 
 void weather_request(void) {
   if (prv_should_pause_periodic_refresh()) {
+    /* TEMP DIAG: phase-1 weather sync stall — remove after testing */
+    APP_LOG(APP_LOG_LEVEL_INFO, "WxDiag request periodic night_pause");
     prv_send_weather_debug_skip(WEATHER_DBG_NIGHT_PAUSE);
     return;
   }
 
   bool due = weather_is_refresh_due();
-  if (!connection_service_peek_pebble_app_connection()) {
+  bool connected = connection_service_peek_pebble_app_connection();
+  /* TEMP DIAG: phase-1 weather sync stall — remove after testing */
+  APP_LOG(APP_LOG_LEVEL_INFO, "WxDiag request periodic due=%d connected=%d", (int)due, (int)connected);
+  if (!connected) {
     if (!due && weather_cache_is_valid()) {
       prv_send_weather_debug_skip(WEATHER_DBG_OFFLINE_CACHE);
       return;
@@ -1236,5 +1250,7 @@ void weather_request(void) {
 }
 
 void weather_request_force(void) {
+  /* TEMP DIAG: phase-1 weather sync stall — remove after testing */
+  APP_LOG(APP_LOG_LEVEL_INFO, "WxDiag request force");
   prv_send_weather_request(0, WEATHER_REQ_FORCE);
 }

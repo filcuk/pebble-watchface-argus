@@ -184,6 +184,9 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   uint8_t interval_min = prv_weather_update_interval_minutes();
   if (s_last_periodic_weather_refresh == 0 ||
       (now - s_last_periodic_weather_refresh) >= (time_t)interval_min * 60) {
+    /* TEMP DIAG: phase-1 weather sync stall — remove after testing */
+    APP_LOG(APP_LOG_LEVEL_INFO, "WxDiag tick interval=%u last=%ld now=%ld",
+            (unsigned)interval_min, (long)s_last_periodic_weather_refresh, (long)now);
     weather_request();
     s_last_periodic_weather_refresh = now;
   }
@@ -304,6 +307,8 @@ static void prv_outbox_failed(DictionaryIterator *iter, AppMessageResult reason,
   (void)iter;
   (void)context;
   APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox failed: %d", (int)reason);
+  /* TEMP DIAG: phase-1 weather sync stall — remove after testing */
+  APP_LOG(APP_LOG_LEVEL_WARNING, "WxDiag outbox_failed reason=%d", (int)reason);
 }
 
 static void prv_battery_handler(BatteryChargeState state) {
