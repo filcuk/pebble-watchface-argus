@@ -501,11 +501,21 @@ function normalizeGpsTimestamp(pos) {
   if ((raw === undefined || raw === null) && pos && pos.coords) {
     raw = pos.coords.timestamp;
   }
-  if (raw === undefined || raw === null) {
+  if (raw === undefined || raw === null || raw === '') {
     return null;
   }
   if (typeof raw === 'object' && typeof raw.getTime === 'function') {
     raw = raw.getTime();
+  } else if (typeof raw === 'string') {
+    var asNum = Number(raw);
+    if (isFinite(asNum) && asNum > 0) {
+      raw = asNum;
+    } else {
+      raw = Date.parse(raw);
+      if (!isFinite(raw)) {
+        return null;
+      }
+    }
   }
   var n = Number(raw);
   if (!isFinite(n) || n <= 0) {
@@ -523,9 +533,18 @@ function wlogGpsPosition(pos) {
   var longitude = quantizeCoord(pos.coords.longitude);
   var fixTime = normalizeGpsTimestamp(pos);
   var nowMs = Date.now();
-  writeLastGpsFix(latitude, longitude, fixTime || nowMs);
-  var ageLabel = fixTime != null ? weatherDebugLog.formatAgeMs(nowMs - fixTime) : '?';
-  wlog('GPS', latitude.toFixed(2) + ',' + longitude.toFixed(2) + ' ' + ageLabel);
+  /* Phone/emulator geolocation often omits a fix timestamp; fall back to now
+     (same as About) so the log shows 0s instead of "?". */
+  var recordedAt = fixTime != null ? fixTime : nowMs;
+  writeLastGpsFix(latitude, longitude, recordedAt);
+  wlog(
+    'GPS',
+    latitude.toFixed(2) +
+      ',' +
+      longitude.toFixed(2) +
+      ' ' +
+      weatherDebugLog.formatAgeMs(nowMs - recordedAt)
+  );
 }
 
 function wlogWeatherRequestKind(kind, reqDetail) {
@@ -576,6 +595,7 @@ function injectWeatherLogForClayConfig() {
 }
 
 function injectAboutStatusForClayConfig() {
+  var weatherCache = readWeatherFetchCache();
   setClayConfigDefaultById(
     'argus-about-status',
     aboutStatus.formatPanelHtml({
@@ -586,7 +606,8 @@ function injectAboutStatusForClayConfig() {
       countryCode: String(getClaySetting('HolidayCountry', '') || ''),
       regionCode: String(getClaySetting('HolidayRegion', '') || ''),
       weekStart: String(getClaySetting('WeekStart', '0')),
-      pauseAtNight: pauseWeatherAtNightEnabled(),
+      pauseAtNight:
+        pauseWeatherAtNightEnabled() && !!weatherCache && weatherIsNightNow(weatherCache),
     })
   );
 }
@@ -774,6 +795,17 @@ function hourStartEpoch(epochSeconds) {
   var d = new Date(epochSeconds * 1000);
   d.setMinutes(0, 0, 0);
   return Math.floor(d.getTime() / 1000);
+}
+
+function extractDailySunTimes(json) {
+  var daily = json && json.daily;
+  if (!daily || !daily.sunrise || !daily.sunset) {
+    return null;
+  }
+  return {
+    sunrise: daily.sunrise.slice(),
+    sunset: daily.sunset.slice(),
+  };
 }
 
 function packWeatherPayload(json, hours, startEpoch) {
@@ -1018,7 +1050,8 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
     quantizeCoord(latitude) +
     '&longitude=' +
     quantizeCoord(longitude) +
-    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day&timezone=auto';
+    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day' +
+    '&daily=sunrise,sunset&timezone=auto';
 
   if (model) {
     url += '&models=' + encodeURIComponent(model);
@@ -1063,6 +1096,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
         return;
       }
       var nowMs = Date.now();
+      var sunTimes = extractDailySunTimes(json);
       var cacheEntry = {
         key: weatherFetchCacheKey(latitude, longitude, model, hours, startEpoch),
         fetchedAt: nowMs,
@@ -1072,8 +1106,14 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
         fetchTime: payload.fetchTime,
         count: payload.count,
         isDayBytes: payload.isDayBytes,
+        utcOffsetSeconds:
+          typeof json.utc_offset_seconds === 'number' ? json.utc_offset_seconds : 0,
         payload: payload,
       };
+      if (sunTimes) {
+        cacheEntry.dailySunrise = sunTimes.sunrise;
+        cacheEntry.dailySunset = sunTimes.sunset;
+      }
       writeWeatherFetchCache(cacheEntry);
       wlog('API+', model || 'auto');
       resetWeatherRetryBackoff();

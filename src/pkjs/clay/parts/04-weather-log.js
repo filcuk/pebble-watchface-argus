@@ -20,10 +20,15 @@
     if (show) {
       root.classList.remove('hide');
       root.classList.add('argus-row', 'argus-weather-log-panel');
+      var current = String(logItem.get() || '').trim();
+      if (!current) {
+        logItem.set(
+          '<div class="argus-weather-log-empty">Save settings to apply.</div>'
+        );
+      }
       return;
     }
 
     root.classList.add('hide');
     root.classList.remove('argus-row', 'argus-weather-log-panel');
-    logItem.set('');
   }

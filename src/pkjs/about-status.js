@@ -46,6 +46,197 @@ function formatHolidayDate(entry) {
   return entry.day + ' ' + months[entry.month];
 }
 
+function formatSunClock(iso) {
+  if (!iso) {
+    return '';
+  }
+  var match = String(iso).match(/T(\d{2}):(\d{2})/);
+  return match ? match[1] + ':' + match[2] : '';
+}
+
+function formatHmFromHours(hours) {
+  if (hours == null || !isFinite(hours)) {
+    return '';
+  }
+  var totalMinutes = Math.round((((hours % 24) + 24) % 24) * 60);
+  var hh = Math.floor(totalMinutes / 60) % 24;
+  var mm = totalMinutes % 60;
+  var hhStr = hh < 10 ? '0' + hh : String(hh);
+  var mmStr = mm < 10 ? '0' + mm : String(mm);
+  return hhStr + ':' + mmStr;
+}
+
+function forecastLocalDateParts(nowMs, utcOffsetSeconds) {
+  var shifted = new Date(nowMs + (utcOffsetSeconds || 0) * 1000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+    ymd:
+      shifted.getUTCFullYear() +
+      '-' +
+      ('0' + (shifted.getUTCMonth() + 1)).slice(-2) +
+      '-' +
+      ('0' + shifted.getUTCDate()).slice(-2),
+  };
+}
+
+function resolveForecastLatLon(cache, gps) {
+  if (cache && cache.latQ != null && cache.lonQ != null) {
+    return { lat: Number(cache.latQ), lon: Number(cache.lonQ) };
+  }
+  if (gps && gps.lat != null && gps.lon != null) {
+    return { lat: Number(gps.lat), lon: Number(gps.lon) };
+  }
+  return null;
+}
+
+function resolveUtcOffsetSeconds(cache) {
+  if (cache && typeof cache.utcOffsetSeconds === 'number') {
+    return cache.utcOffsetSeconds;
+  }
+  /* Phone local offset when forecast timezone is unknown. */
+  return -new Date().getTimezoneOffset() * 60;
+}
+
+function pickSunTimesFromCache(cache) {
+  if (!cache || !cache.dailySunrise || !cache.dailySunset) {
+    return null;
+  }
+  var sunrises = cache.dailySunrise;
+  var sunsets = cache.dailySunset;
+  if (!sunrises.length || !sunsets.length) {
+    return null;
+  }
+  var today = forecastLocalDateParts(Date.now(), resolveUtcOffsetSeconds(cache)).ymd;
+  var i;
+  for (i = 0; i < sunrises.length && i < sunsets.length; i += 1) {
+    if (String(sunrises[i]).indexOf(today) === 0) {
+      return { sunup: formatSunClock(sunrises[i]), sundown: formatSunClock(sunsets[i]) };
+    }
+  }
+  return {
+    sunup: formatSunClock(sunrises[0]),
+    sundown: formatSunClock(sunsets[0]),
+  };
+}
+
+/* Compact NOAA-style sunrise/sunset in local hours for lat/lon. */
+function calcSunTimesLocal(lat, lon, utcOffsetSeconds, nowMs) {
+  var parts = forecastLocalDateParts(nowMs || Date.now(), utcOffsetSeconds);
+  var rad = Math.PI / 180;
+  var dayOfYear =
+    Math.floor((275 * parts.month) / 9) -
+    (Math.floor((parts.month + 9) / 12) *
+      (1 + Math.floor((parts.year - 4 * Math.floor(parts.year / 4) + 2) / 3))) +
+    parts.day -
+    30;
+  var lngHour = lon / 15;
+
+  function eventLocalHours(rising) {
+    var t = rising ? dayOfYear + (6 - lngHour) / 24 : dayOfYear + (18 - lngHour) / 24;
+    var M = 0.9856 * t - 3.289;
+    var L = M + 1.916 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 282.634;
+    L = ((L % 360) + 360) % 360;
+    var RA = Math.atan(0.91764 * Math.tan(L * rad)) / rad;
+    RA = ((RA % 360) + 360) % 360;
+    var Lquadrant = Math.floor(L / 90) * 90;
+    var RAquadrant = Math.floor(RA / 90) * 90;
+    RA = (RA + (Lquadrant - RAquadrant)) / 15;
+    var sinDec = 0.39782 * Math.sin(L * rad);
+    var cosDec = Math.cos(Math.asin(sinDec));
+    var cosH =
+      (Math.cos(90.833 * rad) - sinDec * Math.sin(lat * rad)) /
+      (cosDec * Math.cos(lat * rad));
+    if (cosH > 1 || cosH < -1) {
+      return null;
+    }
+    var H = rising ? 360 - Math.acos(cosH) / rad : Math.acos(cosH) / rad;
+    H /= 15;
+    var T = H + RA - 0.06571 * t - 6.622;
+    var UT = ((T - lngHour) % 24 + 24) % 24;
+    return UT + utcOffsetSeconds / 3600;
+  }
+
+  var sunupHours = eventLocalHours(true);
+  var sundownHours = eventLocalHours(false);
+  if (sunupHours == null && sundownHours == null) {
+    return null;
+  }
+  return {
+    sunup: formatHmFromHours(sunupHours),
+    sundown: formatHmFromHours(sundownHours),
+  };
+}
+
+function pickSunTimesCalculated(cache, gps) {
+  var coords = resolveForecastLatLon(cache, gps);
+  if (!coords || !isFinite(coords.lat) || !isFinite(coords.lon)) {
+    return null;
+  }
+  return calcSunTimesLocal(coords.lat, coords.lon, resolveUtcOffsetSeconds(cache));
+}
+
+function pickSunTimesFromIsDay(cache) {
+  var bytes =
+    (cache && cache.isDayBytes) ||
+    (cache && cache.payload && cache.payload.isDayBytes) ||
+    null;
+  var fetchTime =
+    (cache && cache.fetchTime) ||
+    (cache && cache.payload && cache.payload.fetchTime) ||
+    0;
+  var count =
+    (cache && cache.count) || (cache && cache.payload && cache.payload.count) || 0;
+  if (!bytes || !fetchTime || !count) {
+    return null;
+  }
+  var offset = resolveUtcOffsetSeconds(cache);
+  var sunup = '';
+  var sundown = '';
+  var i;
+  for (i = 1; i < count; i += 1) {
+    var hourEpoch = fetchTime + i * 3600;
+    if (!sunup && bytes[i - 1] === 0 && bytes[i] === 1) {
+      sunup = formatHmFromEpoch(hourEpoch, offset);
+    }
+    if (!sundown && bytes[i - 1] === 1 && bytes[i] === 0) {
+      sundown = formatHmFromEpoch(hourEpoch, offset);
+    }
+  }
+  if (!sunup && !sundown) {
+    return null;
+  }
+  return { sunup: sunup, sundown: sundown };
+}
+
+function formatHmFromEpoch(epochSeconds, utcOffsetSeconds) {
+  var shifted = new Date(epochSeconds * 1000 + (utcOffsetSeconds || 0) * 1000);
+  var hh = shifted.getUTCHours();
+  var mm = shifted.getUTCMinutes();
+  var hhStr = hh < 10 ? '0' + hh : String(hh);
+  var mmStr = mm < 10 ? '0' + mm : String(mm);
+  return hhStr + ':' + mmStr;
+}
+
+function sunTimesLineHtml(cache, gps) {
+  var times =
+    pickSunTimesFromCache(cache) ||
+    pickSunTimesCalculated(cache, gps) ||
+    pickSunTimesFromIsDay(cache);
+  if (!times || (!times.sunup && !times.sundown)) {
+    return '';
+  }
+  var parts = [];
+  if (times.sunup) {
+    parts.push('Sunrise ' + escapeHtml(times.sunup));
+  }
+  if (times.sundown) {
+    parts.push('Sunset ' + escapeHtml(times.sundown));
+  }
+  return '<p class="argus-about-muted argus-about-line">' + parts.join(' · ') + '</p>';
+}
+
 function cacheApiFetchedAt(cache) {
   if (!cache) {
     return 0;
@@ -67,14 +258,53 @@ function regionDisplayName(countryCode, regionCode) {
   return regionCode;
 }
 
-function locationPending(cache, gps) {
-  if (!cache || gps == null || gps.lat == null || gps.lon == null) {
+function quantizeCoord(value) {
+  return Math.round(Number(value) * 100) / 100;
+}
+
+function readGeocodeCache(city) {
+  if (!city) {
+    return null;
+  }
+  try {
+    var raw = localStorage.getItem('geocode:' + String(city).toLowerCase());
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+/* Desired forecast coords vs last successful weather fetch (GPS fix or geocode). */
+function locationPending(cache, gps, options) {
+  options = options || {};
+  if (!cache || cache.latQ == null || cache.lonQ == null) {
     return false;
   }
-  if (cache.latQ == null || cache.lonQ == null) {
-    return false;
+
+  var wantLat = null;
+  var wantLon = null;
+  if (options.locationMode === 'manual') {
+    var geo = readGeocodeCache((options.manualLocation || '').trim());
+    if (!geo || geo.lat == null || geo.lon == null) {
+      return false;
+    }
+    wantLat = geo.lat;
+    wantLon = geo.lon;
+  } else {
+    if (gps == null || gps.lat == null || gps.lon == null) {
+      return false;
+    }
+    wantLat = gps.lat;
+    wantLon = gps.lon;
   }
-  return Number(cache.latQ) !== Number(gps.lat) || Number(cache.lonQ) !== Number(gps.lon);
+
+  return (
+    quantizeCoord(cache.latQ) !== quantizeCoord(wantLat) ||
+    quantizeCoord(cache.lonQ) !== quantizeCoord(wantLon)
+  );
 }
 
 function weatherSectionHtml(options) {
@@ -82,7 +312,11 @@ function weatherSectionHtml(options) {
   var gps = readJson(LAST_GPS_FIX_KEY);
   var apiMs = cacheApiFetchedAt(cache);
   var intervalMs = options.intervalMs || 60 * 60 * 1000;
+  var pausedAtNight = !!options.pauseAtNight;
   var lines = [];
+  var ageMs = apiMs ? Date.now() - apiMs : 0;
+  var stale = apiMs && ageMs > intervalMs;
+  var critical = apiMs && ageMs > intervalMs * 3;
   var warnClass = '';
 
   lines.push('<div class="argus-setting-label">Weather</div>');
@@ -90,10 +324,10 @@ function weatherSectionHtml(options) {
   if (!apiMs) {
     lines.push('<p class="argus-about-line">No weather fetch yet.</p>');
   } else {
-    var ageMs = Date.now() - apiMs;
-    var stale = ageMs > intervalMs;
-    var critical = ageMs > intervalMs * 3;
-    warnClass = critical ? ' argus-about-critical' : stale ? ' argus-about-warn' : '';
+    /* Night pause makes interval age expected — don't color the API line as stale. */
+    if (!pausedAtNight) {
+      warnClass = critical ? ' argus-about-critical' : stale ? ' argus-about-warn' : '';
+    }
     lines.push(
       '<p class="argus-about-line' +
         warnClass +
@@ -103,41 +337,35 @@ function weatherSectionHtml(options) {
         escapeHtml(weatherDebugLog.formatAgeMinutes(ageMs)) +
         ' ago</p>'
     );
-    if (critical) {
-      lines.push(
-        '<p class="argus-about-note argus-about-critical">Past 3× update interval (' +
-          Math.round(intervalMs / 60000) +
-          'm).</p>'
-      );
-    } else if (stale) {
-      lines.push(
-        '<p class="argus-about-note argus-about-warn">Past update interval (' +
-          Math.round(intervalMs / 60000) +
-          'm).</p>'
-      );
-    }
   }
 
-  if (locationPending(cache, gps)) {
+  if (locationPending(cache, gps, options)) {
     lines.push(
-      '<p class="argus-about-note argus-about-critical">Location changed since last weather fetch.</p>'
+      '<p class="argus-about-note argus-about-critical">Location changed since last weather update.</p>'
     );
   }
 
-  if (options.pauseAtNight) {
+  if (pausedAtNight) {
     lines.push(
-      '<p class="argus-about-note">Night pause on — purple header icon while paused.</p>'
+      '<p class="argus-about-note">Weather updates paused - nighttime setting.</p>'
+    );
+  } else if (critical) {
+    lines.push(
+      '<p class="argus-about-note argus-about-critical">Past 3× update interval (' +
+        Math.round(intervalMs / 60000) +
+        'm).</p>'
+    );
+  } else if (stale) {
+    lines.push(
+      '<p class="argus-about-note argus-about-warn">Past update interval (' +
+        Math.round(intervalMs / 60000) +
+        'm).</p>'
     );
   }
 
-  if (cache && cache.latQ != null && cache.lonQ != null) {
-    lines.push(
-      '<p class="argus-about-muted">Forecast for ' +
-        escapeHtml(Number(cache.latQ).toFixed(2)) +
-        ', ' +
-        escapeHtml(Number(cache.lonQ).toFixed(2)) +
-        '</p>'
-    );
+  var sunLine = sunTimesLineHtml(cache, gps);
+  if (sunLine) {
+    lines.push(sunLine);
   }
 
   lines.push(
@@ -150,18 +378,36 @@ function weatherSectionHtml(options) {
   return '<div class="argus-about-section">' + lines.join('') + '</div>';
 }
 
+function forecastCoordsLineHtml(cache) {
+  if (!cache || cache.latQ == null || cache.lonQ == null) {
+    return '';
+  }
+  return (
+    '<p class="argus-about-muted">' +
+    escapeHtml(Number(cache.latQ).toFixed(2)) +
+    ', ' +
+    escapeHtml(Number(cache.lonQ).toFixed(2)) +
+    '</p>'
+  );
+}
+
 function gpsSectionHtml(options) {
   var gps = readJson(LAST_GPS_FIX_KEY);
+  var cache = readJson(WEATHER_FETCH_CACHE_KEY);
   var lines = [];
   lines.push('<div class="argus-setting-label">GPS</div>');
 
   if (options.locationMode === 'manual') {
     var city = (options.manualLocation || '').trim();
     lines.push(
-      '<p class="argus-about-line">Manual location mode: ' +
+      '<p class="argus-about-line">Manual location: ' +
         escapeHtml(city || '—') +
         '</p>'
     );
+    var manualCoords = forecastCoordsLineHtml(cache);
+    if (manualCoords) {
+      lines.push(manualCoords);
+    }
   } else if (!gps || !gps.t) {
     lines.push('<p class="argus-about-line">No GPS fix stored yet.</p>');
   } else {
