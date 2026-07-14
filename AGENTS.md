@@ -1,5 +1,15 @@
 # Agent notes — Argus watchface
 
+## AppMessage (watch ↔ phone)
+
+`require('message_keys')` maps `package.json` `messageKeys` names to **numeric** ids used when **sending** phone→watch (`Pebble.sendAppMessage({ [keys.Foo]: value })`).
+
+**When receiving** watch→phone AppMessages on rePebble, `e.payload` often uses the **string** names from `package.json` (e.g. `"REQUEST_WEATHER": 1`), not the numeric ids. Reading only `e.payload[keys.REQUEST_WEATHER]` then returns `undefined`, the handler no-ops, and the watch times out while `outbox_send` still reports success.
+
+Always read inbound payloads via `appMessagePayloadGet` / `appMessagePayloadHas` in `src/pkjs/index.js` (numeric id, string name, and stringified id). Do **not** use `e.payload[keys.SomeKey]` alone for watch→phone traffic.
+
+`WeatherRequestKind` periodic is `0` — use `appMessagePayloadHas` / explicit undefined checks, not truthiness on the kind value.
+
 ## Settings menu (Clay / PKJS)
 
 The phone settings UI is **not** a hosted web app. Clay embeds HTML, CSS, and JavaScript as a **data URI** opened in the rePebble app WebView via `Pebble.openURL()`. It works offline.
@@ -12,7 +22,7 @@ The phone settings UI is **not** a hosted web app. Clay embeds HTML, CSS, and Ja
 | `src/pkjs/clay/theme.css` | Settings theme (scoped under `html.as`) |
 | `src/pkjs/clay/parts/*.js` | Custom Clay logic — tabs, layout, holiday UI, sync (edit these) |
 | `src/pkjs/custom-clay.js` | **Generated** by `scripts/build-custom-clay.js` — do not edit by hand |
-| `src/pkjs/index.js` | Clay init, settings sync to watch, weather PKJS |
+| `src/pkjs/index.js` | Clay init, settings sync to watch, weather PKJS, AppMessage receive |
 
 Do **not** reintroduce custom Clay components under `clay-components/` unless you can verify they serialize and render reliably on a real phone. Prefer built-ins + `src/pkjs/clay/`.
 

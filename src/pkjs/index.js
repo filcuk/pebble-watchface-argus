@@ -8,6 +8,35 @@ var release = require('./release');
 var keys = require('message_keys');
 var weatherDebugLog = require('./weather-debug-log');
 
+/**
+ * Read a field from a watch→phone AppMessage payload.
+ * rePebble may deliver keys as message_keys numeric ids and/or package.json
+ * string names — never use payload[keys.Foo] alone when reading.
+ */
+function appMessagePayloadGet(payload, keyName) {
+  if (!payload || !keyName) {
+    return undefined;
+  }
+  var id = keys[keyName];
+  if (id !== undefined && id !== null && payload[id] !== undefined && payload[id] !== null) {
+    return payload[id];
+  }
+  if (payload[keyName] !== undefined && payload[keyName] !== null) {
+    return payload[keyName];
+  }
+  if (id !== undefined && id !== null) {
+    var asString = String(id);
+    if (payload[asString] !== undefined && payload[asString] !== null) {
+      return payload[asString];
+    }
+  }
+  return undefined;
+}
+
+function appMessagePayloadHas(payload, keyName) {
+  return appMessagePayloadGet(payload, keyName) !== undefined;
+}
+
 var clayUserData = {
   version: pkg.version,
   githubUrl: 'https://github.com/filcuk/pebble-watchface-argus',
@@ -1410,22 +1439,27 @@ Pebble.addEventListener('ready', function () {
 });
 
 Pebble.addEventListener('appmessage', function (e) {
-  if (e.payload && e.payload[keys.CheckReleaseNotice]) {
+  var payload = e && e.payload ? e.payload : null;
+  if (!payload) {
+    return;
+  }
+
+  if (appMessagePayloadHas(payload, 'CheckReleaseNotice')) {
     maybeShowReleaseNotice({ fromWatch: true });
   }
-  if (e.payload && e.payload[keys.WeatherDebugSkip] !== undefined && e.payload[keys.WeatherDebugSkip] !== null) {
-    wlogWeatherWatchSkip(e.payload[keys.WeatherDebugSkip]);
+  if (appMessagePayloadHas(payload, 'WeatherDebugSkip')) {
+    wlogWeatherWatchSkip(appMessagePayloadGet(payload, 'WeatherDebugSkip'));
   }
-  if (e.payload && e.payload[keys.REQUEST_WEATHER]) {
-    var forEpoch = e.payload[keys.WeatherForEpoch];
+  if (appMessagePayloadHas(payload, 'REQUEST_WEATHER')) {
+    var forEpoch = appMessagePayloadGet(payload, 'WeatherForEpoch');
     var weatherOptions = {};
-    if (e.payload[keys.LocationMode] !== undefined && e.payload[keys.LocationMode] !== null) {
-      weatherOptions.locationMode = e.payload[keys.LocationMode];
+    if (appMessagePayloadHas(payload, 'LocationMode')) {
+      weatherOptions.locationMode = appMessagePayloadGet(payload, 'LocationMode');
     }
-    if (e.payload[keys.ManualLocation]) {
-      weatherOptions.manualLocation = e.payload[keys.ManualLocation];
+    if (appMessagePayloadHas(payload, 'ManualLocation')) {
+      weatherOptions.manualLocation = appMessagePayloadGet(payload, 'ManualLocation');
     }
-    var reqKind = e.payload[keys.WeatherRequestKind];
+    var reqKind = appMessagePayloadGet(payload, 'WeatherRequestKind');
     var reqKindKey = String(reqKind);
     /* Watch force/stale means coverage or freshness failed — bypass phone age cache. */
     if (reqKindKey === '1' || reqKindKey === '2') {
@@ -1443,7 +1477,7 @@ Pebble.addEventListener('appmessage', function (e) {
     wlogWeatherRequestKind(reqKind, reqDetail);
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
-  if (e.payload && e.payload[keys.REQUEST_HOLIDAYS]) {
+  if (appMessagePayloadHas(payload, 'REQUEST_HOLIDAYS')) {
     scheduleHolidaySync({ forceRefresh: true });
   }
 });
