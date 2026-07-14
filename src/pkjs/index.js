@@ -1410,22 +1410,73 @@ Pebble.addEventListener('ready', function () {
 });
 
 Pebble.addEventListener('appmessage', function (e) {
-  if (e.payload && e.payload[keys.CheckReleaseNotice]) {
+  /* TEMP DIAG: phase-2a — remove after testing why watch→phone is mute */
+  var payload = e && e.payload ? e.payload : null;
+  var reqWeatherVal = payload ? payload[keys.REQUEST_WEATHER] : undefined;
+  var reqKindVal = payload ? payload[keys.WeatherRequestKind] : undefined;
+  var skipVal = payload ? payload[keys.WeatherDebugSkip] : undefined;
+  var reqHolidaysVal = payload ? payload[keys.REQUEST_HOLIDAYS] : undefined;
+  try {
+    console.log(
+      'WxDiag appmessage payload=' +
+        JSON.stringify(payload) +
+        ' keys.REQUEST_WEATHER=' +
+        keys.REQUEST_WEATHER +
+        ' keys.WeatherRequestKind=' +
+        keys.WeatherRequestKind +
+        ' keys.WeatherDebugSkip=' +
+        keys.WeatherDebugSkip
+    );
+  } catch (stringifyErr) {
+    console.log('WxDiag appmessage payload stringify failed: ' + stringifyErr);
+  }
+  console.log(
+    'WxDiag appmessage values REQUEST_WEATHER=' +
+      reqWeatherVal +
+      ' (' +
+      typeof reqWeatherVal +
+      ') WeatherRequestKind=' +
+      reqKindVal +
+      ' (' +
+      typeof reqKindVal +
+      ') WeatherDebugSkip=' +
+      skipVal +
+      ' (' +
+      typeof skipVal +
+      ') REQUEST_HOLIDAYS=' +
+      reqHolidaysVal +
+      ' (' +
+      typeof reqHolidaysVal +
+      ')'
+  );
+  if (reqWeatherVal) {
+    console.log('WxDiag got REQUEST_WEATHER');
+  } else if (skipVal !== undefined && skipVal !== null) {
+    console.log('WxDiag got WeatherDebugSkip');
+  } else if (reqHolidaysVal) {
+    console.log('WxDiag got REQUEST_HOLIDAYS');
+  } else if (payload && payload[keys.CheckReleaseNotice]) {
+    console.log('WxDiag got CheckReleaseNotice');
+  } else {
+    console.log('WxDiag appmessage with none of the expected watch keys');
+  }
+
+  if (payload && payload[keys.CheckReleaseNotice]) {
     maybeShowReleaseNotice({ fromWatch: true });
   }
-  if (e.payload && e.payload[keys.WeatherDebugSkip] !== undefined && e.payload[keys.WeatherDebugSkip] !== null) {
-    wlogWeatherWatchSkip(e.payload[keys.WeatherDebugSkip]);
+  if (payload && payload[keys.WeatherDebugSkip] !== undefined && payload[keys.WeatherDebugSkip] !== null) {
+    wlogWeatherWatchSkip(payload[keys.WeatherDebugSkip]);
   }
-  if (e.payload && e.payload[keys.REQUEST_WEATHER]) {
-    var forEpoch = e.payload[keys.WeatherForEpoch];
+  if (payload && payload[keys.REQUEST_WEATHER]) {
+    var forEpoch = payload[keys.WeatherForEpoch];
     var weatherOptions = {};
-    if (e.payload[keys.LocationMode] !== undefined && e.payload[keys.LocationMode] !== null) {
-      weatherOptions.locationMode = e.payload[keys.LocationMode];
+    if (payload[keys.LocationMode] !== undefined && payload[keys.LocationMode] !== null) {
+      weatherOptions.locationMode = payload[keys.LocationMode];
     }
-    if (e.payload[keys.ManualLocation]) {
-      weatherOptions.manualLocation = e.payload[keys.ManualLocation];
+    if (payload[keys.ManualLocation]) {
+      weatherOptions.manualLocation = payload[keys.ManualLocation];
     }
-    var reqKind = e.payload[keys.WeatherRequestKind];
+    var reqKind = payload[keys.WeatherRequestKind];
     var reqKindKey = String(reqKind);
     /* Watch force/stale means coverage or freshness failed — bypass phone age cache. */
     if (reqKindKey === '1' || reqKindKey === '2') {
@@ -1443,7 +1494,7 @@ Pebble.addEventListener('appmessage', function (e) {
     wlogWeatherRequestKind(reqKind, reqDetail);
     scheduleWeatherRequest(forEpoch || null, weatherOptions);
   }
-  if (e.payload && e.payload[keys.REQUEST_HOLIDAYS]) {
+  if (payload && payload[keys.REQUEST_HOLIDAYS]) {
     scheduleHolidaySync({ forceRefresh: true });
   }
 });
