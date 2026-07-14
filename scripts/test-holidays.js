@@ -83,6 +83,34 @@ function testFilterHolidayDatesNoCountry() {
   assert.strictEqual(dates.length, 1);
 }
 
+function testFetchHolidaysForWindowUsesProvidedNow() {
+  var payload = JSON.stringify([
+    {
+      date: '2026-07-04',
+      nationalHoliday: true,
+      subdivisionCodes: null,
+      holidayTypes: ['Public'],
+      localName: 'Independence Day',
+    },
+  ]);
+  var called = false;
+  holidays.fetchHolidaysForWindow({
+    countryCode: 'US',
+    regionCode: '',
+    weekStart: '0',
+    /* Wednesday 2026-07-01 → week starts Mon 2026-06-29; Jul 4 is index 5. */
+    now: new Date(2026, 6, 1, 12, 0, 0, 0),
+    xhrRequest: function (url, callback) {
+      assert.ok(url.indexOf('/2026') !== -1);
+      callback(payload);
+    },
+  }, function (result) {
+    called = true;
+    assert.strictEqual(result.mask & (1 << 5), 1 << 5);
+  });
+  assert.strictEqual(called, true);
+}
+
 function run() {
   testHolidayAppliesNationalOnly();
   testHolidayAppliesRegional();
@@ -91,6 +119,7 @@ function run() {
   testDetectLocaleCountry();
   testDetectLocaleCountryUnsupported();
   testFilterHolidayDatesNoCountry();
+  testFetchHolidaysForWindowUsesProvidedNow();
   console.log('holiday tests passed');
 }
 
