@@ -1525,8 +1525,8 @@ Pebble.addEventListener('appmessage', function (e) {
     }
     var reqKind = appMessagePayloadGet(payload, 'WeatherRequestKind');
     var reqKindKey = String(reqKind);
-    /* Watch force/stale means coverage or freshness failed — bypass phone age cache. */
-    if (reqKindKey === '1' || reqKindKey === '2') {
+    /* Only explicit watch force bypasses phone GPS/API caches; stale may reuse them. */
+    if (reqKindKey === '1') {
       weatherOptions.forceRefresh = true;
     }
     var reqDetail = forEpoch ? 't=' + forEpoch : '';
