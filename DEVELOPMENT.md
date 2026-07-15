@@ -154,4 +154,5 @@ package.json     Manifest, message keys, npm scripts (build:clay, measure-clay)
 wscript          Build config (runs Clay + release generators in options())
 ```
 
-Clay UI conventions and phone testing checklist: [AGENTS.md](AGENTS.md).
+Clay UI conventions and phone testing checklist: [AGENTS.md](AGENTS.md).  
+Design notes for complex mechanisms (e.g. weather update flow): [DOCS.md](DOCS.md).

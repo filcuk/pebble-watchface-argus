@@ -1,5 +1,12 @@
 # Agent notes — Argus watchface
 
+## Documentation
+
+When adding or materially changing a **complex mechanism** (multi-step flows, caching, force/skip rules, cross-device sync, etc.):
+
+1. Confirm the approach with the user before implementing (or while iterating the design).
+2. Update [`DOCS.md`](DOCS.md) with the decision rules, invariants, and flowcharts so humans and agents share the same reference.
+
 ## AppMessage (watch ↔ phone)
 
 `require('message_keys')` maps `package.json` `messageKeys` names to **numeric** ids used when **sending** phone→watch (`Pebble.sendAppMessage({ [keys.Foo]: value })`).
