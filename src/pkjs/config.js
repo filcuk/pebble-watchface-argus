@@ -385,6 +385,14 @@ module.exports = [
   },
   {
     type: 'toggle',
+    messageKey: 'WeatherForceUpdate',
+    label: 'Weather force update',
+    description: 'On save, forces a weather update immediately.',
+    group: 'tabDebug',
+    defaultValue: false,
+  },
+  {
+    type: 'toggle',
     messageKey: 'DebugMode',
     label: 'Debug mode',
     description: 'Enables developer options below for testing without real data.',

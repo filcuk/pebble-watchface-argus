@@ -1,5 +1,6 @@
   function syncDebugToggles() {
     var debugToggle = clayConfig.getItemByMessageKey('DebugMode');
+    var weatherForceToggle = clayConfig.getItemByMessageKey('WeatherForceUpdate');
     var demoWeatherToggle = clayConfig.getItemByMessageKey('DemoWeather');
     var demoBiometricsToggle = clayConfig.getItemByMessageKey('DemoBiometrics');
     var releaseNotification = clayConfig.getItemByMessageKey('ReleaseNotification');
@@ -10,6 +11,9 @@
     }
 
     if (debugToggle.get()) {
+      if (weatherForceToggle) {
+        weatherForceToggle.enable();
+      }
       demoWeatherToggle.enable();
       demoBiometricsToggle.enable();
       releaseNotification.enable();
@@ -17,6 +21,10 @@
         weatherLogToggle.enable();
       }
     } else {
+      if (weatherForceToggle) {
+        weatherForceToggle.set(false);
+        weatherForceToggle.disable();
+      }
       demoWeatherToggle.set(false);
       demoWeatherToggle.disable();
       demoBiometricsToggle.set(false);

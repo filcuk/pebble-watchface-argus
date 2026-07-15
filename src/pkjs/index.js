@@ -223,7 +223,7 @@ function getClaySetting(key, defaultValue) {
 
 var APP_MESSAGE_INT_BATCH = 4;
 /** Clay config keys stored on phone only; not in package.json messageKeys. */
-var CLAY_PKJS_ONLY_KEYS = ['DebugWeatherLog'];
+var CLAY_PKJS_ONLY_KEYS = ['DebugWeatherLog', 'WeatherForceUpdate'];
 /** Settings that change the weather fetch identity — force refresh when they change. */
 var WEATHER_FETCH_SETTING_KEYS = [
   'LocationMode',
@@ -284,6 +284,20 @@ function persistClaySettingsFromRaw(raw) {
   var flat = flattenClayRaw(raw);
   try {
     localStorage.setItem('clay-settings', JSON.stringify(flat));
+  } catch (err) {
+    // Ignore storage errors.
+  }
+}
+
+function clearWeatherForceUpdateSetting() {
+  try {
+    var raw = localStorage.getItem('clay-settings');
+    var settings = raw ? JSON.parse(raw) : {};
+    if (!settings || typeof settings !== 'object') {
+      settings = {};
+    }
+    settings.WeatherForceUpdate = false;
+    localStorage.setItem('clay-settings', JSON.stringify(settings));
   } catch (err) {
     // Ignore storage errors.
   }
@@ -1594,9 +1608,13 @@ Pebble.addEventListener('webviewclosed', function (e) {
 
   var prevFlat = getStoredClaySettings() || {};
   var nextFlat = flattenClayRaw(raw);
-  var forceWeather = weatherFetchSettingsChanged(prevFlat, nextFlat);
+  var oneShotForce = claySettingIsTruthy(nextFlat.WeatherForceUpdate);
+  var forceWeather = oneShotForce || weatherFetchSettingsChanged(prevFlat, nextFlat);
 
   persistClaySettingsFromRaw(raw);
+  if (oneShotForce) {
+    clearWeatherForceUpdateSetting();
+  }
   stripPkjsOnlyClayKeys(raw);
 
   sendPreparedSettingsInChunks(
@@ -1604,7 +1622,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
     function () {
       console.log('Settings sent to watch');
       if (forceWeather) {
-        wlog('REQ', 'settings save');
+        wlog('REQ', oneShotForce ? 'force update' : 'settings save');
         getWeather(null, { forceRefresh: true });
       }
       scheduleHolidaySync({ forceRefresh: true });
