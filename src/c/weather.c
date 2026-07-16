@@ -670,7 +670,7 @@ static void prv_schedule_response_timeout(void) {
 static void prv_retry_callback(void *context) {
   (void)context;
   s_retry_timer = NULL;
-  weather_request_force();
+  weather_request_if_needed();
 }
 
 static void prv_timeout_callback(void *context) {
@@ -757,7 +757,7 @@ void weather_refresh_for_connection(bool phone_connected) {
   }
 
   if (phone_connected) {
-    weather_request_force();
+    weather_request_if_needed();
     return;
   }
 
@@ -1078,7 +1078,7 @@ void weather_apply_from_message(DictionaryIterator *iter) {
     WeatherView applied_view;
     weather_get_view(&applied_view);
     if (weather_view_has_data(&applied_view)) {
-      s_last_weather_request_at = 0;
+      /* Keep s_last_weather_request_at so a success cannot re-arm an AppMessage storm. */
       prv_reset_retry_backoff();
       prv_cancel_timers();
     } else {
@@ -1240,4 +1240,22 @@ void weather_request(void) {
 
 void weather_request_force(void) {
   prv_send_weather_request(0, WEATHER_REQ_FORCE);
+}
+
+void weather_request_if_needed(void) {
+  if (prv_should_pause_periodic_refresh()) {
+    prv_send_weather_debug_skip(WEATHER_DBG_NIGHT_PAUSE);
+    return;
+  }
+
+  WeatherView view;
+  weather_get_view(&view);
+  if (!weather_view_has_data(&view)) {
+    weather_request_for_time(prv_current_hour_start());
+    return;
+  }
+
+  if (weather_is_refresh_due()) {
+    weather_request();
+  }
 }

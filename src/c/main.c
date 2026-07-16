@@ -226,19 +226,11 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   (void)context;
-  bool request_weather = false;
 
   /* PKJS failure signal: WeatherHourCount without WeatherTempHourly. */
   if (dict_find(iter, MESSAGE_KEY_WeatherHourCount) && !dict_find(iter, MESSAGE_KEY_WeatherTempHourly)) {
     weather_mark_fetch_failed();
     return;
-  }
-
-  if (dict_find(iter, MESSAGE_KEY_LocationMode) || dict_find(iter, MESSAGE_KEY_ManualLocation) ||
-      dict_find(iter, MESSAGE_KEY_ForecastHours) || dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
-      dict_find(iter, MESSAGE_KEY_WeatherProvider) || dict_find(iter, MESSAGE_KEY_PauseWeatherAtNight) ||
-      dict_find(iter, MESSAGE_KEY_WeatherUpdateInterval) || dict_find(iter, MESSAGE_KEY_GpsMaxAge)) {
-    request_weather = true;
   }
 
   bool calendar_settings = dict_find(iter, MESSAGE_KEY_WeekStart) || dict_find(iter, MESSAGE_KEY_WeekNumberMode) ||
@@ -324,10 +316,6 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   struct tm *tm_now = localtime(&now);
   if (tm_now) {
     prv_refresh_all_modules(tm_now);
-  }
-
-  if (request_weather) {
-    weather_request_force();
   }
 }
 
@@ -606,7 +594,7 @@ static void init(void) {
   prv_schedule_hr_backfill();
 #endif
 
-  weather_request_force();
+  weather_request_if_needed();
   s_last_periodic_weather_refresh = argus_time_now();
   prv_holidays_request();
 

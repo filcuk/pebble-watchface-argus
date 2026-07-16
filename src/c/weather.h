@@ -65,6 +65,9 @@ void weather_apply_from_message(DictionaryIterator *iter);
 void weather_apply_demo_data(void);
 void weather_request(void);
 void weather_request_force(void);
+/* Age/coverage-aware: night-pause skip if covering; else stale if missing
+ * coverage; else periodic if due; else noop. Prefer this over force. */
+void weather_request_if_needed(void);
 bool weather_is_night_now(void);
 bool weather_is_night_pause_active(void);
 bool weather_is_refresh_due(void);

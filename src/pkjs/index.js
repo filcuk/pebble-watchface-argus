@@ -223,7 +223,14 @@ function getClaySetting(key, defaultValue) {
 
 var APP_MESSAGE_INT_BATCH = 4;
 /** Clay config keys stored on phone only; not in package.json messageKeys. */
-var CLAY_PKJS_ONLY_KEYS = ['DebugWeatherLog'];
+var CLAY_PKJS_ONLY_KEYS = ['DebugWeatherLog', 'WeatherForceUpdate'];
+/** Settings that change the weather fetch identity — force refresh when they change. */
+var WEATHER_FETCH_SETTING_KEYS = [
+  'LocationMode',
+  'ManualLocation',
+  'ForecastHours',
+  'WeatherProvider',
+];
 
 function parseClayWebviewResponse(response) {
   var raw = String(response).match(/^\{/) ? String(response) : decodeURIComponent(String(response));
@@ -238,7 +245,7 @@ function stripPkjsOnlyClayKeys(raw) {
   return raw;
 }
 
-function persistClaySettingsFromRaw(raw) {
+function flattenClayRaw(raw) {
   var flat = {};
   var key;
   for (key in raw) {
@@ -252,8 +259,45 @@ function persistClaySettingsFromRaw(raw) {
       flat[key] = entry;
     }
   }
+  return flat;
+}
+
+function claySettingValuesEqual(a, b) {
+  return String(a == null ? '' : a) === String(b == null ? '' : b);
+}
+
+function weatherFetchSettingsChanged(prevFlat, nextFlat) {
+  var i;
+  var key;
+  prevFlat = prevFlat || {};
+  nextFlat = nextFlat || {};
+  for (i = 0; i < WEATHER_FETCH_SETTING_KEYS.length; i += 1) {
+    key = WEATHER_FETCH_SETTING_KEYS[i];
+    if (!claySettingValuesEqual(prevFlat[key], nextFlat[key])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function persistClaySettingsFromRaw(raw) {
+  var flat = flattenClayRaw(raw);
   try {
     localStorage.setItem('clay-settings', JSON.stringify(flat));
+  } catch (err) {
+    // Ignore storage errors.
+  }
+}
+
+function clearWeatherForceUpdateSetting() {
+  try {
+    var raw = localStorage.getItem('clay-settings');
+    var settings = raw ? JSON.parse(raw) : {};
+    if (!settings || typeof settings !== 'object') {
+      settings = {};
+    }
+    settings.WeatherForceUpdate = false;
+    localStorage.setItem('clay-settings', JSON.stringify(settings));
   } catch (err) {
     // Ignore storage errors.
   }
@@ -457,6 +501,7 @@ var WEATHER_WATCH_SKIP_LABELS = {
 };
 
 var LAST_GPS_FIX_KEY = 'argus-last-gps-fix';
+var LAST_WEATHER_SENT_KEY = 'argus-last-weather-sent';
 var WEATHER_STATUS_LOCATION_PENDING = 1;
 
 function quantizeCoord(value) {
@@ -472,6 +517,51 @@ function cacheApiFetchedAt(cache) {
     return 0;
   }
   return cache.apiFetchedAt || cache.fetchedAt || 0;
+}
+
+function weatherCacheIdentity(cache) {
+  if (!cache) {
+    return null;
+  }
+  var apiMs = cacheApiFetchedAt(cache);
+  if (!cache.key && !apiMs) {
+    return null;
+  }
+  return String(cache.key || '') + '|' + String(apiMs || 0);
+}
+
+function writeLastWeatherSent(cache) {
+  var identity = weatherCacheIdentity(cache);
+  if (!identity) {
+    return;
+  }
+  try {
+    localStorage.setItem(
+      LAST_WEATHER_SENT_KEY,
+      JSON.stringify({
+        key: cache.key || '',
+        apiFetchedAt: cacheApiFetchedAt(cache),
+      })
+    );
+  } catch (e) {
+    // Ignore storage errors.
+  }
+}
+
+function weatherAlreadySentToWatch(cache) {
+  var identity = weatherCacheIdentity(cache);
+  if (!identity) {
+    return false;
+  }
+  try {
+    var raw = localStorage.getItem(LAST_WEATHER_SENT_KEY);
+    if (!raw) {
+      return false;
+    }
+    return weatherCacheIdentity(JSON.parse(raw)) === identity;
+  } catch (e) {
+    return false;
+  }
 }
 
 function cacheHasLocationPending(latitude, longitude, model, hours, startEpoch) {
@@ -1057,6 +1147,9 @@ function sendWeatherPayload(payload, sendMeta, sendOptions) {
     function () {
       console.log('Weather sent to watch (' + payload.count + 'h)');
       wlog('SND+', '');
+      if (sendOptions.sentCache) {
+        writeLastWeatherSent(sendOptions.sentCache);
+      }
       if (!sendOptions.keepInFlight) {
         clearWeatherFetchInFlight();
       }
@@ -1090,7 +1183,9 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
           cached.payload.count +
           'h'
       );
-      sendWeatherPayload(cached.payload, buildSendMeta(latitude, longitude, cached, 0));
+      sendWeatherPayload(cached.payload, buildSendMeta(latitude, longitude, cached, 0), {
+        sentCache: cached,
+      });
       return;
     }
     console.log('Weather fetch cache miss — fetching');
@@ -1110,7 +1205,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
       sendWeatherPayload(
         staleCache.payload,
         buildSendMeta(latitude, longitude, staleCache, statusFlags),
-        { keepInFlight: true }
+        { keepInFlight: true, sentCache: staleCache }
       );
     }
   }
@@ -1188,7 +1283,9 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
       writeWeatherFetchCache(cacheEntry);
       wlog('API+', model || 'auto');
       resetWeatherRetryBackoff();
-      sendWeatherPayload(payload, buildSendMeta(latitude, longitude, cacheEntry, 0));
+      sendWeatherPayload(payload, buildSendMeta(latitude, longitude, cacheEntry, 0), {
+        sentCache: cacheEntry,
+      });
     } catch (e) {
       console.log('Weather parse error: ' + e);
       wlog('API!', 'parse');
@@ -1265,9 +1362,15 @@ function getWeather(forEpoch, options) {
     var nightCache = readWeatherFetchCache();
     if (nightCache && weatherIsNightNow(nightCache)) {
       console.log('Weather fetch paused at night');
+      if (nightCache.payload && weatherAlreadySentToWatch(nightCache)) {
+        wlog('NIGHT', 'skip same cache');
+        return;
+      }
       wlog('NIGHT', 'cache→watch');
       if (nightCache.payload) {
-        sendWeatherPayload(nightCache.payload, buildSendMeta(null, null, nightCache, 0));
+        sendWeatherPayload(nightCache.payload, buildSendMeta(null, null, nightCache, 0), {
+          sentCache: nightCache,
+        });
       }
       return;
     }
@@ -1525,8 +1628,8 @@ Pebble.addEventListener('appmessage', function (e) {
     }
     var reqKind = appMessagePayloadGet(payload, 'WeatherRequestKind');
     var reqKindKey = String(reqKind);
-    /* Watch force/stale means coverage or freshness failed — bypass phone age cache. */
-    if (reqKindKey === '1' || reqKindKey === '2') {
+    /* Only explicit watch force bypasses phone GPS/API caches; stale may reuse them. */
+    if (reqKindKey === '1') {
       weatherOptions.forceRefresh = true;
     }
     var reqDetail = forEpoch ? 't=' + forEpoch : '';
@@ -1562,15 +1665,25 @@ Pebble.addEventListener('webviewclosed', function (e) {
     return;
   }
 
+  var prevFlat = getStoredClaySettings() || {};
+  var nextFlat = flattenClayRaw(raw);
+  var oneShotForce = claySettingIsTruthy(nextFlat.WeatherForceUpdate);
+  var forceWeather = oneShotForce || weatherFetchSettingsChanged(prevFlat, nextFlat);
+
   persistClaySettingsFromRaw(raw);
+  if (oneShotForce) {
+    clearWeatherForceUpdateSetting();
+  }
   stripPkjsOnlyClayKeys(raw);
 
   sendPreparedSettingsInChunks(
     Clay.prepareSettingsForAppMessage(raw),
     function () {
       console.log('Settings sent to watch');
-      wlog('REQ', 'settings save');
-      getWeather(null, { forceRefresh: true });
+      if (forceWeather) {
+        wlog('REQ', oneShotForce ? 'force update' : 'settings save');
+        getWeather(null, { forceRefresh: true });
+      }
       scheduleHolidaySync({ forceRefresh: true });
     },
     function (err) {
