@@ -33,36 +33,80 @@ static int prv_days_since_week_start(int wday, WeekStart week_start) {
   return (wday - start_wday + 7) % 7;
 }
 
+/* Civil-date helpers - avoid mktime()/localtime() round-trips. On Pebble, mktime
+ * treats broken-down time as UTC, so reconstructing local midnight then converting
+ * back shifts the calendar date backward in UTC-negative zones (e.g. US). */
+static bool prv_is_leap_year(int tm_year) {
+  int year = tm_year + 1900;
+  return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+}
+
+static int prv_days_in_month(int tm_year, int tm_mon) {
+  static const int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (tm_mon == 1 && prv_is_leap_year(tm_year)) {
+    return 29;
+  }
+  return days[tm_mon];
+}
+
+static int prv_day_of_year(int tm_year, int tm_mon, int tm_mday) {
+  static const int cum_days[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+  int yday = cum_days[tm_mon] + tm_mday - 1;
+  if (tm_mon > 1 && prv_is_leap_year(tm_year)) {
+    yday++;
+  }
+  return yday;
+}
+
+static void prv_add_days(struct tm *date, int days) {
+  date->tm_wday = ((date->tm_wday + days) % 7 + 7) % 7;
+
+  int year = date->tm_year;
+  int mon = date->tm_mon;
+  int mday = date->tm_mday + days;
+
+  while (mday < 1) {
+    mon--;
+    if (mon < 0) {
+      mon = 11;
+      year--;
+    }
+    mday += prv_days_in_month(year, mon);
+  }
+  while (mday > prv_days_in_month(year, mon)) {
+    mday -= prv_days_in_month(year, mon);
+    mon++;
+    if (mon > 11) {
+      mon = 0;
+      year++;
+    }
+  }
+
+  date->tm_year = year;
+  date->tm_mon = mon;
+  date->tm_mday = mday;
+  date->tm_yday = prv_day_of_year(year, mon, mday);
+}
+
 static void prv_fill_days(struct tm *days, struct tm *now, WeekStart week_start) {
   struct tm cursor = *now;
-  mktime(&cursor);
-
   int index = prv_days_since_week_start(cursor.tm_wday, week_start);
-  time_t time = mktime(&cursor);
-  time -= (time_t)index * SECONDS_PER_DAY;
+  prv_add_days(&cursor, -index);
 
   for (int i = 0; i < 14; i++) {
-    struct tm *day_tm = localtime(&time);
-    if (day_tm) {
-      days[i] = *day_tm;
-    }
-    time += SECONDS_PER_DAY;
+    days[i] = cursor;
+    prv_add_days(&cursor, 1);
   }
 }
 
-static void prv_refresh_cells(Calendar *calendar) {
-  struct tm now = {0};
-  now.tm_year = calendar->year;
-  now.tm_mon = calendar->month;
-  now.tm_mday = calendar->day;
-  mktime(&now);
-
-  prv_fill_days(calendar->cells, &now, settings_get()->week_start);
+static void prv_refresh_cells(Calendar *calendar, struct tm *now) {
+  prv_fill_days(calendar->cells, now, settings_get()->week_start);
   calendar->cells_valid = true;
 }
 
-static bool prv_is_today(struct tm *cell, struct tm *now) {
-  return cell->tm_year == now->tm_year && cell->tm_mon == now->tm_mon && cell->tm_mday == now->tm_mday;
+static bool prv_is_today(struct tm *cell, Calendar *calendar) {
+  return cell->tm_year == calendar->year && cell->tm_mon == calendar->month &&
+         cell->tm_mday == calendar->day;
 }
 
 static bool prv_is_weekend(int wday) {
@@ -77,29 +121,17 @@ static bool prv_is_weekend_column(int col, WeekStart week_start) {
 }
 
 static int prv_iso_week_number(struct tm *date) {
-  struct tm copy = *date;
-  char week_buf[4];
-  if (strftime(week_buf, sizeof(week_buf), "%V", &copy) > 0) {
-    return atoi(week_buf);
-  }
-  return 1;
+  /* ISO week: week containing Thursday; week 1 has the year's first Thursday. */
+  struct tm thursday = *date;
+  int monday_based = (date->tm_wday + 6) % 7;
+  prv_add_days(&thursday, 3 - monday_based);
+  return prv_day_of_year(thursday.tm_year, thursday.tm_mon, thursday.tm_mday) / 7 + 1;
 }
 
 static int prv_gregorian_week_number(struct tm *date) {
-  struct tm copy = *date;
-  copy.tm_hour = 12;
-  copy.tm_min = 0;
-  copy.tm_sec = 0;
-  mktime(&copy);
-
-  struct tm year_start = copy;
-  year_start.tm_mon = 0;
-  year_start.tm_mday = 1;
-  mktime(&year_start);
-
-  int jan1_wday = year_start.tm_wday;
-  int offset = (copy.tm_yday + 7 - jan1_wday) / 7;
-  return offset + 1;
+  int yday = prv_day_of_year(date->tm_year, date->tm_mon, date->tm_mday);
+  int jan1_wday = (date->tm_wday - (yday % 7) + 7) % 7;
+  return (yday + 7 - jan1_wday) / 7 + 1;
 }
 
 static int prv_week_number_for_date(struct tm *date, WeekNumberMode mode) {
@@ -172,12 +204,6 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
   const ArgusSettings *settings = settings_get();
   const char **labels = settings->week_start == WEEK_START_SUNDAY ? WEEKDAY_LABELS_SUN : WEEKDAY_LABELS_MON;
 
-  struct tm now = {0};
-  now.tm_year = calendar->year;
-  now.tm_mon = calendar->month;
-  now.tm_mday = calendar->day;
-  mktime(&now);
-
   int grid_left;
   int col_w;
   int row_y[2];
@@ -190,7 +216,11 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
   if (show_month_label) {
     static char month_buf[8];
     GFont month_font = fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
-    strftime(month_buf, sizeof(month_buf), "%b", &now);
+    struct tm month_tm = {0};
+    month_tm.tm_year = calendar->year;
+    month_tm.tm_mon = calendar->month;
+    month_tm.tm_mday = 1;
+    strftime(month_buf, sizeof(month_buf), "%b", &month_tm);
     GRect month_cell =
         GRect(0, 0, CALENDAR_WEEK_LABEL_WIDTH - CALENDAR_SIDE_LABEL_INSET, CALENDAR_HEADER_HEIGHT);
     GRect month_text_rect = prv_row_text_rect(month_cell, CALENDAR_HEADER_LINE_HEIGHT);
@@ -216,7 +246,7 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
 
   for (int i = 0; i < 14; i++) {
     GRect cell = prv_day_cell_rect(i, grid_left, col_w, row_y);
-    bool today = prv_is_today(&calendar->cells[i], &now);
+    bool today = prv_is_today(&calendar->cells[i], calendar);
 
     if (today) {
       continue;
@@ -245,12 +275,6 @@ static void prv_holiday_layer_update_proc(Layer *layer, GContext *ctx) {
 
   GRect bounds = layer_get_bounds(layer);
 
-  struct tm now = {0};
-  now.tm_year = calendar->year;
-  now.tm_mon = calendar->month;
-  now.tm_mday = calendar->day;
-  mktime(&now);
-
   int grid_left;
   int col_w;
   int row_y[2];
@@ -262,7 +286,7 @@ static void prv_holiday_layer_update_proc(Layer *layer, GContext *ctx) {
     if (!(calendar->event_mask & (1 << i))) {
       continue;
     }
-    if (prv_is_today(&calendar->cells[i], &now)) {
+    if (prv_is_today(&calendar->cells[i], calendar)) {
       continue;
     }
 
@@ -287,15 +311,9 @@ static void prv_today_layer_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   const ArgusSettings *settings = settings_get();
 
-  struct tm now = {0};
-  now.tm_year = calendar->year;
-  now.tm_mon = calendar->month;
-  now.tm_mday = calendar->day;
-  mktime(&now);
-
   int today_index = -1;
   for (int i = 0; i < 14; i++) {
-    if (prv_is_today(&calendar->cells[i], &now)) {
+    if (prv_is_today(&calendar->cells[i], calendar)) {
       today_index = i;
       break;
     }
@@ -417,7 +435,7 @@ void calendar_update(Calendar *calendar, struct tm *now) {
   calendar->last_year = now->tm_year;
   calendar->last_mon = now->tm_mon;
   calendar->last_mday = now->tm_mday;
-  prv_refresh_cells(calendar);
+  prv_refresh_cells(calendar, now);
   prv_mark_calendar_dirty(calendar);
 }
 
