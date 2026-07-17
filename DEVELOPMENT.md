@@ -115,6 +115,16 @@ npm run build:store
 
 ## Screenshots and store assets
 
+**One-shot time simulation** — emulator must already be running with Argus installed:
+
+```bash
+bash scripts/simulate-time.sh "2026-12-25 15:00"
+bash scripts/simulate-time.sh --demo-weather "2026-07-06 09:00"
+bash scripts/simulate-time.sh --reset
+```
+
+Enables DebugMode and sets `CaptureTimeOffset`. On Emery/QEMU 10, `pebble emu-set-time` is ignored.
+
 **Timed capture** — emulator must already be running; do not pass `--emulator` to the script:
 
 ```bash
@@ -125,7 +135,7 @@ bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m
 bash scripts/capture-screenshots.sh --simulate -d 14d -i 1h --start "2026-07-06 09:00"
 ```
 
-Simulated mode uses `CaptureTimeOffset` (debug mode is enabled automatically). On Emery/QEMU 10, `pebble emu-set-time` is ignored. Frames go to `captures/sim-*/frame-NNNN-*.png`.
+Simulated mode uses `CaptureTimeOffset` (debug mode is enabled automatically). Frames go to `captures/sim-*/frame-NNNN-*.png`.
 
 **Store demo scenario** — optional: set **Release notification → Never** in Clay first (phone-side only).
 
