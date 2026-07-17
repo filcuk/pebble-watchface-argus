@@ -33,6 +33,16 @@ pebble install --emulator emery   # emulator
 pebble logs --emulator emery
 ```
 
+### Shell aliases
+
+Source [`scripts/aliases.sh`](scripts/aliases.sh) in WSL for short forms (`pb`, `pbi`, `pl`, `pbic`, `pcfg`, …):
+
+```bash
+source scripts/aliases.sh
+```
+
+To load every new shell, add that line to `~/.bashrc`.
+
 After PKJS or `release.toml` changes, reinstall the `.pbw`. If JS changes do not appear, run `pebble clean && pebble build`. A good build logs a `merge_js` step listing `src/pkjs/*.js`.
 
 ### Physical watch (CloudPebble)
