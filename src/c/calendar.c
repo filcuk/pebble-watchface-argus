@@ -182,6 +182,12 @@ static GRect prv_today_pill_rect(GRect text_rect, int text_w, int cell_w) {
   return GRect(cx - w / 2, y, w, h);
 }
 
+/* Fixed two-digit width so holiday/today pills match for days 1–9 and 10–31. */
+static GRect prv_day_pill_rect(GRect text_rect, GFont font, int cell_w) {
+  GSize ref = prv_text_content_size("00", font, text_rect, GTextAlignmentCenter);
+  return prv_today_pill_rect(text_rect, ref.w, cell_w);
+}
+
 static void prv_draw_holiday_frame(GContext *ctx, GRect pill) {
   graphics_context_set_stroke_color(ctx, CALENDAR_HOLIDAY_FRAME_COLOR);
   graphics_context_set_stroke_width(ctx, CALENDAR_HOLIDAY_FRAME_WIDTH);
@@ -291,12 +297,8 @@ static void prv_holiday_layer_update_proc(Layer *layer, GContext *ctx) {
     }
 
     GRect cell = prv_day_cell_rect(i, grid_left, col_w, row_y);
-    static char day_buf[4];
-    snprintf(day_buf, sizeof(day_buf), "%d", calendar->cells[i].tm_mday);
-
     GRect text_rect = prv_row_text_rect(cell, CALENDAR_DAY_LINE_HEIGHT);
-    GSize text_size = prv_text_content_size(day_buf, day_font, text_rect, GTextAlignmentCenter);
-    GRect pill = prv_today_pill_rect(text_rect, text_size.w, cell.size.w);
+    GRect pill = prv_day_pill_rect(text_rect, day_font, cell.size.w);
     prv_draw_holiday_frame(ctx, pill);
   }
 }
@@ -335,8 +337,7 @@ static void prv_today_layer_update_proc(Layer *layer, GContext *ctx) {
 
   GFont today_font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
   GRect text_rect = prv_row_text_rect(cell, CALENDAR_DAY_LINE_HEIGHT);
-  GSize text_size = prv_text_content_size(day_buf, today_font, text_rect, GTextAlignmentCenter);
-  GRect pill = prv_today_pill_rect(text_rect, text_size.w, cell.size.w);
+  GRect pill = prv_day_pill_rect(text_rect, today_font, cell.size.w);
 
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, pill, CALENDAR_TODAY_PILL_CORNER_RADIUS, GCornersAll);
