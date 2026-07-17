@@ -115,44 +115,63 @@ static void prv_update_layout(void) {
     return;
   }
 
-  GRect bounds = layer_get_unobstructed_bounds(s_window_layer);
-  int width = bounds.size.w;
-  int height = bounds.size.h;
+  /* Clock position is based on the full face so a timeline peek does not pull it down. */
+  GRect full_bounds = layer_get_bounds(s_window_layer);
+  GRect unob_bounds = layer_get_unobstructed_bounds(s_window_layer);
+  int width = unob_bounds.size.w;
+  int full_height = full_bounds.size.h;
+  int unob_height = unob_bounds.size.h;
 
   int time_h = TIME_BLOCK_HEIGHT;
   int calendar_h = CALENDAR_HEIGHT;
   int header_h = HEADER_HEIGHT;
-  int time_zone_top = header_h + calendar_h + TIME_CALENDAR_GAP;
-
-  int time_y = time_zone_top;
-  int weather_y = time_y + time_h + TIME_WEATHER_GAP;
-  int weather_h = height - weather_y;
+  int band_top = header_h + calendar_h + TIME_CALENDAR_GAP;
+  int available = full_height - band_top;
 
   int max_weather_h = WEATHER_CHART_HEIGHT;
-  if (max_weather_h > height / 2) {
-    max_weather_h = height / 2;
+  if (max_weather_h > full_height / 2) {
+    max_weather_h = full_height / 2;
   }
 
-  if (weather_h > max_weather_h) {
+  int time_y = band_top;
+  int weather_h = 0;
+  int weather_y = full_height;
+
+  if (available >= time_h + WEATHER_CHART_MIN_HEIGHT) {
     weather_h = max_weather_h;
-    weather_y = height - weather_h;
-    int time_zone_bottom = weather_y - TIME_WEATHER_GAP;
-    if (time_zone_bottom >= time_zone_top + time_h) {
-      time_y = time_zone_top + (time_zone_bottom - time_zone_top - time_h) / 2;
-    } else {
-      time_y = time_zone_top;
-      weather_y = time_y + time_h + TIME_WEATHER_GAP;
-      weather_h = height - weather_y;
+    int slack = available - time_h - weather_h;
+    if (slack < 0) {
+      /* Preferred chart height does not fit — shrink it, then reserve a gap to split. */
+      weather_h = available - time_h;
+      slack = 0;
+      if (weather_h >= WEATHER_CHART_MIN_HEIGHT + TIME_WEATHER_GAP) {
+        weather_h -= TIME_WEATHER_GAP;
+        slack = TIME_WEATHER_GAP;
+      }
     }
+    if (weather_h >= WEATHER_CHART_MIN_HEIGHT) {
+      weather_y = full_height - weather_h;
+      /* Split leftover space evenly above and below the clock frame. */
+      time_y = band_top + slack / 2;
+    } else {
+      weather_h = 0;
+      weather_y = full_height;
+      time_y = band_top + (available - time_h) / 2;
+    }
+  } else if (available >= time_h) {
+    time_y = band_top + (available - time_h) / 2;
   }
 
-  if (weather_h < WEATHER_CHART_MIN_HEIGHT) {
+  /* Timeline peek covers the bottom — hide the chart rather than recentering the clock. */
+  if (weather_h > 0 && weather_y + WEATHER_CHART_MIN_HEIGHT > unob_height) {
     weather_h = 0;
-    weather_y = height;
-    if (height >= time_zone_top + time_h) {
-      time_y = time_zone_top + (height - time_zone_top - time_h) / 2;
-    } else {
-      time_y = time_zone_top;
+    weather_y = unob_height;
+  }
+
+  if (time_y + time_h > unob_height) {
+    time_y = unob_height - time_h;
+    if (time_y < band_top) {
+      time_y = band_top;
     }
   }
 
@@ -287,6 +306,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   }
   if (dict_find(iter, MESSAGE_KEY_ClockFont) && s_time_display) {
     time_display_apply_settings(s_time_display);
+    prv_update_layout();
     if (s_window_layer) {
       layer_mark_dirty(s_window_layer);
     }

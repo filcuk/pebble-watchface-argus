@@ -56,6 +56,21 @@ static GFont prv_font_for_char(char ch, ClockFont clock_font) {
   return fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
 }
 
+/* System number fonts keep empty space above the digit ink inside their metrics box. */
+static int prv_optical_y_offset(ClockFont clock_font) {
+  switch (clock_font) {
+    case CLOCK_FONT_ROBOTO:
+      return -7;
+    case CLOCK_FONT_BITHAM_BOLD:
+      return -6;
+    case CLOCK_FONT_BITHAM_MEDIUM:
+      return -6;
+    case CLOCK_FONT_LECO:
+    default:
+      return -11;
+  }
+}
+
 static void prv_cache_char_widths(TimeDisplay *display) {
   ClockFont clock_font = settings_get()->clock_font;
   if (display->char_widths_ready && display->cached_clock_font == clock_font) {
@@ -184,7 +199,9 @@ static void prv_time_layer_update_proc(Layer *layer, GContext *ctx) {
 
   GRect bounds = layer_get_bounds(layer);
   int spacing = display->use_12h ? TIME_CHAR_SPACING_12H : TIME_CHAR_SPACING_24H;
-  int text_y = bounds.origin.y + (bounds.size.h - display->text_height) / 2;
+  ClockFont clock_font = settings_get()->clock_font;
+  int text_y =
+      bounds.origin.y + (bounds.size.h - display->text_height) / 2 + prv_optical_y_offset(clock_font);
   TimeLayout layout = prv_time_layout(display, bounds, spacing);
 
   prv_draw_colon_fixed_time(ctx, display, display->time_text, layout, text_y);

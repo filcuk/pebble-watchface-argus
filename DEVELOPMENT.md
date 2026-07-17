@@ -53,6 +53,19 @@ pebble screenshot --no-open frame.png
 
 Run only one `pebble install --emulator` at a time. Close the old emulator window before starting another.
 
+### Timeline Quick View (unobstructed area)
+
+The bottom slide-in overlay that shrinks the watchface is **Timeline Quick View** (Timeline Peek), not a normal app notification. Argus lays out from `layer_get_unobstructed_bounds` in `src/c/main.c` and reflows on obstruction changes (weather hides when space is tight; the clock recenters).
+
+Toggle it in the emulator with Argus already running:
+
+```bash
+pebble emu-set-timeline-quick-view on
+pebble emu-set-timeline-quick-view off
+```
+
+Use this to verify weather hiding and clock alignment. `Pebble.showSimpleNotificationOnPebble` (release notice) does **not** exercise this path — that is a full notification UI.
+
 ### Reset emulator data (`pebble wipe`)
 
 Clears local emulator state: PKJS `localStorage` (Clay settings, weather/geocode cache, `argus-release-seen`), timeline, and related app data. Does **not** remove your Pebble account.
