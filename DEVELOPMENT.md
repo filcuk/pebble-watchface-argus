@@ -96,7 +96,7 @@ Clay config must use built-in types only (`radiogroup`, `toggle`, `input`, `subm
 
 Edit [`release.toml`](release.toml) (`version`, `message`) before each release. `pebble build` runs `scripts/generate-release.js` (via `wscript` `options()`) and writes `src/pkjs/release.js`, syncing `package.json`.
 
-The update notice is shown via `Pebble.showSimpleNotificationOnPebble` on the phone. It is skipped when `argus-release-seen` in phone storage matches the release version (unless Debug → **Always**).
+The update notice is shown via `Pebble.showSimpleNotificationOnPebble` on the phone. It is skipped when `argus-release-seen` in phone storage matches the release version (unless Debug → **Always**). Leave `message` empty (or omit it) to ship a version with no update notice at all.
 
 ### Dual-store `.pbw` (temporary)
 
