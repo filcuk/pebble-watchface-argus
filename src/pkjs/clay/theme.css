@@ -763,21 +763,13 @@ html.as .argus-about-warn {
 html.as .argus-about-critical {
   color: #d07070;
 }
-html.as .argus-about-swatch {
-  display: inline-block;
-  width: 0.7em;
-  height: 0.7em;
+html.as .argus-about-status-icon {
+  display: inline-block !important;
+  width: 14px !important;
+  height: 14px !important;
   margin-right: 0.4em;
-  border-radius: 2px;
-  vertical-align: middle;
-}
-html.as .argus-about-swatch-purple {
-  background: #9b59b6;
-}
-html.as .argus-about-swatch-orange {
-  background: #e67e22;
-}
-html.as .argus-about-swatch-red {
-  background: #e74c3c;
+  vertical-align: -2px;
+  flex-shrink: 0;
+  overflow: visible;
 }
 
