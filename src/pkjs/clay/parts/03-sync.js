@@ -1,37 +1,24 @@
   function syncDebugToggles() {
     var debugToggle = clayConfig.getItemByMessageKey('DebugMode');
-    var weatherForceToggle = clayConfig.getItemByMessageKey('WeatherForceUpdate');
     var demoWeatherToggle = clayConfig.getItemByMessageKey('DemoWeather');
     var demoBiometricsToggle = clayConfig.getItemByMessageKey('DemoBiometrics');
-    var releaseNotification = clayConfig.getItemByMessageKey('ReleaseNotification');
     var weatherLogToggle = clayConfig.getItemByMessageKey('DebugWeatherLog');
 
-    if (!debugToggle || !demoWeatherToggle || !demoBiometricsToggle || !releaseNotification) {
+    if (!debugToggle || !demoWeatherToggle || !demoBiometricsToggle) {
       return;
     }
 
     if (debugToggle.get()) {
-      if (weatherForceToggle) {
-        weatherForceToggle.enable();
-      }
       demoWeatherToggle.enable();
       demoBiometricsToggle.enable();
-      releaseNotification.enable();
       if (weatherLogToggle) {
         weatherLogToggle.enable();
       }
     } else {
-      if (weatherForceToggle) {
-        weatherForceToggle.set(false);
-        weatherForceToggle.disable();
-      }
       demoWeatherToggle.set(false);
       demoWeatherToggle.disable();
       demoBiometricsToggle.set(false);
       demoBiometricsToggle.disable();
-      releaseNotification.set('0');
-      syncRadioLabels('ReleaseNotification');
-      releaseNotification.disable();
       if (weatherLogToggle) {
         weatherLogToggle.set(false);
         weatherLogToggle.disable();

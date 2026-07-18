@@ -6,7 +6,7 @@ Living reference for non-obvious mechanisms. When changing these, update this fi
 
 Weather refreshes are age- and coverage-aware. Force (bypass phone GPS/API caches) is reserved for:
 
-- Debug one-shot **Weather force update** (clears itself after save)
+- One-shot **Weather force update** (clears itself after save)
 - Real changes to fetch inputs: `LocationMode`, `ManualLocation`, `ForecastHours`, `WeatherProvider`
 
 Boot, BT reconnect, retries, and periodic ticks use coverage/age checks instead of force. At night, the phone does not re-send the same cache payload to the watch if it was already delivered successfully.
@@ -14,7 +14,7 @@ Boot, BT reconnect, retries, and periodic ticks use coverage/age checks instead 
 ```mermaid
 flowchart TD
   trigger[Trigger] --> kind{What happened?}
-  kind -->|Debug one-shot or fetch settings changed| force[forceRefresh true]
+  kind -->|One-shot force or fetch settings changed| force[forceRefresh true]
   kind -->|Boot BT tick retry| smart[Age and coverage check]
   kind -->|Night pause non-force| night{Same cache already sent?}
   smart -->|Has covering data and not due| noop[No request]
@@ -39,4 +39,4 @@ flowchart TD
 |------|----------|
 | Watch age/coverage helper | `weather_request_if_needed()` in `src/c/weather.c` |
 | Phone force / night / sent marker | `src/pkjs/index.js` |
-| Debug one-shot toggle | Clay `WeatherForceUpdate` (PKJS-only) |
+| One-shot force toggle | Clay `WeatherForceUpdate` (PKJS-only) |
