@@ -745,6 +745,14 @@ html.as .argus-about a {
   color: #6894b8 !important;
   text-decoration: none;
 }
+html.as .argus-about-github-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.25em;
+  vertical-align: -0.125em;
+  color: #6894b8;
+}
 html.as .argus-about-section > .argus-setting-subheading {
   margin-top: 0.75rem;
   margin-bottom: 0.35rem !important;
