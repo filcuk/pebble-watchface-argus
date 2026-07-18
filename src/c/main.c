@@ -275,6 +275,11 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
                          dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
                          dict_find(iter, MESSAGE_KEY_BluetoothDisplay) ||
                          dict_find(iter, MESSAGE_KEY_QuietModeDisplay);
+  bool weather_ui = dict_find(iter, MESSAGE_KEY_WeatherTempHourly) || dict_find(iter, MESSAGE_KEY_DemoWeather) ||
+                    dict_find(iter, MESSAGE_KEY_DebugMode) || dict_find(iter, MESSAGE_KEY_ForecastHours) ||
+                    dict_find(iter, MESSAGE_KEY_TemperatureUnit) || dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
+                    dict_find(iter, MESSAGE_KEY_PauseWeatherAtNight);
+  bool time_settings = dict_find(iter, MESSAGE_KEY_HourFormat) || dict_find(iter, MESSAGE_KEY_ClockFont);
 
   settings_apply_from_message(iter);
   if (dict_find(iter, MESSAGE_KEY_WeatherTempHourly)) {
@@ -323,9 +328,6 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   if (dict_find(iter, MESSAGE_KEY_ClockFont) && s_time_display) {
     time_display_apply_settings(s_time_display);
     prv_update_layout();
-    if (s_window_layer) {
-      layer_mark_dirty(s_window_layer);
-    }
   }
 
   Tuple *offset_tuple = dict_find(iter, MESSAGE_KEY_CaptureTimeOffset);
@@ -348,10 +350,33 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
     return;
   }
 
+  /* Holiday-mask-only messages already dirty the calendar via set_event_days. */
+  if (!calendar_settings && !header_settings && !weather_ui && !time_settings) {
+    return;
+  }
+
   time_t now = argus_time_now();
   struct tm *tm_now = localtime(&now);
-  if (tm_now) {
-    prv_refresh_all_modules(tm_now);
+  if (!tm_now) {
+    return;
+  }
+  struct tm now_copy = *tm_now;
+
+  if (header_settings || weather_ui) {
+    if (!header_settings && settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
+      header_invalidate(s_header);
+    }
+    header_update(s_header, &now_copy);
+  }
+  if (time_settings) {
+    time_display_update(s_time_display, &now_copy);
+  }
+  if (calendar_settings) {
+    calendar_update(s_calendar, &now_copy);
+  }
+  if (weather_ui) {
+    weather_chart_refresh(s_weather_chart);
+    header_refresh_weather_status(s_header);
   }
 }
 
