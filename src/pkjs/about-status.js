@@ -244,6 +244,20 @@ function cacheApiFetchedAt(cache) {
   return cache.apiFetchedAt || cache.fetchedAt || 0;
 }
 
+function countryDisplayName(countryCode) {
+  if (!countryCode) {
+    return '';
+  }
+  var list = holidays.countries || [];
+  var i;
+  for (i = 0; i < list.length; i += 1) {
+    if (list[i].code === countryCode) {
+      return list[i].name || countryCode;
+    }
+  }
+  return countryCode;
+}
+
 function regionDisplayName(countryCode, regionCode) {
   if (!regionCode) {
     return '';
@@ -256,6 +270,15 @@ function regionDisplayName(countryCode, regionCode) {
     }
   }
   return regionCode;
+}
+
+function holidayLocationLabel(countryCode, regionCode) {
+  var countryName = countryDisplayName(countryCode);
+  var regionName = regionDisplayName(countryCode, regionCode);
+  if (regionName) {
+    return countryName + ' - ' + regionName;
+  }
+  return countryName;
 }
 
 function quantizeCoord(value) {
@@ -448,7 +471,7 @@ function holidaySectionHtml(options) {
   }
 
   var regionCode = options.regionCode || '';
-  var regionName = regionDisplayName(countryCode, regionCode);
+  var locationLabel = holidayLocationLabel(countryCode, regionCode);
   var cached = holidays.readCachedHolidaysForWindow(
     countryCode,
     new Date(),
@@ -458,8 +481,7 @@ function holidaySectionHtml(options) {
   if (!cached.length) {
     lines.push(
       '<p class="argus-about-line">No cached holidays yet for ' +
-        escapeHtml(countryCode) +
-        (regionName ? ' / ' + escapeHtml(regionName) : '') +
+        escapeHtml(locationLabel) +
         '.</p>'
     );
     return '<div class="argus-about-section">' + lines.join('') + '</div>';
@@ -481,16 +503,13 @@ function holidaySectionHtml(options) {
 
   if (!upcoming.length) {
     lines.push(
-      '<p class="argus-about-line">No holidays in the current 14-day calendar window' +
-        (regionName ? ' (' + escapeHtml(regionName) + ')' : '') +
-        '.</p>'
+      '<p class="argus-about-line">No holidays for ' +
+        escapeHtml(locationLabel) +
+        ' in the current 14-day calendar window.</p>'
     );
   } else {
     lines.push(
-      '<p class="argus-about-muted">' +
-        escapeHtml(countryCode) +
-        (regionName ? ' · ' + escapeHtml(regionName) : '') +
-        '</p>'
+      '<p class="argus-about-muted">' + escapeHtml(locationLabel) + '</p>'
     );
     for (i = 0; i < upcoming.length && i < 4; i += 1) {
       var entry = upcoming[i];
