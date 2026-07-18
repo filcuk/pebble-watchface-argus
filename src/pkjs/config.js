@@ -21,9 +21,8 @@ var precipitationInfoHtml =
   '<div class="argus-precip-info">' +
   '<div class="argus-setting-label">Precipitation</div>' +
   '<p class="argus-precip-intro">' +
-  'Blue bars representing precipitation on the weather chart use a fixed intensity scale. The chart height is split ' +
-  'into five equal bands. Within each band, bar height shows how far the hourly rate falls ' +
-  'within that range.' +
+  'Blue bars use a fixed intensity scale: chart height is five equal bands; within each band, ' +
+  'bar height shows where the hourly rate falls in that range.' +
   '</p>' +
   '<div class="argus-precip-table-wrap">' +
   '<table class="argus-precip-table">' +
@@ -43,10 +42,8 @@ var windInfoHtml =
   '<div class="argus-wind-info">' +
   '<div class="argus-setting-label">Wind</div>' +
   '<p class="argus-precip-intro">' +
-  'Gray × marks show wind speed on the Beaufort scale. Within each force level, ' +
-  'mark height reflects where the hourly speed falls in that level\'s range. ' +
-  'The chart axis normally spans force 0 to 8. If any visible hour exceeds force 8 ' +
-  '(75&nbsp;km/h or more), the axis extends to force 12.' +
+  'Gray × marks use the Beaufort scale. Mark height is relative within each force level. ' +
+  'The axis spans force 0–8, or 0–12 if any visible hour exceeds force 8 (75&nbsp;km/h / 47&nbsp;mph).' +
   '</p>' +
   '<div class="argus-precip-table-wrap">' +
   '<table class="argus-precip-table">' +
@@ -75,13 +72,9 @@ var windInfoHtml =
   '</div>';
 
 var headerDisplayHelpHtml =
-  '<strong>Step count</strong> shows your total steps for the day. <strong>Temperature</strong> shows the current ' +
-  'reading with today\'s minimum and maximum forecasted. <strong>Wind</strong> shows the current speed and ' +
-  'direction with the forecast minimum and maximum. <strong>Heart rate</strong> ' +
-  'shows your current BPM with today\'s maximum.<br><br>' +
-  '<em>Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
-  'earlier peaks from today may be included if the watch already stored minute ' +
-  'heart-rate samples.</em>';
+  '<strong>Step count</strong> shows daily steps. <strong>Temperature</strong> and <strong>Wind</strong> show the ' +
+  'current reading with forecast min/max (wind includes direction). <strong>Heart rate</strong> shows current BPM ' +
+  'with today\'s max while Argus is active.';
 
 var realtimeStepsHelpHtml =
   '<strong>Optimised</strong> leaves updates to the OS, <strong>live</strong> updates on every change. ' +
@@ -142,10 +135,8 @@ module.exports = [
     messageKey: 'WeekNumberMode',
     label: 'Week numbers',
     description:
-      'Type of calendar. This setting affects week numbers.<br><br>' +
-      '<strong>ISO 8601</strong> is the international standard. Week 1 is determined by the first Thursday ' +
-      'of the year. <strong>US</strong> traditional style is typically used in North America. US week 1 is ' +
-      'the week containing 1st of January.',
+      'Affects week numbers. <strong>ISO</strong>: week 1 contains the first Thursday. ' +
+      '<strong>US</strong>: week 1 contains 1 January.',
     group: 'tabCalendar',
     defaultValue: '0',
     options: [
@@ -368,9 +359,7 @@ module.exports = [
     messageKey: 'WeatherProvider',
     label: 'Weather model',
     description:
-      'Open-Meteo forecast source. Auto picks the best model for your location.<br><br>' +
-      '<em>All models are served by Open-Meteo. Auto combines the highest-' +
-      'resolution model available for your coordinates.</em>',
+      'Open-Meteo forecast source. Auto picks the highest-resolution model for your location.',
     group: 'tabWeather',
     defaultValue: '0',
     options: [
