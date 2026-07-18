@@ -23,6 +23,7 @@
           showTab(btn.getAttribute('data-tab'), tabsRoot);
         }
       });
+      bindTabSwipe(tabsRoot);
       showTab('tabAbout', tabsRoot);
     }
 

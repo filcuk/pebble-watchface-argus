@@ -359,3 +359,96 @@
     }
   }
 
+  function bindTabSwipe(tabsRoot) {
+    var form = clayConfig.$rootContainer && clayConfig.$rootContainer[0];
+    if (!form || !tabsRoot) {
+      return;
+    }
+
+    var SWIPE_MIN_DX = 60;
+    var SWIPE_MAX_DY_RATIO = 0.75;
+    var VERTICAL_CANCEL_PX = 30;
+    var startX = 0;
+    var startY = 0;
+    var tracking = false;
+
+    function isIgnoredTarget(target) {
+      var el = target;
+      while (el && el !== form) {
+        if (el.classList) {
+          if (el.classList.contains('argus-tabs')) {
+            return true;
+          }
+          if (el.classList.contains('argus-segment-radiogroup')) {
+            return true;
+          }
+        }
+        var tag = el.tagName;
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
+            tag === 'A' || tag === 'BUTTON') {
+          return true;
+        }
+        el = el.parentNode;
+      }
+      return false;
+    }
+
+    function currentTabIndex() {
+      var active = tabsRoot.querySelector('.argus-tab.active');
+      if (!active) {
+        return 0;
+      }
+      var idx = TAB_GROUPS.indexOf(active.getAttribute('data-tab'));
+      return idx >= 0 ? idx : 0;
+    }
+
+    form.addEventListener('touchstart', function (e) {
+      if (!e.touches || e.touches.length !== 1 || isIgnoredTarget(e.target)) {
+        tracking = false;
+        return;
+      }
+      tracking = true;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    }, false);
+
+    form.addEventListener('touchmove', function (e) {
+      if (!tracking || !e.touches || e.touches.length !== 1) {
+        return;
+      }
+      var dx = Math.abs(e.touches[0].clientX - startX);
+      var dy = Math.abs(e.touches[0].clientY - startY);
+      if (dy > VERTICAL_CANCEL_PX && dy > dx) {
+        tracking = false;
+      }
+    }, false);
+
+    form.addEventListener('touchend', function (e) {
+      if (!tracking) {
+        return;
+      }
+      tracking = false;
+      if (!e.changedTouches || !e.changedTouches.length) {
+        return;
+      }
+      var dx = e.changedTouches[0].clientX - startX;
+      var dy = e.changedTouches[0].clientY - startY;
+      var absDx = Math.abs(dx);
+      var absDy = Math.abs(dy);
+      if (absDx < SWIPE_MIN_DX || absDy > absDx * SWIPE_MAX_DY_RATIO) {
+        return;
+      }
+
+      var idx = currentTabIndex();
+      if (dx < 0 && idx < TAB_GROUPS.length - 1) {
+        showTab(TAB_GROUPS[idx + 1], tabsRoot);
+      } else if (dx > 0 && idx > 0) {
+        showTab(TAB_GROUPS[idx - 1], tabsRoot);
+      }
+    }, false);
+
+    form.addEventListener('touchcancel', function () {
+      tracking = false;
+    }, false);
+  }
+

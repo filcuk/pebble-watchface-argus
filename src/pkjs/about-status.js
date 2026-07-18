@@ -513,10 +513,22 @@ function holidaySectionHtml(options) {
   return '<div class="argus-about-section">' + lines.join('') + '</div>';
 }
 
+function aboutIntroSectionHtml() {
+  return (
+    '<div class="argus-about-section">' +
+    '<div class="argus-setting-label">About</div>' +
+    '<p class="argus-about-line">' +
+    'Tip: Swipe left or right to navigate between pages!' +
+    '</p>' +
+    '</div>'
+  );
+}
+
 function formatPanelHtml(options) {
   options = options || {};
   return (
     '<div class="argus-about">' +
+    aboutIntroSectionHtml() +
     holidaySectionHtml(options) +
     gpsSectionHtml(options) +
     weatherSectionHtml(options) +
