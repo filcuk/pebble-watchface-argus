@@ -20,6 +20,7 @@
     'ReleaseNotification',
   ];
   var SELECT_DROPDOWN_KEYS = ['HolidayCountry'];
+  var SUBHEADING_KEYS = [];
   var TITLE_INLINE_SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
@@ -185,12 +186,18 @@
         return;
       }
       var root = item.$element[0];
+      var isSubheading = SUBHEADING_KEYS.indexOf(key) !== -1;
+      if (isSubheading) {
+        root.classList.add('argus-subheading-control');
+      }
       var mainLabel = root.querySelector(':scope > .label');
       if (!mainLabel) {
         mainLabel = root.querySelector('label > .label');
       }
       if (mainLabel) {
-        mainLabel.classList.add('argus-setting-label');
+        mainLabel.classList.add(
+          isSubheading ? 'argus-setting-subheading' : 'argus-setting-label'
+        );
       }
     });
   }
@@ -230,6 +237,67 @@
   function injectSplitListRadiogroupHelp() {
     injectListRadiogroupHelp('HeaderDisplay', 'argus-header-display-help');
     injectListRadiogroupHelp('RealtimeSteps', 'argus-realtime-steps-help');
+  }
+
+  // 14x14 watchface header glyphs (row bitmasks, bit13 = leftmost pixel).
+  var HEADER_OPTION_ICON_MASKS = {
+    '1': [0x0000, 0x0140, 0x0d10, 0x0c00, 0x00e0, 0x03f0, 0x03f8, 0x01f8, 0x0078, 0x0078, 0x0078, 0x00f0, 0x0060, 0x0000],
+    '3': [0x0000, 0x0000, 0x0e1c, 0x1f3e, 0x1ffe, 0x1ff0, 0x1fe0, 0x0f84, 0x0704, 0x032a, 0x0110, 0x0090, 0x0000, 0x0000],
+    '2': [0x0000, 0x01e0, 0x0210, 0x0610, 0x0210, 0x0210, 0x0610, 0x02d0, 0x02d0, 0x06d0, 0x02d0, 0x0210, 0x01e0, 0x0000],
+  };
+
+  function createHeaderOptionIconSvg(maskRows) {
+    var parts = [];
+    for (var row = 0; row < 14; row++) {
+      var bits = maskRows[row];
+      for (var col = 0; col < 14; col++) {
+        if (bits & (1 << (13 - col))) {
+          parts.push('M' + col + ' ' + row + 'h1v1h-1z');
+        }
+      }
+    }
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14" ' +
+      'shape-rendering="crispEdges" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="' +
+      parts.join('') +
+      '"/></svg>'
+    );
+  }
+
+  function injectHeaderDisplayIcons() {
+    var item = clayConfig.getItemByMessageKey('HeaderDisplay');
+    if (!item || !item.$element || !item.$element[0]) {
+      return;
+    }
+
+    var labels = item.$element[0].querySelectorAll('.radio-group > label');
+    for (var i = 0; i < labels.length; i++) {
+      var label = labels[i];
+      if (label.querySelector('.argus-header-option-main')) {
+        continue;
+      }
+
+      var text = label.querySelector('.label');
+      var input = label.querySelector('input');
+      if (!text || !input) {
+        continue;
+      }
+
+      var main = document.createElement('span');
+      main.className = 'argus-header-option-main';
+
+      var icon = document.createElement('span');
+      icon.className = 'argus-header-option-icon';
+      var mask = HEADER_OPTION_ICON_MASKS[input.value];
+      if (mask) {
+        icon.innerHTML = createHeaderOptionIconSvg(mask);
+      }
+
+      label.insertBefore(main, text);
+      main.appendChild(icon);
+      main.appendChild(text);
+    }
   }
 
   function wrapInlineControlBodies() {
@@ -357,5 +425,98 @@
     if (activeButton && activeButton.scrollIntoView) {
       activeButton.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
+  }
+
+  function bindTabSwipe(tabsRoot) {
+    var form = clayConfig.$rootContainer && clayConfig.$rootContainer[0];
+    if (!form || !tabsRoot) {
+      return;
+    }
+
+    var SWIPE_MIN_DX = 60;
+    var SWIPE_MAX_DY_RATIO = 0.75;
+    var VERTICAL_CANCEL_PX = 30;
+    var startX = 0;
+    var startY = 0;
+    var tracking = false;
+
+    function isIgnoredTarget(target) {
+      var el = target;
+      while (el && el !== form) {
+        if (el.classList) {
+          if (el.classList.contains('argus-tabs')) {
+            return true;
+          }
+          if (el.classList.contains('argus-segment-radiogroup')) {
+            return true;
+          }
+        }
+        var tag = el.tagName;
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
+            tag === 'A' || tag === 'BUTTON') {
+          return true;
+        }
+        el = el.parentNode;
+      }
+      return false;
+    }
+
+    function currentTabIndex() {
+      var active = tabsRoot.querySelector('.argus-tab.active');
+      if (!active) {
+        return 0;
+      }
+      var idx = TAB_GROUPS.indexOf(active.getAttribute('data-tab'));
+      return idx >= 0 ? idx : 0;
+    }
+
+    form.addEventListener('touchstart', function (e) {
+      if (!e.touches || e.touches.length !== 1 || isIgnoredTarget(e.target)) {
+        tracking = false;
+        return;
+      }
+      tracking = true;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    }, false);
+
+    form.addEventListener('touchmove', function (e) {
+      if (!tracking || !e.touches || e.touches.length !== 1) {
+        return;
+      }
+      var dx = Math.abs(e.touches[0].clientX - startX);
+      var dy = Math.abs(e.touches[0].clientY - startY);
+      if (dy > VERTICAL_CANCEL_PX && dy > dx) {
+        tracking = false;
+      }
+    }, false);
+
+    form.addEventListener('touchend', function (e) {
+      if (!tracking) {
+        return;
+      }
+      tracking = false;
+      if (!e.changedTouches || !e.changedTouches.length) {
+        return;
+      }
+      var dx = e.changedTouches[0].clientX - startX;
+      var dy = e.changedTouches[0].clientY - startY;
+      var absDx = Math.abs(dx);
+      var absDy = Math.abs(dy);
+      if (absDx < SWIPE_MIN_DX || absDy > absDx * SWIPE_MAX_DY_RATIO) {
+        return;
+      }
+
+      var idx = currentTabIndex();
+      if (dx < 0 && idx < TAB_GROUPS.length - 1) {
+        showTab(TAB_GROUPS[idx + 1], tabsRoot);
+      } else if (dx > 0 && idx > 0) {
+        showTab(TAB_GROUPS[idx - 1], tabsRoot);
+      }
+    }, false);
+
+    form.addEventListener('touchcancel', function () {
+      tracking = false;
+    }, false);
   }
 

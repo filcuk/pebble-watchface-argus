@@ -95,7 +95,7 @@ pebble kill --force
 rm -f ~/.local/share/pebble-sdk/4.17/emery/localstorage/f8c3a2b1-4d5e-6f70-8a9b-0c1d2e3f4a5b.*
 ```
 
-To re-test the release notification without wiping storage: Clay **Debug → Release notification → Always**.
+To re-test the release notification without wiping storage: Clay **Debug → Release notification → Always** (does not require Debug mode).
 
 ### Clay settings
 
@@ -119,7 +119,7 @@ Clay config must use built-in types only (`radiogroup`, `toggle`, `input`, `subm
 
 Edit [`release.toml`](release.toml) (`version`, `message`) before each release. `pebble build` runs `scripts/generate-release.js` (via `wscript` `options()`) and writes `src/pkjs/release.js`, syncing `package.json`.
 
-The update notice is shown via `Pebble.showSimpleNotificationOnPebble` on the phone. It is skipped when `argus-release-seen` in phone storage matches the release version (unless Debug → **Always**). Leave `message` empty (or omit it) to ship a version with no update notice at all.
+The update notice is shown via `Pebble.showSimpleNotificationOnPebble` on the phone. It is skipped when `argus-release-seen` in phone storage matches the release version (unless Release notification is **Always**). Leave `message` empty (or omit it) to ship a version with no update notice at all.
 
 ### Dual-store `.pbw` (temporary)
 

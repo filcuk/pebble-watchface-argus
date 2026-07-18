@@ -65,8 +65,11 @@ html.as .argus-tabs {
   top: 0;
   z-index: 10;
   background: #1a1d21 !important;
-  padding: 0 0 4px;
-  margin-bottom: 8px;
+  /* Keep top/bottom gap inside sticky box so spacing survives when stuck
+     (form padding alone collapses at top: 0; margin-bottom isn't painted). */
+  margin-top: -12px;
+  margin-bottom: 0;
+  padding: 12px 0 12px;
 }
 html.as .argus-tabs::-webkit-scrollbar {
   display: none;
@@ -147,6 +150,19 @@ html.as .argus-row.component-input label > .label {
   font-weight: 600;
   color: #e8ebef !important;
   margin-bottom: 10px !important;
+  padding: 0 !important;
+}
+html.as .argus-setting-subheading,
+html.as .argus-row.argus-subheading-control > .label,
+html.as .argus-row.argus-subheading-control.component-radio > .label,
+html.as .argus-row.argus-subheading-control.component-input label > .label,
+html.as .argus-list-radiogroup.argus-subheading-control > .label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #9aa1ab !important;
+  margin-bottom: 8px !important;
   padding: 0 !important;
 }
 html.as .argus-row.component-toggle > label > .label,
@@ -325,6 +341,38 @@ html.as .argus-list-radiogroup .radio-group .label {
   font-weight: 600;
   color: #b4bac3 !important;
   text-align: left;
+}
+html.as .argus-list-radiogroup .radio-group .argus-header-option-main {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex: 1 1 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html.as .argus-list-radiogroup .radio-group .argus-header-option-icon {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  -webkit-flex: 0 0 14px;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  margin-right: 10px;
+  color: #b4bac3;
+}
+html.as .argus-list-radiogroup .radio-group .argus-header-option-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  shape-rendering: crispEdges;
+}
+html.as .argus-list-radiogroup .radio-group label.active .argus-header-option-icon {
+  color: #e8ebef;
 }
 html.as .argus-list-radiogroup .radio-group i {
   display: block;
@@ -702,6 +750,10 @@ html.as .argus-about {
   font-size: 13px;
   line-height: 1.4;
 }
+html.as .argus-about strong {
+  font-weight: 600;
+  color: #6894b8 !important;
+}
 html.as .argus-about-section {
   margin: 0 0 1rem;
   padding-bottom: 0.75rem;
@@ -725,8 +777,21 @@ html.as .argus-about-muted {
   color: #7a8494;
   font-size: 12px;
 }
-html.as .argus-about-icons-heading {
+html.as .argus-about a {
+  color: #6894b8 !important;
+  text-decoration: none;
+}
+html.as .argus-about-github-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.25em;
+  vertical-align: -0.125em;
+  color: #6894b8;
+}
+html.as .argus-about-section > .argus-setting-subheading {
   margin-top: 0.75rem;
+  margin-bottom: 0.35rem !important;
 }
 html.as .argus-about-warn {
   color: #d4b86a;
@@ -734,21 +799,13 @@ html.as .argus-about-warn {
 html.as .argus-about-critical {
   color: #d07070;
 }
-html.as .argus-about-swatch {
-  display: inline-block;
-  width: 0.7em;
-  height: 0.7em;
+html.as .argus-about-status-icon {
+  display: inline-block !important;
+  width: 14px !important;
+  height: 14px !important;
   margin-right: 0.4em;
-  border-radius: 2px;
-  vertical-align: middle;
-}
-html.as .argus-about-swatch-purple {
-  background: #9b59b6;
-}
-html.as .argus-about-swatch-orange {
-  background: #e67e22;
-}
-html.as .argus-about-swatch-red {
-  background: #e74c3c;
+  vertical-align: -2px;
+  flex-shrink: 0;
+  overflow: visible;
 }
 

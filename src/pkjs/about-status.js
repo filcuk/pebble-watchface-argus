@@ -244,6 +244,20 @@ function cacheApiFetchedAt(cache) {
   return cache.apiFetchedAt || cache.fetchedAt || 0;
 }
 
+function countryDisplayName(countryCode) {
+  if (!countryCode) {
+    return '';
+  }
+  var list = holidays.countries || [];
+  var i;
+  for (i = 0; i < list.length; i += 1) {
+    if (list[i].code === countryCode) {
+      return list[i].name || countryCode;
+    }
+  }
+  return countryCode;
+}
+
 function regionDisplayName(countryCode, regionCode) {
   if (!regionCode) {
     return '';
@@ -256,6 +270,15 @@ function regionDisplayName(countryCode, regionCode) {
     }
   }
   return regionCode;
+}
+
+function holidayLocationLabel(countryCode, regionCode) {
+  var countryName = countryDisplayName(countryCode);
+  var regionName = regionDisplayName(countryCode, regionCode);
+  if (regionName) {
+    return countryName + ' - ' + regionName;
+  }
+  return countryName;
 }
 
 function quantizeCoord(value) {
@@ -304,6 +327,78 @@ function locationPending(cache, gps, options) {
   return (
     quantizeCoord(cache.latQ) !== quantizeCoord(wantLat) ||
     quantizeCoord(cache.lonQ) !== quantizeCoord(wantLon)
+  );
+}
+
+/* Cloud silhouette from weather_status_icon.c (14×14). '.' empty, 'w' white, 'f' fill. */
+var WEATHER_STATUS_CLOUD = [
+  '..............',
+  '..............',
+  '..............',
+  '......wwww....',
+  '.....wffffw...',
+  '..wwwfffffww..',
+  '.wfffwffffwfw.',
+  '.wfffffffwffw.',
+  '.wffffffffffw.',
+  '.wffffffffffw.',
+  '..wwwwwwwwww..',
+  '..............',
+  '..............',
+  '..............',
+];
+
+/* Pebble GColorOrange / GColorRed / GColorPurple. */
+var WEATHER_STATUS_FILL = {
+  orange: '#ffaa00',
+  red: '#ff0000',
+  purple: '#aa00ff',
+};
+
+function weatherStatusIconSvg(fillHex) {
+  var parts = [];
+  var y;
+  var x;
+  var ch;
+  var runCh;
+  var runStart;
+  var runLen;
+  var color;
+
+  for (y = 0; y < WEATHER_STATUS_CLOUD.length; y += 1) {
+    runCh = '';
+    runStart = 0;
+    runLen = 0;
+    for (x = 0; x <= 14; x += 1) {
+      ch = x < 14 ? WEATHER_STATUS_CLOUD[y].charAt(x) : '.';
+      if (ch === runCh && ch !== '.') {
+        runLen += 1;
+        continue;
+      }
+      if (runLen > 0) {
+        color = runCh === 'w' ? '#ffffff' : fillHex;
+        parts.push(
+          '<rect x="' +
+            runStart +
+            '" y="' +
+            y +
+            '" width="' +
+            runLen +
+            '" height="1" fill="' +
+            color +
+            '"></rect>'
+        );
+      }
+      runCh = ch;
+      runStart = x;
+      runLen = ch === '.' ? 0 : 1;
+    }
+  }
+
+  return (
+    '<svg class="argus-about-status-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false">' +
+    parts.join('') +
+    '</svg>'
   );
 }
 
@@ -369,10 +464,16 @@ function weatherSectionHtml(options) {
   }
 
   lines.push(
-    '<p class="argus-about-icons-heading">Weather status</p>' +
-      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-purple"></span> Purple:  updates paused</p>' +
-      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-orange"></span> Orange: older than set interval</p>' +
-      '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-red"></span> Red: pending or age &gt; 3× interval</p>'
+    '<div class="argus-setting-subheading">Weather status</div>' +
+      '<p class="argus-about-line">' +
+      weatherStatusIconSvg(WEATHER_STATUS_FILL.purple) +
+      ' Updates paused</p>' +
+      '<p class="argus-about-line">' +
+      weatherStatusIconSvg(WEATHER_STATUS_FILL.orange) +
+      ' Older than set interval</p>' +
+      '<p class="argus-about-line">' +
+      weatherStatusIconSvg(WEATHER_STATUS_FILL.red) +
+      ' Pending or age &gt; 3× interval</p>'
   );
 
   return '<div class="argus-about-section">' + lines.join('') + '</div>';
@@ -432,8 +533,16 @@ function gpsSectionHtml(options) {
   return '<div class="argus-about-section">' + lines.join('') + '</div>';
 }
 
+function holidaySectionNow(options) {
+  if (options && options.now instanceof Date && !isNaN(options.now.getTime())) {
+    return options.now;
+  }
+  return new Date();
+}
+
 function holidaySectionHtml(options) {
   var lines = [];
+  var now = holidaySectionNow(options);
   lines.push('<div class="argus-setting-label">Holidays</div>');
 
   if (!options.showHolidays) {
@@ -448,19 +557,18 @@ function holidaySectionHtml(options) {
   }
 
   var regionCode = options.regionCode || '';
-  var regionName = regionDisplayName(countryCode, regionCode);
+  var locationLabel = holidayLocationLabel(countryCode, regionCode);
   var cached = holidays.readCachedHolidaysForWindow(
     countryCode,
-    new Date(),
+    now,
     options.weekStart || '0'
   );
 
   if (!cached.length) {
     lines.push(
-      '<p class="argus-about-line">No cached holidays yet for ' +
-        escapeHtml(countryCode) +
-        (regionName ? ' / ' + escapeHtml(regionName) : '') +
-        '.</p>'
+      '<p class="argus-about-line">No cached holidays yet for <strong>' +
+        escapeHtml(locationLabel) +
+        '</strong>.</p>'
     );
     return '<div class="argus-about-section">' + lines.join('') + '</div>';
   }
@@ -468,7 +576,7 @@ function holidaySectionHtml(options) {
   var inWindow = holidays.listHolidaysInCalendarWindow(
     cached,
     regionCode,
-    new Date(),
+    now,
     options.weekStart || '0'
   );
   var upcoming = [];
@@ -481,16 +589,13 @@ function holidaySectionHtml(options) {
 
   if (!upcoming.length) {
     lines.push(
-      '<p class="argus-about-line">No holidays in the current 14-day calendar window' +
-        (regionName ? ' (' + escapeHtml(regionName) + ')' : '') +
-        '.</p>'
+      '<p class="argus-about-line">No holidays for <strong>' +
+        escapeHtml(locationLabel) +
+        '</strong> in the current 14-day calendar window.</p>'
     );
   } else {
     lines.push(
-      '<p class="argus-about-muted">' +
-        escapeHtml(countryCode) +
-        (regionName ? ' · ' + escapeHtml(regionName) : '') +
-        '</p>'
+      '<p class="argus-setting-subheading">' + escapeHtml(locationLabel) + '</p>'
     );
     for (i = 0; i < upcoming.length && i < 4; i += 1) {
       var entry = upcoming[i];
@@ -513,10 +618,49 @@ function holidaySectionHtml(options) {
   return '<div class="argus-about-section">' + lines.join('') + '</div>';
 }
 
+function githubMarkSvg() {
+  return (
+    '<svg class="argus-about-github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+    '<path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/>' +
+    '</svg>'
+  );
+}
+
+function aboutIntroSectionHtml() {
+  var wikiUrl = 'https://github.com/filcuk/pebble-watchface-argus/wiki';
+  var issuesUrl = 'https://github.com/filcuk/pebble-watchface-argus/issues';
+  var helpUrl = 'https://github.com/filcuk/pebble-watchface-argus/discussions';
+  return (
+    '<div class="argus-about-section">' +
+    '<div class="argus-setting-label">Info</div>' +
+    '<p class="argus-about-line argus-about-links">' +
+    ' External links: ' +
+    githubMarkSvg() +
+    '<a href="' +
+    wikiUrl +
+    '" target="_blank" rel="noopener noreferrer">Wiki</a>' +
+    ' · ' +
+    '<a href="' +
+    issuesUrl +
+    '" target="_blank" rel="noopener noreferrer">Issues</a>' +
+    ' · ' +
+    '<a href="' +
+    helpUrl +
+    '" target="_blank" rel="noopener noreferrer">Help</a>' +
+    '</p>' +
+    '<br>' +
+    '<p class="argus-about-line">' +
+    '<em>Tip: Swipe left or right to navigate between pages!</em>' +
+    '</p>' +
+    '</div>'
+  );
+}
+
 function formatPanelHtml(options) {
   options = options || {};
   return (
     '<div class="argus-about">' +
+    aboutIntroSectionHtml() +
     holidaySectionHtml(options) +
     gpsSectionHtml(options) +
     weatherSectionHtml(options) +

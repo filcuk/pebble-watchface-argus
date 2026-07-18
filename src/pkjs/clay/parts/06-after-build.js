@@ -11,6 +11,7 @@
     convertSelectDropdowns();
     wrapInlineControlBodies();
     hideHeaderHeartRateIfNeeded();
+    injectHeaderDisplayIcons();
     normalizeRealtimeStepsDefault();
 
     if (tabsRoot) {
@@ -23,6 +24,7 @@
           showTab(btn.getAttribute('data-tab'), tabsRoot);
         }
       });
+      bindTabSwipe(tabsRoot);
       showTab('tabAbout', tabsRoot);
     }
 
@@ -48,11 +50,19 @@
       headerDisplay.on('change', syncFullDateFormatVisibility);
     }
 
+    bindSaveChangeTracking();
+
+    saveTrackingPaused = true;
     loadHolidayCountries(function () {
       refreshHolidayCountryDropdown();
       resolveHolidayDefaults();
-      syncHolidaySettings();
-      bindSegmentSync();
+      syncHolidaySettings(function () {
+        bindSegmentSync();
+        // Holiday defaults may set country/region after open; don't count those.
+        refreshSaveBaselineKeys(['HolidayCountry', 'HolidayRegion']);
+        saveTrackingPaused = false;
+        updateSaveButtonLabel();
+      });
     });
 
     var showHolidays = clayConfig.getItemByMessageKey('ShowHolidays');

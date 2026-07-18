@@ -56,6 +56,7 @@ var weatherRetryDelayMs = 0;
 var weatherRetryContext = null;
 var holidayRequestTimer = null;
 var holidayFetchInFlight = false;
+var HOLIDAY_WATCH_NOW_KEY = 'argus-holiday-watch-now';
 var WEATHER_FETCH_STALE_MS = 30000;
 var WEATHER_RETRY_BASE_MS = 30 * 1000;
 var WEATHER_RETRY_CAP_MS = 30 * 60 * 1000;
@@ -760,6 +761,7 @@ function injectAboutStatusForClayConfig() {
       countryCode: String(getClaySetting('HolidayCountry', '') || ''),
       regionCode: String(getClaySetting('HolidayRegion', '') || ''),
       weekStart: String(getClaySetting('WeekStart', '0')),
+      now: getHolidayWatchNow() || new Date(),
       pauseAtNight:
         pauseWeatherAtNightEnabled() && !!weatherCache && weatherIsNightNow(weatherCache),
     })
@@ -1499,6 +1501,40 @@ function sendHolidayMask(mask) {
   );
 }
 
+function rememberHolidayWatchNow(epochSec) {
+  if (!(epochSec > 1000000000)) {
+    return;
+  }
+  try {
+    localStorage.setItem(
+      HOLIDAY_WATCH_NOW_KEY,
+      JSON.stringify({
+        epoch: Math.floor(epochSec),
+        receivedAt: Date.now(),
+      })
+    );
+  } catch (e) {
+    /* ignore quota / private mode */
+  }
+}
+
+/* Last watch holiday clock (incl. CaptureTimeOffset) — About only, never mask packing. */
+function getHolidayWatchNow() {
+  try {
+    var raw = localStorage.getItem(HOLIDAY_WATCH_NOW_KEY);
+    if (!raw) {
+      return null;
+    }
+    var parsed = JSON.parse(raw);
+    if (!parsed || !(parsed.epoch > 1000000000) || !parsed.receivedAt) {
+      return null;
+    }
+    return new Date(parsed.epoch * 1000 + (Date.now() - parsed.receivedAt));
+  } catch (e) {
+    return null;
+  }
+}
+
 function holidayNowFromOptions(options) {
   if (options && options.now instanceof Date && !isNaN(options.now.getTime())) {
     return options.now;
@@ -1506,6 +1542,7 @@ function holidayNowFromOptions(options) {
   if (options && typeof options.nowEpoch === 'number' && options.nowEpoch > 1000000000) {
     return new Date(options.nowEpoch * 1000);
   }
+  /* Boot/settings sync: phone wall clock. Simulated time only via watch REQUEST_HOLIDAYS. */
   return new Date();
 }
 
@@ -1527,12 +1564,16 @@ function syncHolidaysToWatch(options) {
     return;
   }
 
+  var now = holidayNowFromOptions(options);
+  /* Keep About in sync with the clock used for the mask (real or simulated). */
+  rememberHolidayWatchNow(Math.floor(now.getTime() / 1000));
+
   holidayFetchInFlight = true;
   holidays.fetchHolidaysForWindow({
     countryCode: country,
     regionCode: getHolidayRegion(),
     weekStart: String(getClaySetting('WeekStart', '0')),
-    now: holidayNowFromOptions(options),
+    now: now,
     xhrRequest: xhrRequest,
   }, function (result) {
     holidayFetchInFlight = false;

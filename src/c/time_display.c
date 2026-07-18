@@ -67,7 +67,7 @@ static int prv_optical_y_offset(ClockFont clock_font) {
       return -6;
     case CLOCK_FONT_LECO:
     default:
-      return -12;
+      return -11;
   }
 }
 

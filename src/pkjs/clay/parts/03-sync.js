@@ -1,40 +1,28 @@
   function syncDebugToggles() {
     var debugToggle = clayConfig.getItemByMessageKey('DebugMode');
-    var weatherForceToggle = clayConfig.getItemByMessageKey('WeatherForceUpdate');
     var demoWeatherToggle = clayConfig.getItemByMessageKey('DemoWeather');
     var demoBiometricsToggle = clayConfig.getItemByMessageKey('DemoBiometrics');
-    var releaseNotification = clayConfig.getItemByMessageKey('ReleaseNotification');
     var weatherLogToggle = clayConfig.getItemByMessageKey('DebugWeatherLog');
+    var debugItems = [demoWeatherToggle, demoBiometricsToggle, weatherLogToggle];
+    var i;
 
-    if (!debugToggle || !demoWeatherToggle || !demoBiometricsToggle || !releaseNotification) {
+    if (!debugToggle) {
       return;
     }
 
-    if (debugToggle.get()) {
-      if (weatherForceToggle) {
-        weatherForceToggle.enable();
+    var debugOn = !!debugToggle.get();
+    for (i = 0; i < debugItems.length; i += 1) {
+      var item = debugItems[i];
+      if (!item || !item.$element || !item.$element[0]) {
+        continue;
       }
-      demoWeatherToggle.enable();
-      demoBiometricsToggle.enable();
-      releaseNotification.enable();
-      if (weatherLogToggle) {
-        weatherLogToggle.enable();
-      }
-    } else {
-      if (weatherForceToggle) {
-        weatherForceToggle.set(false);
-        weatherForceToggle.disable();
-      }
-      demoWeatherToggle.set(false);
-      demoWeatherToggle.disable();
-      demoBiometricsToggle.set(false);
-      demoBiometricsToggle.disable();
-      releaseNotification.set('0');
-      syncRadioLabels('ReleaseNotification');
-      releaseNotification.disable();
-      if (weatherLogToggle) {
-        weatherLogToggle.set(false);
-        weatherLogToggle.disable();
+      if (debugOn) {
+        item.$element[0].classList.remove('hide');
+        item.enable();
+      } else {
+        item.set(false);
+        item.$element[0].classList.add('hide');
+        item.disable();
       }
     }
 
@@ -404,12 +392,15 @@
     }
   }
 
-  function syncHolidaySettings() {
+  function syncHolidaySettings(done) {
     var showHolidays = clayConfig.getItemByMessageKey('ShowHolidays');
     var countryItem = clayConfig.getItemByMessageKey('HolidayCountry');
     var regionItem = clayConfig.getItemByMessageKey('HolidayRegion');
 
     if (!showHolidays || !countryItem || !regionItem) {
+      if (done) {
+        done();
+      }
       return;
     }
 
@@ -429,6 +420,9 @@
     }
 
     if (!enabled) {
+      if (done) {
+        done();
+      }
       return;
     }
 
@@ -437,6 +431,9 @@
     rebuildRegionOptions(country, region || '', function () {
       syncHolidayRegionVisibility(country, regionItem);
       ensureHolidayRegionItemValue(regionItem, region || '');
+      if (done) {
+        done();
+      }
     });
   }
 
@@ -539,5 +536,103 @@
     if (headerItem.get() === '3') {
       headerItem.set('0');
     }
+  }
+
+  var saveBaseline = null;
+  var saveTrackingReady = false;
+  var saveTrackingPaused = false;
+
+  function canonicalizeSettingValue(value) {
+    var normalized = normalizeClayValue(value);
+    if (normalized === true) {
+      return 'true';
+    }
+    if (normalized === false) {
+      return 'false';
+    }
+    if (normalized === null || normalized === undefined) {
+      return '';
+    }
+    return String(normalized);
+  }
+
+  function getTrackedSettingItems() {
+    return clayConfig.getAllItems().filter(function (item) {
+      return !!item.messageKey;
+    });
+  }
+
+  function captureSaveBaseline() {
+    saveBaseline = {};
+    getTrackedSettingItems().forEach(function (item) {
+      saveBaseline[item.messageKey] = canonicalizeSettingValue(item.get());
+    });
+    saveTrackingReady = true;
+  }
+
+  function countChangedSettings() {
+    if (!saveBaseline) {
+      return 0;
+    }
+
+    var count = 0;
+    getTrackedSettingItems().forEach(function (item) {
+      var current = canonicalizeSettingValue(item.get());
+      var baseline = saveBaseline[item.messageKey];
+      if (baseline === undefined) {
+        baseline = '';
+      }
+      if (current !== baseline) {
+        count += 1;
+      }
+    });
+    return count;
+  }
+
+  function updateSaveButtonLabel() {
+    if (!saveTrackingReady || saveTrackingPaused) {
+      return;
+    }
+
+    var submitItems = clayConfig.getItemsByType('submit');
+    if (!submitItems.length) {
+      return;
+    }
+
+    var count = countChangedSettings();
+    var label = count > 0 ? 'Save (' + count + ')' : 'Save';
+    if (submitItems[0].get() !== label) {
+      submitItems[0].set(label);
+    }
+  }
+
+  function refreshSaveBaselineKeys(keys) {
+    if (!saveBaseline) {
+      return;
+    }
+
+    keys.forEach(function (key) {
+      var item = clayConfig.getItemByMessageKey(key);
+      if (item) {
+        saveBaseline[key] = canonicalizeSettingValue(item.get());
+      }
+    });
+    updateSaveButtonLabel();
+  }
+
+  function bindSaveChangeTracking() {
+    getTrackedSettingItems().forEach(function (item) {
+      item.on('change', updateSaveButtonLabel);
+      if (
+        item.config.type === 'input' &&
+        item.$manipulatorTarget &&
+        item.$manipulatorTarget[0]
+      ) {
+        item.$manipulatorTarget[0].addEventListener('input', updateSaveButtonLabel);
+      }
+    });
+
+    captureSaveBaseline();
+    updateSaveButtonLabel();
   }
 
