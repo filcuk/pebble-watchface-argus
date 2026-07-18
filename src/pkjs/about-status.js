@@ -455,8 +455,16 @@ function gpsSectionHtml(options) {
   return '<div class="argus-about-section">' + lines.join('') + '</div>';
 }
 
+function holidaySectionNow(options) {
+  if (options && options.now instanceof Date && !isNaN(options.now.getTime())) {
+    return options.now;
+  }
+  return new Date();
+}
+
 function holidaySectionHtml(options) {
   var lines = [];
+  var now = holidaySectionNow(options);
   lines.push('<div class="argus-setting-label">Holidays</div>');
 
   if (!options.showHolidays) {
@@ -474,7 +482,7 @@ function holidaySectionHtml(options) {
   var locationLabel = holidayLocationLabel(countryCode, regionCode);
   var cached = holidays.readCachedHolidaysForWindow(
     countryCode,
-    new Date(),
+    now,
     options.weekStart || '0'
   );
 
@@ -490,7 +498,7 @@ function holidaySectionHtml(options) {
   var inWindow = holidays.listHolidaysInCalendarWindow(
     cached,
     regionCode,
-    new Date(),
+    now,
     options.weekStart || '0'
   );
   var upcoming = [];

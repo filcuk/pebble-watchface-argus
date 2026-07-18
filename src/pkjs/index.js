@@ -56,6 +56,7 @@ var weatherRetryDelayMs = 0;
 var weatherRetryContext = null;
 var holidayRequestTimer = null;
 var holidayFetchInFlight = false;
+var HOLIDAY_WATCH_NOW_KEY = 'argus-holiday-watch-now';
 var WEATHER_FETCH_STALE_MS = 30000;
 var WEATHER_RETRY_BASE_MS = 30 * 1000;
 var WEATHER_RETRY_CAP_MS = 30 * 60 * 1000;
@@ -760,6 +761,7 @@ function injectAboutStatusForClayConfig() {
       countryCode: String(getClaySetting('HolidayCountry', '') || ''),
       regionCode: String(getClaySetting('HolidayRegion', '') || ''),
       weekStart: String(getClaySetting('WeekStart', '0')),
+      now: holidayNowFromOptions({}),
       pauseAtNight:
         pauseWeatherAtNightEnabled() && !!weatherCache && weatherIsNightNow(weatherCache),
     })
@@ -1499,12 +1501,51 @@ function sendHolidayMask(mask) {
   );
 }
 
+function rememberHolidayWatchNow(epochSec) {
+  if (!(epochSec > 1000000000)) {
+    return;
+  }
+  try {
+    localStorage.setItem(
+      HOLIDAY_WATCH_NOW_KEY,
+      JSON.stringify({
+        epoch: Math.floor(epochSec),
+        receivedAt: Date.now(),
+      })
+    );
+  } catch (e) {
+    /* ignore quota / private mode */
+  }
+}
+
+/* Advance the last watch holiday clock so About/sync match CaptureTimeOffset. */
+function getHolidayWatchNow() {
+  try {
+    var raw = localStorage.getItem(HOLIDAY_WATCH_NOW_KEY);
+    if (!raw) {
+      return null;
+    }
+    var parsed = JSON.parse(raw);
+    if (!parsed || !(parsed.epoch > 1000000000) || !parsed.receivedAt) {
+      return null;
+    }
+    return new Date(parsed.epoch * 1000 + (Date.now() - parsed.receivedAt));
+  } catch (e) {
+    return null;
+  }
+}
+
 function holidayNowFromOptions(options) {
   if (options && options.now instanceof Date && !isNaN(options.now.getTime())) {
     return options.now;
   }
   if (options && typeof options.nowEpoch === 'number' && options.nowEpoch > 1000000000) {
+    rememberHolidayWatchNow(options.nowEpoch);
     return new Date(options.nowEpoch * 1000);
+  }
+  var watchNow = getHolidayWatchNow();
+  if (watchNow) {
+    return watchNow;
   }
   return new Date();
 }
