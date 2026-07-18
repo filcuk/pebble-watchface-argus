@@ -188,7 +188,7 @@ static GSize prv_text_content_size(const char *text, GFont font, GRect bounds, G
 }
 
 static GRect prv_today_pill_rect(GRect text_rect, int text_w, int cell_w) {
-  int w = text_w * CALENDAR_TODAY_PILL_WIDTH_MULTIPLIER;
+  int w = (text_w * CALENDAR_TODAY_PILL_WIDTH_NUM) / CALENDAR_TODAY_PILL_WIDTH_DEN;
   if (w > cell_w) {
     w = cell_w;
   }
