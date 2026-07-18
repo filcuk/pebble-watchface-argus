@@ -253,15 +253,11 @@ void time_display_destroy(TimeDisplay *display) {
   if (s_time_display == display) {
     s_time_display = NULL;
   }
-  if (display->time_layer &&
-      (!display->container || layer_get_parent(display->time_layer) != display->container)) {
+  if (display->time_layer) {
     layer_destroy(display->time_layer);
-    display->time_layer = NULL;
   }
   if (display->container) {
     layer_destroy(display->container);
-  } else if (display->time_layer) {
-    layer_destroy(display->time_layer);
   }
   free(display);
 }

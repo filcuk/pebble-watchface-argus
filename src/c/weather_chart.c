@@ -796,13 +796,11 @@ void weather_chart_destroy(WeatherChart *chart) {
   if (s_weather_chart == chart) {
     s_weather_chart = NULL;
   }
-  if (chart->decor_layer && (!chart->layer || layer_get_parent(chart->decor_layer) != chart->layer)) {
+  if (chart->decor_layer) {
     layer_destroy(chart->decor_layer);
-    chart->decor_layer = NULL;
   }
-  if (chart->plot_layer && (!chart->layer || layer_get_parent(chart->plot_layer) != chart->layer)) {
+  if (chart->plot_layer) {
     layer_destroy(chart->plot_layer);
-    chart->plot_layer = NULL;
   }
   if (chart->layer) {
     layer_destroy(chart->layer);

@@ -161,6 +161,11 @@ static void prv_refresh_labels(Calendar *calendar) {
   const ArgusSettings *settings = settings_get();
   for (int row = 0; row < 2; row++) {
     int week = prv_week_number_for_date(&calendar->cells[row * 7], settings->week_number_mode);
+    if (week < 1) {
+      week = 1;
+    } else if (week > 53) {
+      week = 53;
+    }
     snprintf(calendar->week_labels[row], sizeof(calendar->week_labels[row]), "W%d", week);
   }
   for (int i = 0; i < 14; i++) {
@@ -424,16 +429,11 @@ void calendar_destroy(Calendar *calendar) {
   if (s_calendar == calendar) {
     s_calendar = NULL;
   }
-  /* Destroy orphans first if create failed before parenting. */
-  if (calendar->today_layer &&
-      (!calendar->layer || layer_get_parent(calendar->today_layer) != calendar->layer)) {
+  if (calendar->today_layer) {
     layer_destroy(calendar->today_layer);
-    calendar->today_layer = NULL;
   }
-  if (calendar->holiday_layer &&
-      (!calendar->layer || layer_get_parent(calendar->holiday_layer) != calendar->layer)) {
+  if (calendar->holiday_layer) {
     layer_destroy(calendar->holiday_layer);
-    calendar->holiday_layer = NULL;
   }
   if (calendar->layer) {
     layer_destroy(calendar->layer);
