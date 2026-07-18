@@ -761,7 +761,7 @@ function injectAboutStatusForClayConfig() {
       countryCode: String(getClaySetting('HolidayCountry', '') || ''),
       regionCode: String(getClaySetting('HolidayRegion', '') || ''),
       weekStart: String(getClaySetting('WeekStart', '0')),
-      now: holidayNowFromOptions({}),
+      now: getHolidayWatchNow() || new Date(),
       pauseAtNight:
         pauseWeatherAtNightEnabled() && !!weatherCache && weatherIsNightNow(weatherCache),
     })
@@ -1518,7 +1518,7 @@ function rememberHolidayWatchNow(epochSec) {
   }
 }
 
-/* Advance the last watch holiday clock so About/sync match CaptureTimeOffset. */
+/* Last watch holiday clock (incl. CaptureTimeOffset) — About only, never mask packing. */
 function getHolidayWatchNow() {
   try {
     var raw = localStorage.getItem(HOLIDAY_WATCH_NOW_KEY);
@@ -1540,13 +1540,9 @@ function holidayNowFromOptions(options) {
     return options.now;
   }
   if (options && typeof options.nowEpoch === 'number' && options.nowEpoch > 1000000000) {
-    rememberHolidayWatchNow(options.nowEpoch);
     return new Date(options.nowEpoch * 1000);
   }
-  var watchNow = getHolidayWatchNow();
-  if (watchNow) {
-    return watchNow;
-  }
+  /* Boot/settings sync: phone wall clock. Simulated time only via watch REQUEST_HOLIDAYS. */
   return new Date();
 }
 
@@ -1568,12 +1564,16 @@ function syncHolidaysToWatch(options) {
     return;
   }
 
+  var now = holidayNowFromOptions(options);
+  /* Keep About in sync with the clock used for the mask (real or simulated). */
+  rememberHolidayWatchNow(Math.floor(now.getTime() / 1000));
+
   holidayFetchInFlight = true;
   holidays.fetchHolidaysForWindow({
     countryCode: country,
     regionCode: getHolidayRegion(),
     weekStart: String(getClaySetting('WeekStart', '0')),
-    now: holidayNowFromOptions(options),
+    now: now,
     xhrRequest: xhrRequest,
   }, function (result) {
     holidayFetchInFlight = false;
