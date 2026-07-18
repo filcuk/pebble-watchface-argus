@@ -541,11 +541,29 @@ function holidaySectionHtml(options) {
 }
 
 function aboutIntroSectionHtml() {
+  var wikiUrl = 'https://github.com/filcuk/pebble-watchface-argus/wiki';
+  var issuesUrl = 'https://github.com/filcuk/pebble-watchface-argus/issues';
+  var helpUrl = 'https://github.com/filcuk/pebble-watchface-argus/discussions';
   return (
     '<div class="argus-about-section">' +
-    '<div class="argus-setting-label">About</div>' +
+    '<div class="argus-setting-label">Info</div>' +
     '<p class="argus-about-line">' +
     'Tip: Swipe left or right to navigate between pages!' +
+    '</p>' +
+    '<br>' +
+    '<p class="argus-about-line argus-about-links">' +
+    'External links: ' +
+    '<a href="' +
+    wikiUrl +
+    '" target="_blank" rel="noopener noreferrer">Wiki</a>' +
+    ' · ' +
+    '<a href="' +
+    issuesUrl +
+    '" target="_blank" rel="noopener noreferrer">Issues</a>' +
+    ' · ' +
+    '<a href="' +
+    helpUrl +
+    '" target="_blank" rel="noopener noreferrer">Help</a>' +
     '</p>' +
     '</div>'
   );

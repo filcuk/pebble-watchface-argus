@@ -741,6 +741,10 @@ html.as .argus-about-muted {
   color: #7a8494;
   font-size: 12px;
 }
+html.as .argus-about a {
+  color: #6894b8 !important;
+  text-decoration: none;
+}
 html.as .argus-about-section > .argus-setting-subheading {
   margin-top: 0.75rem;
   margin-bottom: 0.35rem !important;
