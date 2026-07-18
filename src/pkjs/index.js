@@ -977,6 +977,7 @@ function packWeatherPayload(json, hours, startEpoch) {
   var feelsTemps = json.hourly.apparent_temperature || [];
   var precips = json.hourly.precipitation;
   var winds = json.hourly.wind_speed_10m || [];
+  var windDirs = json.hourly.wind_direction_10m || [];
   var isDay = json.hourly.is_day || [];
   var utcOffset =
     typeof json.utc_offset_seconds === 'number' ? json.utc_offset_seconds : 0;
@@ -1000,6 +1001,9 @@ function packWeatherPayload(json, hours, startEpoch) {
   if (winds.length > 0) {
     count = Math.min(count, winds.length - startIndex);
   }
+  if (windDirs.length > 0) {
+    count = Math.min(count, windDirs.length - startIndex);
+  }
   if (feelsTemps.length > 0) {
     count = Math.min(count, feelsTemps.length - startIndex);
   }
@@ -1011,6 +1015,7 @@ function packWeatherPayload(json, hours, startEpoch) {
   var precipMax = 0;
   var windMax = 0;
   var hasFeels = feelsTemps.length > 0;
+  var hasWindDir = windDirs.length > 0;
 
   for (var i = 0; i < count; i++) {
     var src = startIndex + i;
@@ -1085,6 +1090,18 @@ function packWeatherPayload(json, hours, startEpoch) {
       count
     ),
     windBytes: packUint8Array(winds.slice(startIndex, startIndex + count), count),
+    windDirBytes: hasWindDir
+      ? packUint8Array(
+          windDirs.slice(startIndex, startIndex + count).map(function (d) {
+            var deg = Math.round(d || 0) % 360;
+            if (deg < 0) {
+              deg += 360;
+            }
+            return Math.round(deg / 2) % 180;
+          }),
+          count
+        )
+      : null,
     isDayBytes: packUint8Array(isDay.slice(startIndex, startIndex + count), count),
     fetchTime: parseOpenMeteoTime(times[startIndex], utcOffset),
   };
@@ -1130,6 +1147,9 @@ function sendWeatherPayload(payload, sendMeta, sendOptions) {
   }
   dict[keys.WeatherPrecipHourly] = payload.precipBytes;
   dict[keys.WeatherWindHourly] = payload.windBytes;
+  if (payload.windDirBytes) {
+    dict[keys.WeatherWindDirHourly] = payload.windDirBytes;
+  }
   dict[keys.WeatherIsDayHourly] = payload.isDayBytes;
   if (sendMeta.apiFetchedAt) {
     dict[keys.WeatherApiFetchedAt] = sendMeta.apiFetchedAt;
@@ -1217,7 +1237,7 @@ function fetchForecast(latitude, longitude, forEpoch, options) {
     quantizeCoord(latitude) +
     '&longitude=' +
     quantizeCoord(longitude) +
-    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,is_day' +
+    '&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,is_day' +
     '&daily=sunrise,sunset&timezone=auto';
 
   if (model) {

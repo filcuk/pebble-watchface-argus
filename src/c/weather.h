@@ -9,7 +9,8 @@
 #define WEATHER_PERSIST_KEY_PRECIP 32
 #define WEATHER_PERSIST_KEY_WIND 33
 #define WEATHER_PERSIST_KEY_IS_DAY 34
-#define WEATHER_PERSIST_VERSION 4
+#define WEATHER_PERSIST_KEY_WIND_DIR 35
+#define WEATHER_PERSIST_VERSION 5
 #define WEATHER_CACHE_MAX_AGE_S (12 * 3600)
 #define WEATHER_STATUS_LOCATION_PENDING 0x01
 
@@ -34,9 +35,11 @@ typedef struct {
   int8_t feels_temps[WEATHER_MAX_HOURS];
   uint8_t precips[WEATHER_MAX_HOURS];
   uint8_t winds[WEATHER_MAX_HOURS];
+  uint8_t wind_dirs[WEATHER_MAX_HOURS]; /* degrees / 2 (0–179) */
   uint8_t is_day[WEATHER_MAX_HOURS];
   bool has_is_day;
   bool has_wind;
+  bool has_wind_dir;
   bool has_feels_temps;
   int8_t temp_min;
   int8_t temp_max;
@@ -90,5 +93,8 @@ int8_t weather_display_temp_min_for_view(const WeatherView *view);
 int8_t weather_display_temp_max_for_view(const WeatherView *view);
 uint8_t weather_precip_max_for_view(const WeatherView *view);
 uint8_t weather_wind_max_for_view(const WeatherView *view);
+uint8_t weather_wind_min_for_view(const WeatherView *view);
+uint8_t weather_wind_at(uint8_t index);
+uint16_t weather_wind_dir_degrees_at(uint8_t index);
 int8_t weather_display_temp_min(void);
 int8_t weather_display_temp_max(void);

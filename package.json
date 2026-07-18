@@ -69,6 +69,7 @@
       "WeatherFeelsTempHourly",
       "WeatherPrecipHourly",
       "WeatherWindHourly",
+      "WeatherWindDirHourly",
       "WeatherFetchTime",
       "WeatherApiFetchedAt",
       "WeatherApiLatE4",
