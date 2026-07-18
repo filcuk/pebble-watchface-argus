@@ -76,7 +76,8 @@ var windInfoHtml =
 
 var headerDisplayHelpHtml =
   '<strong>Step count</strong> shows your total steps for the day. <strong>Temperature</strong> shows the current ' +
-  'reading with today\'s minimum and maximum forecasted. <strong>Heart rate</strong> ' +
+  'reading with today\'s minimum and maximum forecasted. <strong>Wind</strong> shows the current speed and ' +
+  'direction with the forecast minimum and maximum. <strong>Heart rate</strong> ' +
   'shows your current BPM with today\'s maximum.<br><br>' +
   '<em>Maximum heart rate is recorded while Argus is active. When you open the watchface, ' +
   'earlier peaks from today may be included if the watch already stored minute ' +
@@ -198,6 +199,7 @@ module.exports = [
       { label: 'Step count', value: '1' },
       { label: 'Heart rate', value: '3' },
       { label: 'Temperature', value: '2' },
+      { label: 'Wind', value: '4' },
     ],
   },
   {
@@ -213,6 +215,17 @@ module.exports = [
       { label: 'dd-mm-yyyy', value: '2' },
       { label: 'mm-dd-yyyy', value: '3' },
       { label: 'yyyy-mm-dd', value: '4' },
+    ],
+  },
+  {
+    type: 'radiogroup',
+    messageKey: 'WindUnit',
+    label: 'Wind units',
+    group: 'tabDisplay',
+    defaultValue: '0',
+    options: [
+      { label: 'km/h', value: '0' },
+      { label: 'mph', value: '1' },
     ],
   },
   {

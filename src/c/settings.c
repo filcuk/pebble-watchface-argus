@@ -143,6 +143,30 @@ typedef struct {
   bool quiet_mode_display;
 } ArgusSettingsV8;
 
+typedef struct {
+  uint8_t version;
+  HourFormat hour_format;
+  ClockFont clock_font;
+  WeekStart week_start;
+  WeekNumberMode week_number_mode;
+  BluetoothDisplay bluetooth_display;
+  LocationMode location_mode;
+  HeaderDisplayMode header_display_mode;
+  FullDateFormat full_date_format;
+  char manual_location[48];
+  uint8_t forecast_hours;
+  bool temperature_fahrenheit;
+  TemperatureDisplay temperature_display;
+  bool show_event_indicators;
+  bool debug_mode;
+  bool demo_weather;
+  bool demo_biometrics;
+  BiometricUpdateMode biometric_update_mode;
+  bool pause_weather_at_night;
+  uint8_t weather_update_interval_min;
+  bool quiet_mode_display;
+} ArgusSettingsV9;
+
 static void settings_set_defaults(void) {
   s_settings.version = SETTINGS_PERSIST_VERSION;
   s_settings.hour_format = HOUR_FORMAT_SYSTEM;
@@ -165,6 +189,7 @@ static void settings_set_defaults(void) {
   s_settings.pause_weather_at_night = false;
   s_settings.weather_update_interval_min = WEATHER_UPDATE_INTERVAL_60_MIN;
   s_settings.quiet_mode_display = true;
+  s_settings.wind_mph = false;
 }
 
 static bool settings_is_valid_weather_update_interval(uint8_t minutes) {
@@ -174,7 +199,7 @@ static bool settings_is_valid_weather_update_interval(uint8_t minutes) {
 }
 
 static void settings_validate(void) {
-  if (s_settings.header_display_mode > HEADER_DISPLAY_HEART_RATE) {
+  if (s_settings.header_display_mode > HEADER_DISPLAY_WIND) {
     s_settings.header_display_mode = HEADER_DISPLAY_FULL_DATE;
   }
   if (s_settings.full_date_format > FULL_DATE_FORMAT_YYYY_MM_DD) {
@@ -353,6 +378,32 @@ static void settings_migrate_from_v8(const ArgusSettingsV8 *legacy) {
   s_settings.version = SETTINGS_PERSIST_VERSION;
 }
 
+static void settings_migrate_from_v9(const ArgusSettingsV9 *legacy) {
+  settings_set_defaults();
+  s_settings.hour_format = legacy->hour_format;
+  s_settings.clock_font = legacy->clock_font;
+  s_settings.week_start = legacy->week_start;
+  s_settings.week_number_mode = legacy->week_number_mode;
+  s_settings.bluetooth_display = legacy->bluetooth_display;
+  s_settings.location_mode = legacy->location_mode;
+  s_settings.header_display_mode = legacy->header_display_mode;
+  s_settings.full_date_format = legacy->full_date_format;
+  strncpy(s_settings.manual_location, legacy->manual_location, sizeof(s_settings.manual_location) - 1);
+  s_settings.manual_location[sizeof(s_settings.manual_location) - 1] = '\0';
+  s_settings.forecast_hours = legacy->forecast_hours;
+  s_settings.temperature_fahrenheit = legacy->temperature_fahrenheit;
+  s_settings.temperature_display = legacy->temperature_display;
+  s_settings.show_event_indicators = legacy->show_event_indicators;
+  s_settings.debug_mode = legacy->debug_mode;
+  s_settings.demo_weather = legacy->demo_weather;
+  s_settings.demo_biometrics = legacy->demo_biometrics;
+  s_settings.biometric_update_mode = legacy->biometric_update_mode;
+  s_settings.pause_weather_at_night = legacy->pause_weather_at_night;
+  s_settings.weather_update_interval_min = legacy->weather_update_interval_min;
+  s_settings.quiet_mode_display = legacy->quiet_mode_display;
+  s_settings.version = SETTINGS_PERSIST_VERSION;
+}
+
 void settings_init(void) {
   settings_set_defaults();
   if (!persist_exists(SETTINGS_PERSIST_KEY)) {
@@ -456,6 +507,18 @@ void settings_init(void) {
     }
   }
 
+  if (persist_size == sizeof(ArgusSettingsV9)) {
+    ArgusSettingsV9 legacy;
+    persist_read_data(SETTINGS_PERSIST_KEY, &legacy, sizeof(legacy));
+    if (legacy.version == 9) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Migrating settings from version 9");
+      settings_migrate_from_v9(&legacy);
+      settings_validate();
+      settings_save();
+      return;
+    }
+  }
+
   APP_LOG(APP_LOG_LEVEL_INFO, "Settings persist size mismatch — resetting defaults");
   settings_save();
 }
@@ -549,7 +612,7 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   t = dict_find(iter, MESSAGE_KEY_HeaderDisplay);
   if (t) {
     int32_t mode = settings_tuple_to_int32(t);
-    if (mode >= HEADER_DISPLAY_FULL_DATE && mode <= HEADER_DISPLAY_HEART_RATE) {
+    if (mode >= HEADER_DISPLAY_FULL_DATE && mode <= HEADER_DISPLAY_WIND) {
       s_settings.header_display_mode = (HeaderDisplayMode)mode;
       changed = true;
     }
@@ -562,6 +625,12 @@ void settings_apply_from_message(DictionaryIterator *iter) {
       s_settings.full_date_format = (FullDateFormat)format;
       changed = true;
     }
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_WindUnit);
+  if (t) {
+    s_settings.wind_mph = settings_tuple_to_int32(t) != 0;
+    changed = true;
   }
 
   t = dict_find(iter, MESSAGE_KEY_ManualLocation);

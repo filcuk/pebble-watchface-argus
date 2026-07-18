@@ -7,6 +7,7 @@
     'LocationMode',
     'ForecastHours',
     'TemperatureUnit',
+    'WindUnit',
   ];
   var LIST_RADIO_KEYS = [
     'HeaderDisplay',
@@ -26,6 +27,7 @@
     'WeekStart',
     'LocationMode',
     'TemperatureUnit',
+    'WindUnit',
   ];
   var INLINE_CONTROL_KEYS = SEGMENT_KEYS.filter(function (key) {
     return TITLE_INLINE_SEGMENT_KEYS.indexOf(key) === -1;

@@ -50,6 +50,7 @@
       "GpsMaxAge",
       "TemperatureUnit",
       "TemperatureDisplay",
+      "WindUnit",
       "DebugMode",
       "DemoWeather",
       "DemoBiometrics",

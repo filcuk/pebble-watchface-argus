@@ -3,7 +3,7 @@
 #include <pebble.h>
 
 #define SETTINGS_PERSIST_KEY 2
-#define SETTINGS_PERSIST_VERSION 9
+#define SETTINGS_PERSIST_VERSION 10
 
 typedef enum {
   HOUR_FORMAT_SYSTEM = 0,
@@ -41,6 +41,7 @@ typedef enum {
   HEADER_DISPLAY_STEPS = 1,
   HEADER_DISPLAY_TEMP_RANGE = 2,
   HEADER_DISPLAY_HEART_RATE = 3,
+  HEADER_DISPLAY_WIND = 4,
 } HeaderDisplayMode;
 
 typedef enum {
@@ -95,6 +96,7 @@ typedef struct {
   bool pause_weather_at_night;
   uint8_t weather_update_interval_min;
   bool quiet_mode_display;
+  bool wind_mph;
 } ArgusSettings;
 
 void settings_init(void);

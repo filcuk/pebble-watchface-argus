@@ -272,7 +272,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
                            dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_ShowHolidays);
   bool header_settings = dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_FullDateFormat) ||
                          dict_find(iter, MESSAGE_KEY_RealtimeSteps) || dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
-                         dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
+                         dict_find(iter, MESSAGE_KEY_TemperatureDisplay) || dict_find(iter, MESSAGE_KEY_WindUnit) ||
                          dict_find(iter, MESSAGE_KEY_BluetoothDisplay) ||
                          dict_find(iter, MESSAGE_KEY_QuietModeDisplay);
   bool weather_ui = dict_find(iter, MESSAGE_KEY_WeatherTempHourly) || dict_find(iter, MESSAGE_KEY_DemoWeather) ||
