@@ -8,6 +8,7 @@
 #include "quiet_mode_icon.h"
 #include "steps_icon.h"
 #include "temp_icon.h"
+#include "wind_icon.h"
 #include "weather_status_icon.h"
 #include "settings.h"
 #include "weather.h"
@@ -26,6 +27,8 @@ struct Header {
   char status_text[24];
   char status_temp_current_text[8];
   char status_temp_range_text[16];
+  char status_wind_current_text[10];
+  char status_wind_range_text[16];
   char status_hr_current_text[8];
   char status_hr_max_text[12];
   HeaderDisplayMode status_mode;
@@ -33,6 +36,12 @@ struct Header {
   int8_t status_temp_current;
   int8_t status_temp_min;
   int8_t status_temp_max;
+  bool status_wind_ready;
+  bool status_wind_has_dir;
+  uint8_t status_wind_current;
+  uint8_t status_wind_min;
+  uint8_t status_wind_max;
+  uint16_t status_wind_dir;
   bool status_hr_ready;
   uint8_t status_hr_current;
   uint8_t status_hr_max;
@@ -65,6 +74,25 @@ static void prv_format_temp_status_texts(Header *header) {
   } else {
     snprintf(header->status_temp_current_text, sizeof(header->status_temp_current_text), "--");
     snprintf(header->status_temp_range_text, sizeof(header->status_temp_range_text), "(--/--)");
+  }
+}
+
+static void prv_format_wind_status_texts(Header *header) {
+  if (header->status_wind_ready) {
+    if (header->status_wind_has_dir) {
+      char compass[4];
+      formatting_wind_compass(compass, sizeof(compass), header->status_wind_dir);
+      snprintf(header->status_wind_current_text, sizeof(header->status_wind_current_text), "%u%s",
+               (unsigned)header->status_wind_current, compass);
+    } else {
+      snprintf(header->status_wind_current_text, sizeof(header->status_wind_current_text), "%u",
+               (unsigned)header->status_wind_current);
+    }
+    snprintf(header->status_wind_range_text, sizeof(header->status_wind_range_text), "(%u/%u)",
+             (unsigned)header->status_wind_min, (unsigned)header->status_wind_max);
+  } else {
+    snprintf(header->status_wind_current_text, sizeof(header->status_wind_current_text), "--");
+    snprintf(header->status_wind_range_text, sizeof(header->status_wind_range_text), "(--/--)");
   }
 }
 
@@ -316,6 +344,20 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       prv_draw_text_font(ctx, header->status_temp_range_text, prv_status_font_regular(), x, bounds);
       break;
     }
+    case HEADER_DISPLAY_WIND: {
+      GSize current_size = prv_text_size(header->status_wind_current_text);
+      GSize range_size = prv_text_size_font(header->status_wind_range_text, prv_status_font_regular());
+      int total_w = WIND_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + range_size.w;
+      int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      int icon_y = center_y - WIND_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
+
+      wind_icon_draw(ctx, x, icon_y);
+      x += WIND_ICON_WIDTH + STATUS_ICON_GAP;
+      prv_draw_text(ctx, header->status_wind_current_text, x, bounds);
+      x += current_size.w + STATUS_ICON_GAP;
+      prv_draw_text_font(ctx, header->status_wind_range_text, prv_status_font_regular(), x, bounds);
+      break;
+    }
     case HEADER_DISPLAY_HEART_RATE: {
       GSize current_size = prv_text_size(header->status_hr_current_text);
       GSize max_size = prv_text_size_font(header->status_hr_max_text, prv_status_font_regular());
@@ -464,10 +506,17 @@ Header *header_create(Layer *parent) {
   header->status_temp_current = 0;
   header->status_temp_min = 0;
   header->status_temp_max = 0;
+  header->status_wind_ready = false;
+  header->status_wind_has_dir = false;
+  header->status_wind_current = 0;
+  header->status_wind_min = 0;
+  header->status_wind_max = 0;
+  header->status_wind_dir = 0;
   header->status_hr_ready = false;
   header->status_hr_current = 0;
   header->status_hr_max = 0;
   prv_format_temp_status_texts(header);
+  prv_format_wind_status_texts(header);
   prv_format_hr_status_texts(header);
   s_header = header;
   prv_sync_bt_visibility(header);
@@ -564,6 +613,12 @@ void header_update(Header *header, struct tm *now) {
   int8_t temp_current = 0;
   int8_t temp_min = 0;
   int8_t temp_max = 0;
+  bool wind_ready = false;
+  bool wind_has_dir = false;
+  uint8_t wind_current = 0;
+  uint8_t wind_min = 0;
+  uint8_t wind_max = 0;
+  uint16_t wind_dir = 0;
 
   switch (mode) {
     case HEADER_DISPLAY_STEPS:
@@ -578,6 +633,22 @@ void header_update(Header *header, struct tm *now) {
         temp_current = formatting_display_temp(weather_display_temp_at(view.start_index));
         temp_min = formatting_display_temp(weather_display_temp_min_for_view(&view));
         temp_max = formatting_display_temp(weather_display_temp_max_for_view(&view));
+      }
+      break;
+    }
+    case HEADER_DISPLAY_WIND: {
+      WeatherView view;
+      weather_get_view(&view);
+      WeatherData *data = weather_get();
+      if (weather_view_has_data(&view) && data && data->has_wind) {
+        wind_ready = true;
+        wind_current = formatting_display_wind(weather_wind_at(view.start_index));
+        wind_min = formatting_display_wind(weather_wind_min_for_view(&view));
+        wind_max = formatting_display_wind(weather_wind_max_for_view(&view));
+        if (data->has_wind_dir) {
+          wind_has_dir = true;
+          wind_dir = weather_wind_dir_degrees_at(view.start_index);
+        }
       }
       break;
     }
@@ -614,6 +685,20 @@ void header_update(Header *header, struct tm *now) {
       header->status_temp_min = temp_min;
       header->status_temp_max = temp_max;
       prv_format_temp_status_texts(header);
+    }
+  } else if (mode == HEADER_DISPLAY_WIND) {
+    changed = changed || header->status_wind_ready != wind_ready ||
+              header->status_wind_has_dir != wind_has_dir || header->status_wind_current != wind_current ||
+              header->status_wind_min != wind_min || header->status_wind_max != wind_max ||
+              header->status_wind_dir != wind_dir;
+    if (changed) {
+      header->status_wind_ready = wind_ready;
+      header->status_wind_has_dir = wind_has_dir;
+      header->status_wind_current = wind_current;
+      header->status_wind_min = wind_min;
+      header->status_wind_max = wind_max;
+      header->status_wind_dir = wind_dir;
+      prv_format_wind_status_texts(header);
     }
   } else if (mode == HEADER_DISPLAY_HEART_RATE) {
     changed = changed || force;
