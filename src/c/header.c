@@ -24,6 +24,10 @@ struct Header {
   Layer *battery_layer;
   Layer *status_layer;
   char status_text[24];
+  char status_temp_current_text[8];
+  char status_temp_range_text[16];
+  char status_hr_current_text[8];
+  char status_hr_max_text[12];
   HeaderDisplayMode status_mode;
   bool status_temp_ready;
   int8_t status_temp_current;
@@ -50,6 +54,32 @@ static Header *s_header;
 
 static bool prv_valid_hr_bpm(uint8_t bpm) {
   return bpm >= HR_BPM_MIN && bpm <= HR_BPM_MAX;
+}
+
+static void prv_format_temp_status_texts(Header *header) {
+  if (header->status_temp_ready) {
+    snprintf(header->status_temp_current_text, sizeof(header->status_temp_current_text), "%d",
+             (int)header->status_temp_current);
+    snprintf(header->status_temp_range_text, sizeof(header->status_temp_range_text), "(%d/%d)",
+             (int)header->status_temp_min, (int)header->status_temp_max);
+  } else {
+    snprintf(header->status_temp_current_text, sizeof(header->status_temp_current_text), "--");
+    snprintf(header->status_temp_range_text, sizeof(header->status_temp_range_text), "(--/--)");
+  }
+}
+
+static void prv_format_hr_status_texts(Header *header) {
+  if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_current)) {
+    snprintf(header->status_hr_current_text, sizeof(header->status_hr_current_text), "%d",
+             header->status_hr_current);
+  } else {
+    snprintf(header->status_hr_current_text, sizeof(header->status_hr_current_text), "--");
+  }
+  if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_max)) {
+    snprintf(header->status_hr_max_text, sizeof(header->status_hr_max_text), "(%d)", header->status_hr_max);
+  } else {
+    snprintf(header->status_hr_max_text, sizeof(header->status_hr_max_text), "(--)");
+  }
 }
 
 #if defined(PBL_HEALTH)
@@ -273,57 +303,31 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       break;
     }
     case HEADER_DISPLAY_TEMP_RANGE: {
-      char current_buf[8];
-      char range_buf[16];
-      if (header->status_temp_ready) {
-        snprintf(current_buf, sizeof(current_buf), "%d", (int)header->status_temp_current);
-        snprintf(range_buf, sizeof(range_buf), "(%d/%d)", (int)header->status_temp_min,
-                 (int)header->status_temp_max);
-      } else {
-        snprintf(current_buf, sizeof(current_buf), "--");
-        snprintf(range_buf, sizeof(range_buf), "(--/--)");
-      }
-
-      GSize current_size = prv_text_size(current_buf);
-      GSize range_size = prv_text_size_font(range_buf, prv_status_font_regular());
+      GSize current_size = prv_text_size(header->status_temp_current_text);
+      GSize range_size = prv_text_size_font(header->status_temp_range_text, prv_status_font_regular());
       int total_w = TEMP_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + range_size.w;
       int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
       int icon_y = center_y - TEMP_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       temp_icon_draw(ctx, x, icon_y);
       x += TEMP_ICON_WIDTH + STATUS_ICON_GAP;
-      prv_draw_text(ctx, current_buf, x, bounds);
+      prv_draw_text(ctx, header->status_temp_current_text, x, bounds);
       x += current_size.w + STATUS_ICON_GAP;
-      prv_draw_text_font(ctx, range_buf, prv_status_font_regular(), x, bounds);
+      prv_draw_text_font(ctx, header->status_temp_range_text, prv_status_font_regular(), x, bounds);
       break;
     }
     case HEADER_DISPLAY_HEART_RATE: {
-      char current_buf[8];
-      char max_buf[8];
-      char max_display_buf[12];
-      if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_current)) {
-        snprintf(current_buf, sizeof(current_buf), "%d", header->status_hr_current);
-      } else {
-        snprintf(current_buf, sizeof(current_buf), "--");
-      }
-      if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_max)) {
-        snprintf(max_buf, sizeof(max_buf), "%d", header->status_hr_max);
-      } else {
-        snprintf(max_buf, sizeof(max_buf), "--");
-      }
-      snprintf(max_display_buf, sizeof(max_display_buf), "(%s)", max_buf);
-
-      GSize current_size = prv_text_size(current_buf);
-      GSize max_size = prv_text_size_font(max_display_buf, prv_status_font_regular());
+      GSize current_size = prv_text_size(header->status_hr_current_text);
+      GSize max_size = prv_text_size_font(header->status_hr_max_text, prv_status_font_regular());
       int total_w = HEART_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + max_size.w;
       int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
       int icon_y = center_y - HEART_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       heart_icon_draw(ctx, x, icon_y);
       x += HEART_ICON_WIDTH + STATUS_ICON_GAP;
-      prv_draw_text(ctx, current_buf, x, bounds);
+      prv_draw_text(ctx, header->status_hr_current_text, x, bounds);
       x += current_size.w + STATUS_ICON_GAP;
-      prv_draw_text_font(ctx, max_display_buf, prv_status_font_regular(), x, bounds);
+      prv_draw_text_font(ctx, header->status_hr_max_text, prv_status_font_regular(), x, bounds);
       break;
     }
     case HEADER_DISPLAY_FULL_DATE:
@@ -409,32 +413,39 @@ Header *header_create(Layer *parent) {
   if (!header) {
     return NULL;
   }
+  memset(header, 0, sizeof(*header));
 
   GRect bounds = layer_get_bounds(parent);
   header->container = layer_create(GRect(0, 0, bounds.size.w, HEADER_HEIGHT));
+  if (!header->container) {
+    free(header);
+    return NULL;
+  }
   layer_add_child(parent, header->container);
 
   header->bt_layer = layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, BT_ICON_WIDTH, HEADER_ICON_H));
-  layer_set_update_proc(header->bt_layer, prv_bt_update_proc);
-  layer_add_child(header->container, header->bt_layer);
-
   header->quiet_layer =
       layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, QUIET_MODE_ICON_WIDTH, HEADER_ICON_H));
-  layer_set_update_proc(header->quiet_layer, prv_quiet_update_proc);
-  layer_add_child(header->container, header->quiet_layer);
-
   header->weather_layer =
       layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, WEATHER_STATUS_ICON_WIDTH, HEADER_ICON_H));
+  header->battery_layer = layer_create(GRect(bounds.size.w - HEADER_BATTERY_WIDTH, 2, 24, HEADER_HEIGHT - 4));
+  header->status_layer = layer_create(GRect(HEADER_STATUS_MIN_LEFT, 0, bounds.size.w - HEADER_STATUS_MIN_LEFT - HEADER_BATTERY_WIDTH,
+                                          HEADER_HEIGHT));
+  if (!header->bt_layer || !header->quiet_layer || !header->weather_layer || !header->battery_layer ||
+      !header->status_layer) {
+    header_destroy(header);
+    return NULL;
+  }
+
+  layer_set_update_proc(header->bt_layer, prv_bt_update_proc);
+  layer_add_child(header->container, header->bt_layer);
+  layer_set_update_proc(header->quiet_layer, prv_quiet_update_proc);
+  layer_add_child(header->container, header->quiet_layer);
   layer_set_update_proc(header->weather_layer, prv_weather_status_update_proc);
   layer_set_hidden(header->weather_layer, true);
   layer_add_child(header->container, header->weather_layer);
-
-  header->battery_layer = layer_create(GRect(bounds.size.w - HEADER_BATTERY_WIDTH, 2, 24, HEADER_HEIGHT - 4));
   layer_set_update_proc(header->battery_layer, prv_battery_update_proc);
   layer_add_child(header->container, header->battery_layer);
-
-  header->status_layer = layer_create(GRect(HEADER_STATUS_MIN_LEFT, 0, bounds.size.w - HEADER_STATUS_MIN_LEFT - HEADER_BATTERY_WIDTH,
-                                          HEADER_HEIGHT));
   layer_set_update_proc(header->status_layer, prv_status_layer_update_proc);
   layer_add_child(header->container, header->status_layer);
 
@@ -456,6 +467,8 @@ Header *header_create(Layer *parent) {
   header->status_hr_ready = false;
   header->status_hr_current = 0;
   header->status_hr_max = 0;
+  prv_format_temp_status_texts(header);
+  prv_format_hr_status_texts(header);
   s_header = header;
   prv_sync_bt_visibility(header);
   return header;
@@ -468,12 +481,24 @@ void header_destroy(Header *header) {
   if (s_header == header) {
     s_header = NULL;
   }
-  layer_destroy(header->status_layer);
-  layer_destroy(header->weather_layer);
-  layer_destroy(header->quiet_layer);
-  layer_destroy(header->bt_layer);
-  layer_destroy(header->battery_layer);
-  layer_destroy(header->container);
+  if (header->status_layer) {
+    layer_destroy(header->status_layer);
+  }
+  if (header->weather_layer) {
+    layer_destroy(header->weather_layer);
+  }
+  if (header->quiet_layer) {
+    layer_destroy(header->quiet_layer);
+  }
+  if (header->bt_layer) {
+    layer_destroy(header->bt_layer);
+  }
+  if (header->battery_layer) {
+    layer_destroy(header->battery_layer);
+  }
+  if (header->container) {
+    layer_destroy(header->container);
+  }
   free(header);
 }
 
@@ -588,9 +613,13 @@ void header_update(Header *header, struct tm *now) {
       header->status_temp_current = temp_current;
       header->status_temp_min = temp_min;
       header->status_temp_max = temp_max;
+      prv_format_temp_status_texts(header);
     }
   } else if (mode == HEADER_DISPLAY_HEART_RATE) {
     changed = changed || force;
+    if (changed) {
+      prv_format_hr_status_texts(header);
+    }
   }
 
   if (changed) {
@@ -635,6 +664,7 @@ void header_refresh_biometrics(Header *header, struct tm *now) {
       header->status_hr_ready = hr.ready;
       header->status_hr_current = hr.current;
       header->status_hr_max = hr.max;
+      prv_format_hr_status_texts(header);
     }
 #endif
   }
@@ -648,6 +678,9 @@ void header_refresh_bt(Header *header, bool connected) {
   if (!header) {
     return;
   }
+  if (header->bt_connected == connected) {
+    return;
+  }
   bool was_visible = prv_bt_should_show(header);
   header->bt_connected = connected;
   bool is_visible = prv_bt_should_show(header);
@@ -659,6 +692,9 @@ void header_refresh_bt(Header *header, bool connected) {
 
 void header_refresh_quiet_time(Header *header, bool active) {
   if (!header) {
+    return;
+  }
+  if (header->quiet_time_active == active) {
     return;
   }
   bool was_visible = prv_quiet_should_show(header);
@@ -676,12 +712,14 @@ void header_refresh_weather_status(Header *header) {
   }
 
   WeatherStatusIconKind kind = weather_status_icon_kind();
+  if (header->weather_status_kind == kind) {
+    return;
+  }
   bool was_visible = header->weather_status_kind != WEATHER_STATUS_ICON_NONE;
-  bool changed = header->weather_status_kind != kind;
   header->weather_status_kind = kind;
   bool is_visible = kind != WEATHER_STATUS_ICON_NONE;
   prv_sync_bt_visibility(header);
-  if (changed || was_visible != is_visible || is_visible) {
+  if (was_visible != is_visible || is_visible) {
     layer_mark_dirty(header->weather_layer);
   }
 }

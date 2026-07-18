@@ -212,12 +212,17 @@ TimeDisplay *time_display_create(Layer *parent) {
   if (!display) {
     return NULL;
   }
+  memset(display, 0, sizeof(*display));
 
   GRect bounds = layer_get_bounds(parent);
   display->container = layer_create(GRect(0, 0, bounds.size.w, TIME_BLOCK_HEIGHT));
-  layer_add_child(parent, display->container);
-
   display->time_layer = layer_create(GRect(0, 0, bounds.size.w, TIME_BLOCK_HEIGHT));
+  if (!display->container || !display->time_layer) {
+    time_display_destroy(display);
+    return NULL;
+  }
+
+  layer_add_child(parent, display->container);
   layer_set_update_proc(display->time_layer, prv_time_layer_update_proc);
   layer_add_child(display->container, display->time_layer);
 
@@ -248,8 +253,12 @@ void time_display_destroy(TimeDisplay *display) {
   if (s_time_display == display) {
     s_time_display = NULL;
   }
-  layer_destroy(display->time_layer);
-  layer_destroy(display->container);
+  if (display->time_layer) {
+    layer_destroy(display->time_layer);
+  }
+  if (display->container) {
+    layer_destroy(display->container);
+  }
   free(display);
 }
 

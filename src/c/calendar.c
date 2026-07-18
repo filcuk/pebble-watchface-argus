@@ -7,6 +7,13 @@
 #include <string.h>
 #include <time.h>
 
+typedef struct {
+  int grid_left;
+  int col_w;
+  int col_rem; /* first col_rem columns are 1px wider so the grid fills to SIDE_PAD_RIGHT */
+  int row_y[2];
+} CalendarGridLayout;
+
 struct Calendar {
   Layer *layer;
   Layer *holiday_layer;
@@ -16,6 +23,12 @@ struct Calendar {
   int day;
   uint16_t event_mask;
   struct tm cells[14];
+  char day_labels[14][4];
+  char week_labels[2][6];
+  char month_label[8];
+  CalendarGridLayout grid_layout;
+  bool layout_valid;
+  int layout_bounds_w;
   bool cells_valid;
   bool force_dirty;
   int last_year;
@@ -138,16 +151,31 @@ static int prv_week_number_for_date(struct tm *date, WeekNumberMode mode) {
   return mode == WEEK_NUMBER_ISO ? prv_iso_week_number(date) : prv_gregorian_week_number(date);
 }
 
+static void prv_refresh_labels(Calendar *calendar) {
+  struct tm month_tm = {0};
+  month_tm.tm_year = calendar->year;
+  month_tm.tm_mon = calendar->month;
+  month_tm.tm_mday = 1;
+  strftime(calendar->month_label, sizeof(calendar->month_label), "%b", &month_tm);
+
+  const ArgusSettings *settings = settings_get();
+  for (int row = 0; row < 2; row++) {
+    int week = prv_week_number_for_date(&calendar->cells[row * 7], settings->week_number_mode);
+    if (week < 1) {
+      week = 1;
+    } else if (week > 53) {
+      week = 53;
+    }
+    snprintf(calendar->week_labels[row], sizeof(calendar->week_labels[row]), "W%d", week);
+  }
+  for (int i = 0; i < 14; i++) {
+    snprintf(calendar->day_labels[i], sizeof(calendar->day_labels[i]), "%d", calendar->cells[i].tm_mday);
+  }
+}
+
 static GRect prv_row_text_rect(GRect cell, int line_height) {
   return GRect(cell.origin.x, cell.origin.y + (cell.size.h - line_height) / 2, cell.size.w, line_height);
 }
-
-typedef struct {
-  int grid_left;
-  int col_w;
-  int col_rem; /* first col_rem columns are 1px wider so the grid fills to SIDE_PAD_RIGHT */
-  int row_y[2];
-} CalendarGridLayout;
 
 static void prv_compute_grid_layout(GRect bounds, CalendarGridLayout *layout) {
   layout->grid_left = CALENDAR_SIDE_PAD_LEFT + CALENDAR_WEEK_LABEL_WIDTH + CALENDAR_WEEK_COLUMN_GAP;
@@ -156,6 +184,15 @@ static void prv_compute_grid_layout(GRect bounds, CalendarGridLayout *layout) {
   layout->col_rem = grid_w % 7;
   layout->row_y[0] = CALENDAR_HEADER_HEIGHT + CALENDAR_HEADER_ROW_GAP;
   layout->row_y[1] = CALENDAR_HEADER_HEIGHT + CALENDAR_HEADER_ROW_GAP + CALENDAR_ROW_HEIGHT + CALENDAR_WEEK_ROW_GAP;
+}
+
+static const CalendarGridLayout *prv_ensure_grid_layout(Calendar *calendar, GRect bounds) {
+  if (!calendar->layout_valid || calendar->layout_bounds_w != bounds.size.w) {
+    prv_compute_grid_layout(bounds, &calendar->grid_layout);
+    calendar->layout_bounds_w = bounds.size.w;
+    calendar->layout_valid = true;
+  }
+  return &calendar->grid_layout;
 }
 
 static int prv_col_width(const CalendarGridLayout *layout, int col) {
@@ -188,7 +225,7 @@ static GSize prv_text_content_size(const char *text, GFont font, GRect bounds, G
 }
 
 static GRect prv_today_pill_rect(GRect text_rect, int text_w, int cell_w) {
-  int w = text_w * CALENDAR_TODAY_PILL_WIDTH_MULTIPLIER;
+  int w = (text_w * CALENDAR_TODAY_PILL_WIDTH_NUM) / CALENDAR_TODAY_PILL_WIDTH_DEN;
   if (w > cell_w) {
     w = cell_w;
   }
@@ -229,59 +266,43 @@ static void prv_calendar_update_proc(Layer *layer, GContext *ctx) {
   GRect bounds = layer_get_bounds(layer);
   const ArgusSettings *settings = settings_get();
   const char **labels = settings->week_start == WEEK_START_SUNDAY ? WEEKDAY_LABELS_SUN : WEEKDAY_LABELS_MON;
-
-  CalendarGridLayout layout;
-  prv_compute_grid_layout(bounds, &layout);
+  const CalendarGridLayout *layout = prv_ensure_grid_layout(calendar, bounds);
 
   GFont header_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   GFont day_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
   bool show_month_label = settings_show_calendar_month();
 
   if (show_month_label) {
-    static char month_buf[8];
     GFont month_font = fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
-    struct tm month_tm = {0};
-    month_tm.tm_year = calendar->year;
-    month_tm.tm_mon = calendar->month;
-    month_tm.tm_mday = 1;
-    strftime(month_buf, sizeof(month_buf), "%b", &month_tm);
     GRect month_cell =
         GRect(CALENDAR_SIDE_PAD_LEFT, 0, CALENDAR_WEEK_LABEL_WIDTH - CALENDAR_SIDE_LABEL_INSET, CALENDAR_HEADER_HEIGHT);
     GRect month_text_rect = prv_row_text_rect(month_cell, CALENDAR_HEADER_LINE_HEIGHT);
-    prv_draw_text(ctx, month_buf, month_font, month_text_rect, GTextAlignmentRight, GColorWhite);
+    prv_draw_text(ctx, calendar->month_label, month_font, month_text_rect, GTextAlignmentRight, GColorWhite);
   }
 
   for (int col = 0; col < 7; col++) {
-    int col_w = prv_col_width(&layout, col);
-    GRect header_cell = GRect(prv_col_x(&layout, col), 0, col_w, CALENDAR_HEADER_HEIGHT);
+    int col_w = prv_col_width(layout, col);
+    GRect header_cell = GRect(prv_col_x(layout, col), 0, col_w, CALENDAR_HEADER_HEIGHT);
     GRect text_rect = prv_row_text_rect(header_cell, CALENDAR_HEADER_LINE_HEIGHT);
     prv_draw_text(ctx, labels[col], header_font, text_rect, GTextAlignmentCenter,
                   prv_is_weekend_column(col, settings->week_start) ? CALENDAR_WEEKEND_COLOR : GColorWhite);
   }
 
-  static char week_buf[6];
   for (int row = 0; row < 2; row++) {
-    int week = prv_week_number_for_date(&calendar->cells[row * 7], settings->week_number_mode);
-    snprintf(week_buf, sizeof(week_buf), "W%d", week);
-    GRect week_cell = GRect(CALENDAR_SIDE_PAD_LEFT, layout.row_y[row],
+    GRect week_cell = GRect(CALENDAR_SIDE_PAD_LEFT, layout->row_y[row],
                             CALENDAR_WEEK_LABEL_WIDTH - CALENDAR_SIDE_LABEL_INSET, CALENDAR_ROW_HEIGHT);
     GRect text_rect = prv_row_text_rect(week_cell, CALENDAR_DAY_LINE_HEIGHT);
-    prv_draw_text(ctx, week_buf, day_font, text_rect, GTextAlignmentRight, CALENDAR_WEEK_NUMBER_COLOR);
+    prv_draw_text(ctx, calendar->week_labels[row], day_font, text_rect, GTextAlignmentRight, CALENDAR_WEEK_NUMBER_COLOR);
   }
 
   for (int i = 0; i < 14; i++) {
-    GRect cell = prv_day_cell_rect(i, &layout);
-    bool today = prv_is_today(&calendar->cells[i], calendar);
-
-    if (today) {
+    if (prv_is_today(&calendar->cells[i], calendar)) {
       continue;
     }
 
-    static char day_buf[4];
-    snprintf(day_buf, sizeof(day_buf), "%d", calendar->cells[i].tm_mday);
-
+    GRect cell = prv_day_cell_rect(i, layout);
     GRect text_rect = prv_row_text_rect(cell, CALENDAR_DAY_LINE_HEIGHT);
-    prv_draw_text(ctx, day_buf, day_font, text_rect, GTextAlignmentCenter,
+    prv_draw_text(ctx, calendar->day_labels[i], day_font, text_rect, GTextAlignmentCenter,
                   prv_is_weekend(calendar->cells[i].tm_wday) ? CALENDAR_WEEKEND_COLOR : GColorWhite);
   }
 }
@@ -299,10 +320,7 @@ static void prv_holiday_layer_update_proc(Layer *layer, GContext *ctx) {
   }
 
   GRect bounds = layer_get_bounds(layer);
-
-  CalendarGridLayout layout;
-  prv_compute_grid_layout(bounds, &layout);
-
+  const CalendarGridLayout *layout = prv_ensure_grid_layout(calendar, bounds);
   GFont day_font = fonts_get_system_font(FONT_KEY_GOTHIC_18);
 
   for (int i = 0; i < 14; i++) {
@@ -313,7 +331,7 @@ static void prv_holiday_layer_update_proc(Layer *layer, GContext *ctx) {
       continue;
     }
 
-    GRect cell = prv_day_cell_rect(i, &layout);
+    GRect cell = prv_day_cell_rect(i, layout);
     GRect text_rect = prv_row_text_rect(cell, CALENDAR_DAY_LINE_HEIGHT);
     GRect pill = prv_day_pill_rect(text_rect, day_font, cell.size.w);
     prv_draw_holiday_frame(ctx, pill);
@@ -341,14 +359,9 @@ static void prv_today_layer_update_proc(Layer *layer, GContext *ctx) {
     return;
   }
 
-  CalendarGridLayout layout;
-  prv_compute_grid_layout(bounds, &layout);
-
-  GRect cell = prv_day_cell_rect(today_index, &layout);
+  const CalendarGridLayout *layout = prv_ensure_grid_layout(calendar, bounds);
+  GRect cell = prv_day_cell_rect(today_index, layout);
   bool is_holiday = settings->show_event_indicators && (calendar->event_mask & (1 << today_index));
-
-  static char day_buf[4];
-  snprintf(day_buf, sizeof(day_buf), "%d", calendar->cells[today_index].tm_mday);
 
   GFont today_font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
   GRect text_rect = prv_row_text_rect(cell, CALENDAR_DAY_LINE_HEIGHT);
@@ -359,7 +372,7 @@ static void prv_today_layer_update_proc(Layer *layer, GContext *ctx) {
   if (is_holiday) {
     prv_draw_holiday_frame(ctx, pill);
   }
-  prv_draw_text(ctx, day_buf, today_font, text_rect, GTextAlignmentCenter, GColorBlack);
+  prv_draw_text(ctx, calendar->day_labels[today_index], today_font, text_rect, GTextAlignmentCenter, GColorBlack);
 }
 
 Calendar *calendar_create(Layer *parent) {
@@ -367,19 +380,22 @@ Calendar *calendar_create(Layer *parent) {
   if (!calendar) {
     return NULL;
   }
+  memset(calendar, 0, sizeof(*calendar));
 
   GRect bounds = layer_get_bounds(parent);
   calendar->layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
-  layer_set_update_proc(calendar->layer, prv_calendar_update_proc);
-
   calendar->holiday_layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
+  calendar->today_layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
+  if (!calendar->layer || !calendar->holiday_layer || !calendar->today_layer) {
+    calendar_destroy(calendar);
+    return NULL;
+  }
+
+  layer_set_update_proc(calendar->layer, prv_calendar_update_proc);
   layer_set_update_proc(calendar->holiday_layer, prv_holiday_layer_update_proc);
   layer_add_child(calendar->layer, calendar->holiday_layer);
-
-  calendar->today_layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
   layer_set_update_proc(calendar->today_layer, prv_today_layer_update_proc);
   layer_add_child(calendar->layer, calendar->today_layer);
-
   layer_add_child(parent, calendar->layer);
 
   time_t now = argus_time_now();
@@ -395,6 +411,9 @@ Calendar *calendar_create(Layer *parent) {
   }
   calendar->event_mask = 0;
   calendar->cells_valid = false;
+  calendar->layout_valid = false;
+  calendar->layout_bounds_w = 0;
+  calendar->month_label[0] = '\0';
   calendar->force_dirty = true;
   calendar->last_year = -1;
   calendar->last_mon = -1;
@@ -410,7 +429,15 @@ void calendar_destroy(Calendar *calendar) {
   if (s_calendar == calendar) {
     s_calendar = NULL;
   }
-  layer_destroy(calendar->layer);
+  if (calendar->today_layer) {
+    layer_destroy(calendar->today_layer);
+  }
+  if (calendar->holiday_layer) {
+    layer_destroy(calendar->holiday_layer);
+  }
+  if (calendar->layer) {
+    layer_destroy(calendar->layer);
+  }
   free(calendar);
 }
 
@@ -422,6 +449,7 @@ void calendar_set_bounds(Calendar *calendar, GRect frame) {
   GRect layer_bounds = GRect(0, 0, frame.size.w, frame.size.h);
   layer_set_frame(calendar->holiday_layer, layer_bounds);
   layer_set_frame(calendar->today_layer, layer_bounds);
+  calendar->layout_valid = false;
 }
 
 void calendar_invalidate(Calendar *calendar) {
@@ -452,6 +480,7 @@ void calendar_update(Calendar *calendar, struct tm *now) {
   calendar->last_mon = now->tm_mon;
   calendar->last_mday = now->tm_mday;
   prv_refresh_cells(calendar, now);
+  prv_refresh_labels(calendar);
   prv_mark_calendar_dirty(calendar);
 }
 
