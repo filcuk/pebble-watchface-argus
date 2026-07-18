@@ -20,6 +20,7 @@ static time_t s_last_periodic_weather_refresh;
 static AppTimer *s_holiday_request_timer;
 static int s_last_holiday_yday = -1;
 static int s_last_holiday_year = -1;
+static uint8_t s_last_weather_view_start = 0xFF;
 
 static void prv_holidays_request(void) {
   if (!settings_get()->show_event_indicators) {
@@ -209,6 +210,21 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   struct tm tick_copy = *tm_now;
 
   weather_slide_stale_hours();
+
+  WeatherView weather_view;
+  weather_get_view(&weather_view);
+  if (weather_view_has_data(&weather_view)) {
+    if (s_last_weather_view_start != weather_view.start_index) {
+      s_last_weather_view_start = weather_view.start_index;
+      weather_chart_refresh(s_weather_chart);
+      if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
+        header_invalidate(s_header);
+      }
+    }
+  } else {
+    s_last_weather_view_start = 0xFF;
+  }
+
   time_display_update(s_time_display, &tick_copy);
 
   if (units_changed & DAY_UNIT) {
