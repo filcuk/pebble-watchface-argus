@@ -20,6 +20,7 @@
     'ReleaseNotification',
   ];
   var SELECT_DROPDOWN_KEYS = ['HolidayCountry'];
+  var SUBHEADING_KEYS = ['HolidayCountry', 'HolidayRegion'];
   var TITLE_INLINE_SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
@@ -185,12 +186,18 @@
         return;
       }
       var root = item.$element[0];
+      var isSubheading = SUBHEADING_KEYS.indexOf(key) !== -1;
+      if (isSubheading) {
+        root.classList.add('argus-subheading-control');
+      }
       var mainLabel = root.querySelector(':scope > .label');
       if (!mainLabel) {
         mainLabel = root.querySelector('label > .label');
       }
       if (mainLabel) {
-        mainLabel.classList.add('argus-setting-label');
+        mainLabel.classList.add(
+          isSubheading ? 'argus-setting-subheading' : 'argus-setting-label'
+        );
       }
     });
   }

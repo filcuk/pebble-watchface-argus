@@ -152,6 +152,19 @@ html.as .argus-row.component-input label > .label {
   margin-bottom: 10px !important;
   padding: 0 !important;
 }
+html.as .argus-setting-subheading,
+html.as .argus-row.argus-subheading-control > .label,
+html.as .argus-row.argus-subheading-control.component-radio > .label,
+html.as .argus-row.argus-subheading-control.component-input label > .label,
+html.as .argus-list-radiogroup.argus-subheading-control > .label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #9aa1ab !important;
+  margin-bottom: 8px !important;
+  padding: 0 !important;
+}
 html.as .argus-row.component-toggle > label > .label,
 html.as .component-toggle > label > .label {
   margin-bottom: 0;
@@ -728,8 +741,9 @@ html.as .argus-about-muted {
   color: #7a8494;
   font-size: 12px;
 }
-html.as .argus-about-icons-heading {
+html.as .argus-about-section > .argus-setting-subheading {
   margin-top: 0.75rem;
+  margin-bottom: 0.35rem !important;
 }
 html.as .argus-about-warn {
   color: #d4b86a;

@@ -392,7 +392,7 @@ function weatherSectionHtml(options) {
   }
 
   lines.push(
-    '<p class="argus-about-icons-heading">Weather status</p>' +
+    '<div class="argus-setting-subheading">Weather status</div>' +
       '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-purple"></span> Purple:  updates paused</p>' +
       '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-orange"></span> Orange: older than set interval</p>' +
       '<p class="argus-about-line"><span class="argus-about-swatch argus-about-swatch-red"></span> Red: pending or age &gt; 3× interval</p>'
@@ -517,7 +517,7 @@ function holidaySectionHtml(options) {
     );
   } else {
     lines.push(
-      '<p class="argus-about-muted">' + escapeHtml(locationLabel) + '</p>'
+      '<p class="argus-setting-subheading">' + escapeHtml(locationLabel) + '</p>'
     );
     for (i = 0; i < upcoming.length && i < 4; i += 1) {
       var entry = upcoming[i];
