@@ -24,6 +24,10 @@ struct Header {
   Layer *battery_layer;
   Layer *status_layer;
   char status_text[24];
+  char status_temp_current_text[8];
+  char status_temp_range_text[16];
+  char status_hr_current_text[8];
+  char status_hr_max_text[12];
   HeaderDisplayMode status_mode;
   bool status_temp_ready;
   int8_t status_temp_current;
@@ -50,6 +54,32 @@ static Header *s_header;
 
 static bool prv_valid_hr_bpm(uint8_t bpm) {
   return bpm >= HR_BPM_MIN && bpm <= HR_BPM_MAX;
+}
+
+static void prv_format_temp_status_texts(Header *header) {
+  if (header->status_temp_ready) {
+    snprintf(header->status_temp_current_text, sizeof(header->status_temp_current_text), "%d",
+             (int)header->status_temp_current);
+    snprintf(header->status_temp_range_text, sizeof(header->status_temp_range_text), "(%d/%d)",
+             (int)header->status_temp_min, (int)header->status_temp_max);
+  } else {
+    snprintf(header->status_temp_current_text, sizeof(header->status_temp_current_text), "--");
+    snprintf(header->status_temp_range_text, sizeof(header->status_temp_range_text), "(--/--)");
+  }
+}
+
+static void prv_format_hr_status_texts(Header *header) {
+  if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_current)) {
+    snprintf(header->status_hr_current_text, sizeof(header->status_hr_current_text), "%d",
+             header->status_hr_current);
+  } else {
+    snprintf(header->status_hr_current_text, sizeof(header->status_hr_current_text), "--");
+  }
+  if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_max)) {
+    snprintf(header->status_hr_max_text, sizeof(header->status_hr_max_text), "(%d)", header->status_hr_max);
+  } else {
+    snprintf(header->status_hr_max_text, sizeof(header->status_hr_max_text), "(--)");
+  }
 }
 
 #if defined(PBL_HEALTH)
@@ -273,57 +303,31 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       break;
     }
     case HEADER_DISPLAY_TEMP_RANGE: {
-      char current_buf[8];
-      char range_buf[16];
-      if (header->status_temp_ready) {
-        snprintf(current_buf, sizeof(current_buf), "%d", (int)header->status_temp_current);
-        snprintf(range_buf, sizeof(range_buf), "(%d/%d)", (int)header->status_temp_min,
-                 (int)header->status_temp_max);
-      } else {
-        snprintf(current_buf, sizeof(current_buf), "--");
-        snprintf(range_buf, sizeof(range_buf), "(--/--)");
-      }
-
-      GSize current_size = prv_text_size(current_buf);
-      GSize range_size = prv_text_size_font(range_buf, prv_status_font_regular());
+      GSize current_size = prv_text_size(header->status_temp_current_text);
+      GSize range_size = prv_text_size_font(header->status_temp_range_text, prv_status_font_regular());
       int total_w = TEMP_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + range_size.w;
       int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
       int icon_y = center_y - TEMP_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       temp_icon_draw(ctx, x, icon_y);
       x += TEMP_ICON_WIDTH + STATUS_ICON_GAP;
-      prv_draw_text(ctx, current_buf, x, bounds);
+      prv_draw_text(ctx, header->status_temp_current_text, x, bounds);
       x += current_size.w + STATUS_ICON_GAP;
-      prv_draw_text_font(ctx, range_buf, prv_status_font_regular(), x, bounds);
+      prv_draw_text_font(ctx, header->status_temp_range_text, prv_status_font_regular(), x, bounds);
       break;
     }
     case HEADER_DISPLAY_HEART_RATE: {
-      char current_buf[8];
-      char max_buf[8];
-      char max_display_buf[12];
-      if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_current)) {
-        snprintf(current_buf, sizeof(current_buf), "%d", header->status_hr_current);
-      } else {
-        snprintf(current_buf, sizeof(current_buf), "--");
-      }
-      if (header->status_hr_ready && prv_valid_hr_bpm(header->status_hr_max)) {
-        snprintf(max_buf, sizeof(max_buf), "%d", header->status_hr_max);
-      } else {
-        snprintf(max_buf, sizeof(max_buf), "--");
-      }
-      snprintf(max_display_buf, sizeof(max_display_buf), "(%s)", max_buf);
-
-      GSize current_size = prv_text_size(current_buf);
-      GSize max_size = prv_text_size_font(max_display_buf, prv_status_font_regular());
+      GSize current_size = prv_text_size(header->status_hr_current_text);
+      GSize max_size = prv_text_size_font(header->status_hr_max_text, prv_status_font_regular());
       int total_w = HEART_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + max_size.w;
       int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
       int icon_y = center_y - HEART_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       heart_icon_draw(ctx, x, icon_y);
       x += HEART_ICON_WIDTH + STATUS_ICON_GAP;
-      prv_draw_text(ctx, current_buf, x, bounds);
+      prv_draw_text(ctx, header->status_hr_current_text, x, bounds);
       x += current_size.w + STATUS_ICON_GAP;
-      prv_draw_text_font(ctx, max_display_buf, prv_status_font_regular(), x, bounds);
+      prv_draw_text_font(ctx, header->status_hr_max_text, prv_status_font_regular(), x, bounds);
       break;
     }
     case HEADER_DISPLAY_FULL_DATE:
@@ -456,6 +460,8 @@ Header *header_create(Layer *parent) {
   header->status_hr_ready = false;
   header->status_hr_current = 0;
   header->status_hr_max = 0;
+  prv_format_temp_status_texts(header);
+  prv_format_hr_status_texts(header);
   s_header = header;
   prv_sync_bt_visibility(header);
   return header;
@@ -588,9 +594,13 @@ void header_update(Header *header, struct tm *now) {
       header->status_temp_current = temp_current;
       header->status_temp_min = temp_min;
       header->status_temp_max = temp_max;
+      prv_format_temp_status_texts(header);
     }
   } else if (mode == HEADER_DISPLAY_HEART_RATE) {
     changed = changed || force;
+    if (changed) {
+      prv_format_hr_status_texts(header);
+    }
   }
 
   if (changed) {
@@ -635,6 +645,7 @@ void header_refresh_biometrics(Header *header, struct tm *now) {
       header->status_hr_ready = hr.ready;
       header->status_hr_current = hr.current;
       header->status_hr_max = hr.max;
+      prv_format_hr_status_texts(header);
     }
 #endif
   }
