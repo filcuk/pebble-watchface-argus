@@ -20,7 +20,7 @@
     'ReleaseNotification',
   ];
   var SELECT_DROPDOWN_KEYS = ['HolidayCountry'];
-  var SUBHEADING_KEYS = ['HolidayCountry', 'HolidayRegion'];
+  var SUBHEADING_KEYS = [];
   var TITLE_INLINE_SEGMENT_KEYS = [
     'HourFormat',
     'WeekStart',
