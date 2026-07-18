@@ -648,6 +648,9 @@ void header_refresh_bt(Header *header, bool connected) {
   if (!header) {
     return;
   }
+  if (header->bt_connected == connected) {
+    return;
+  }
   bool was_visible = prv_bt_should_show(header);
   header->bt_connected = connected;
   bool is_visible = prv_bt_should_show(header);
@@ -659,6 +662,9 @@ void header_refresh_bt(Header *header, bool connected) {
 
 void header_refresh_quiet_time(Header *header, bool active) {
   if (!header) {
+    return;
+  }
+  if (header->quiet_time_active == active) {
     return;
   }
   bool was_visible = prv_quiet_should_show(header);
@@ -676,12 +682,14 @@ void header_refresh_weather_status(Header *header) {
   }
 
   WeatherStatusIconKind kind = weather_status_icon_kind();
+  if (header->weather_status_kind == kind) {
+    return;
+  }
   bool was_visible = header->weather_status_kind != WEATHER_STATUS_ICON_NONE;
-  bool changed = header->weather_status_kind != kind;
   header->weather_status_kind = kind;
   bool is_visible = kind != WEATHER_STATUS_ICON_NONE;
   prv_sync_bt_visibility(header);
-  if (changed || was_visible != is_visible || is_visible) {
+  if (was_visible != is_visible || is_visible) {
     layer_mark_dirty(header->weather_layer);
   }
 }
