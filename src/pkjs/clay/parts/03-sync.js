@@ -63,18 +63,26 @@
     }
   }
 
-  function syncFullDateFormatVisibility() {
+  function syncHeaderDependentVisibility() {
     var headerDisplay = clayConfig.getItemByMessageKey('HeaderDisplay');
     var fullDateFormat = clayConfig.getItemByMessageKey('FullDateFormat');
+    var windUnit = clayConfig.getItemByMessageKey('WindUnit');
+    var headerValue = headerDisplay ? headerDisplay.get() : null;
 
-    if (!headerDisplay || !fullDateFormat || !fullDateFormat.$element || !fullDateFormat.$element[0]) {
-      return;
+    if (fullDateFormat && fullDateFormat.$element && fullDateFormat.$element[0]) {
+      if (headerValue === '0') {
+        fullDateFormat.$element[0].classList.remove('hide');
+      } else {
+        fullDateFormat.$element[0].classList.add('hide');
+      }
     }
 
-    if (headerDisplay.get() === '0') {
-      fullDateFormat.$element[0].classList.remove('hide');
-    } else {
-      fullDateFormat.$element[0].classList.add('hide');
+    if (windUnit && windUnit.$element && windUnit.$element[0]) {
+      if (headerValue === '4') {
+        windUnit.$element[0].classList.remove('hide');
+      } else {
+        windUnit.$element[0].classList.add('hide');
+      }
     }
   }
 

@@ -217,7 +217,8 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     if (s_last_weather_view_start != weather_view.start_index) {
       s_last_weather_view_start = weather_view.start_index;
       weather_chart_refresh(s_weather_chart);
-      if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
+      if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE ||
+          settings_get()->header_display_mode == HEADER_DISPLAY_WIND) {
         header_invalidate(s_header);
       }
     }
@@ -272,7 +273,7 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
                            dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_ShowHolidays);
   bool header_settings = dict_find(iter, MESSAGE_KEY_HeaderDisplay) || dict_find(iter, MESSAGE_KEY_FullDateFormat) ||
                          dict_find(iter, MESSAGE_KEY_RealtimeSteps) || dict_find(iter, MESSAGE_KEY_TemperatureUnit) ||
-                         dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
+                         dict_find(iter, MESSAGE_KEY_TemperatureDisplay) || dict_find(iter, MESSAGE_KEY_WindUnit) ||
                          dict_find(iter, MESSAGE_KEY_BluetoothDisplay) ||
                          dict_find(iter, MESSAGE_KEY_QuietModeDisplay);
   bool weather_ui = dict_find(iter, MESSAGE_KEY_WeatherTempHourly) || dict_find(iter, MESSAGE_KEY_DemoWeather) ||
@@ -363,7 +364,8 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   struct tm now_copy = *tm_now;
 
   if (header_settings || weather_ui) {
-    if (!header_settings && settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
+    if (!header_settings && (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE ||
+                             settings_get()->header_display_mode == HEADER_DISPLAY_WIND)) {
       header_invalidate(s_header);
     }
     header_update(s_header, &now_copy);
@@ -464,7 +466,8 @@ static void prv_window_unload(Window *window) {
 static void prv_weather_updated(void) {
   weather_chart_refresh(s_weather_chart);
   header_refresh_weather_status(s_header);
-  if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE) {
+  if (settings_get()->header_display_mode == HEADER_DISPLAY_TEMP_RANGE ||
+      settings_get()->header_display_mode == HEADER_DISPLAY_WIND) {
     header_invalidate(s_header);
     time_t now = argus_time_now();
     struct tm *tm_now = localtime(&now);

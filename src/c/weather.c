@@ -9,6 +9,7 @@
 #define WEATHER_PERSIST_FLAG_IS_DAY 0x01
 #define WEATHER_PERSIST_FLAG_WIND 0x02
 #define WEATHER_PERSIST_FLAG_FEELS 0x04
+#define WEATHER_PERSIST_FLAG_WIND_DIR 0x08
 
 /* Compact meta blob — must stay under PERSIST_DATA_MAX_LENGTH (256). */
 typedef struct {
@@ -245,6 +246,35 @@ uint8_t weather_wind_max_for_view(const WeatherView *view) {
   return wind_max ? wind_max : 1;
 }
 
+uint8_t weather_wind_min_for_view(const WeatherView *view) {
+  if (!s_weather.has_wind || !view || view->hour_count == 0) {
+    return 0;
+  }
+
+  uint8_t wind_min = 255;
+  for (uint8_t i = 0; i < view->hour_count; i++) {
+    uint8_t wind = s_weather.winds[view->start_index + i];
+    if (wind < wind_min) {
+      wind_min = wind;
+    }
+  }
+  return wind_min == 255 ? 0 : wind_min;
+}
+
+uint8_t weather_wind_at(uint8_t index) {
+  if (!s_weather.has_wind || index >= s_weather.hour_count) {
+    return 0;
+  }
+  return s_weather.winds[index];
+}
+
+uint16_t weather_wind_dir_degrees_at(uint8_t index) {
+  if (!s_weather.has_wind_dir || index >= s_weather.hour_count) {
+    return 0;
+  }
+  return (uint16_t)s_weather.wind_dirs[index] * 2;
+}
+
 void weather_get_view(WeatherView *view) {
   if (!view) {
     return;
@@ -468,6 +498,7 @@ static void prv_persist_delete_all(void) {
   persist_delete(WEATHER_PERSIST_KEY_PRECIP);
   persist_delete(WEATHER_PERSIST_KEY_WIND);
   persist_delete(WEATHER_PERSIST_KEY_IS_DAY);
+  persist_delete(WEATHER_PERSIST_KEY_WIND_DIR);
 }
 
 static bool prv_persist_write_blob(uint32_t key, const void *data, size_t size) {
@@ -495,6 +526,9 @@ static void prv_persist_save(void) {
   }
   if (s_weather.has_wind) {
     meta.flags |= WEATHER_PERSIST_FLAG_WIND;
+  }
+  if (s_weather.has_wind_dir) {
+    meta.flags |= WEATHER_PERSIST_FLAG_WIND_DIR;
   }
   if (s_weather.has_feels_temps) {
     meta.flags |= WEATHER_PERSIST_FLAG_FEELS;
@@ -526,6 +560,11 @@ static void prv_persist_save(void) {
     ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_WIND, s_weather.winds, count);
   } else {
     persist_delete(WEATHER_PERSIST_KEY_WIND);
+  }
+  if (s_weather.has_wind_dir) {
+    ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_WIND_DIR, s_weather.wind_dirs, count);
+  } else {
+    persist_delete(WEATHER_PERSIST_KEY_WIND_DIR);
   }
   if (s_weather.has_is_day) {
     ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_IS_DAY, s_weather.is_day, count);
@@ -576,6 +615,7 @@ static bool prv_persist_load(void) {
   s_weather.hour_count = count;
   s_weather.has_is_day = (meta.flags & WEATHER_PERSIST_FLAG_IS_DAY) != 0;
   s_weather.has_wind = (meta.flags & WEATHER_PERSIST_FLAG_WIND) != 0;
+  s_weather.has_wind_dir = (meta.flags & WEATHER_PERSIST_FLAG_WIND_DIR) != 0;
   s_weather.has_feels_temps = (meta.flags & WEATHER_PERSIST_FLAG_FEELS) != 0;
   s_weather.temp_min = meta.temp_min;
   s_weather.temp_max = meta.temp_max;
@@ -607,6 +647,12 @@ static bool prv_persist_load(void) {
     if (persist_get_size(WEATHER_PERSIST_KEY_WIND) != count ||
         persist_read_data(WEATHER_PERSIST_KEY_WIND, s_weather.winds, count) != (int)count) {
       s_weather.has_wind = false;
+    }
+  }
+  if (s_weather.has_wind_dir) {
+    if (persist_get_size(WEATHER_PERSIST_KEY_WIND_DIR) != count ||
+        persist_read_data(WEATHER_PERSIST_KEY_WIND_DIR, s_weather.wind_dirs, count) != (int)count) {
+      s_weather.has_wind_dir = false;
     }
   }
   if (s_weather.has_is_day) {
@@ -877,6 +923,11 @@ static uint8_t prv_demo_fair_wind_for_clock_hour(int clock_hour) {
   return WIND_KMH[clock_hour % 24];
 }
 
+static uint8_t prv_demo_wind_dir_packed_for_clock_hour(int clock_hour) {
+  /* Rotate through the compass over the day; store degrees/2. */
+  return (uint8_t)(((clock_hour % 24) * 15) / 2);
+}
+
 void weather_apply_demo_data(void) {
   if (!weather_use_demo_data()) {
     return;
@@ -907,10 +958,12 @@ void weather_apply_demo_data(void) {
 
     s_weather.temps[i] = temp;
     s_weather.feels_temps[i] = feels;
+    s_weather.wind_dirs[i] = prv_demo_wind_dir_packed_for_clock_hour(clock_hour);
     s_weather.is_day[i] = (clock_hour >= 6 && clock_hour < 20) ? 1 : 0;
   }
   s_weather.has_is_day = true;
   s_weather.has_wind = true;
+  s_weather.has_wind_dir = true;
   s_weather.has_feels_temps = true;
 
   prv_recompute_extremes();
@@ -962,6 +1015,7 @@ void weather_apply_from_message(DictionaryIterator *iter) {
   s_weather.has_feels_temps = false;
   s_weather.has_is_day = false;
   s_weather.has_wind = false;
+  s_weather.has_wind_dir = false;
 
   Tuple *feels_tuple = dict_find(iter, MESSAGE_KEY_WeatherFeelsTempHourly);
   if (feels_tuple && feels_tuple->type == TUPLE_BYTE_ARRAY) {
@@ -1010,6 +1064,19 @@ void weather_apply_from_message(DictionaryIterator *iter) {
     s_weather.has_wind = true;
   } else {
     memset(s_weather.winds, 0, sizeof(s_weather.winds));
+  }
+
+  Tuple *wind_dir_tuple = dict_find(iter, MESSAGE_KEY_WeatherWindDirHourly);
+  if (wind_dir_tuple && wind_dir_tuple->type == TUPLE_BYTE_ARRAY) {
+    uint8_t wind_dir_len = wind_dir_tuple->length;
+    if (wind_dir_len > count) {
+      wind_dir_len = count;
+    }
+    memset(s_weather.wind_dirs, 0, sizeof(s_weather.wind_dirs));
+    memcpy(s_weather.wind_dirs, wind_dir_tuple->value->data, wind_dir_len);
+    s_weather.has_wind_dir = true;
+  } else {
+    memset(s_weather.wind_dirs, 0, sizeof(s_weather.wind_dirs));
   }
 
   t = dict_find(iter, MESSAGE_KEY_TempMin);

@@ -13,6 +13,25 @@ int8_t formatting_display_temp(int8_t celsius) {
   return (int8_t)(((celsius * 9) + (celsius >= 0 ? 2 : -2)) / 5 + 32);
 }
 
+uint8_t formatting_display_wind(uint8_t kmh) {
+  const ArgusSettings *settings = settings_get();
+  if (!settings->wind_mph) {
+    return kmh;
+  }
+  /* Approximate km/h → mph (×0.621). */
+  return (uint8_t)((kmh * 621 + 500) / 1000);
+}
+
+void formatting_wind_compass(char *buf, size_t len, uint16_t degrees) {
+  static const char *const LABELS[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+  if (!buf || len == 0) {
+    return;
+  }
+  uint16_t deg = degrees % 360;
+  uint8_t index = (uint8_t)((deg + 22) / 45) % 8;
+  snprintf(buf, len, "%s", LABELS[index]);
+}
+
 bool formatting_use_24h(void) {
   const ArgusSettings *settings = settings_get();
   switch (settings->hour_format) {

@@ -44,10 +44,10 @@
       locationMode.on('change', syncManualLocationInput);
     }
 
-    syncFullDateFormatVisibility();
+    syncHeaderDependentVisibility();
     var headerDisplay = clayConfig.getItemByMessageKey('HeaderDisplay');
     if (headerDisplay) {
-      headerDisplay.on('change', syncFullDateFormatVisibility);
+      headerDisplay.on('change', syncHeaderDependentVisibility);
     }
 
     bindSaveChangeTracking();
