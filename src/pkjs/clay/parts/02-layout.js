@@ -239,6 +239,67 @@
     injectListRadiogroupHelp('RealtimeSteps', 'argus-realtime-steps-help');
   }
 
+  // 14x14 watchface header glyphs (row bitmasks, bit13 = leftmost pixel).
+  var HEADER_OPTION_ICON_MASKS = {
+    '1': [0x0000, 0x0140, 0x0d10, 0x0c00, 0x00e0, 0x03f0, 0x03f8, 0x01f8, 0x0078, 0x0078, 0x0078, 0x00f0, 0x0060, 0x0000],
+    '3': [0x0000, 0x0000, 0x0e1c, 0x1f3e, 0x1ffe, 0x1ff0, 0x1fe0, 0x0f84, 0x0704, 0x032a, 0x0110, 0x0090, 0x0000, 0x0000],
+    '2': [0x0000, 0x01e0, 0x0210, 0x0610, 0x0210, 0x0210, 0x0610, 0x02d0, 0x02d0, 0x06d0, 0x02d0, 0x0210, 0x01e0, 0x0000],
+  };
+
+  function createHeaderOptionIconSvg(maskRows) {
+    var parts = [];
+    for (var row = 0; row < 14; row++) {
+      var bits = maskRows[row];
+      for (var col = 0; col < 14; col++) {
+        if (bits & (1 << (13 - col))) {
+          parts.push('M' + col + ' ' + row + 'h1v1h-1z');
+        }
+      }
+    }
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14" ' +
+      'shape-rendering="crispEdges" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="' +
+      parts.join('') +
+      '"/></svg>'
+    );
+  }
+
+  function injectHeaderDisplayIcons() {
+    var item = clayConfig.getItemByMessageKey('HeaderDisplay');
+    if (!item || !item.$element || !item.$element[0]) {
+      return;
+    }
+
+    var labels = item.$element[0].querySelectorAll('.radio-group > label');
+    for (var i = 0; i < labels.length; i++) {
+      var label = labels[i];
+      if (label.querySelector('.argus-header-option-main')) {
+        continue;
+      }
+
+      var text = label.querySelector('.label');
+      var input = label.querySelector('input');
+      if (!text || !input) {
+        continue;
+      }
+
+      var main = document.createElement('span');
+      main.className = 'argus-header-option-main';
+
+      var icon = document.createElement('span');
+      icon.className = 'argus-header-option-icon';
+      var mask = HEADER_OPTION_ICON_MASKS[input.value];
+      if (mask) {
+        icon.innerHTML = createHeaderOptionIconSvg(mask);
+      }
+
+      label.insertBefore(main, text);
+      main.appendChild(icon);
+      main.appendChild(text);
+    }
+  }
+
   function wrapInlineControlBodies() {
     INLINE_CONTROL_KEYS.forEach(function (key) {
       var item = clayConfig.getItemByMessageKey(key);

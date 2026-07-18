@@ -342,6 +342,38 @@ html.as .argus-list-radiogroup .radio-group .label {
   color: #b4bac3 !important;
   text-align: left;
 }
+html.as .argus-list-radiogroup .radio-group .argus-header-option-main {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-flex: 1 1 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html.as .argus-list-radiogroup .radio-group .argus-header-option-icon {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  -webkit-flex: 0 0 14px;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  margin-right: 10px;
+  color: #b4bac3;
+}
+html.as .argus-list-radiogroup .radio-group .argus-header-option-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  shape-rendering: crispEdges;
+}
+html.as .argus-list-radiogroup .radio-group label.active .argus-header-option-icon {
+  color: #e8ebef;
+}
 html.as .argus-list-radiogroup .radio-group i {
   display: block;
   position: relative;

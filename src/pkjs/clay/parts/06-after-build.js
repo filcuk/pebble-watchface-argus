@@ -11,6 +11,7 @@
     convertSelectDropdowns();
     wrapInlineControlBodies();
     hideHeaderHeartRateIfNeeded();
+    injectHeaderDisplayIcons();
     normalizeRealtimeStepsDefault();
 
     if (tabsRoot) {
