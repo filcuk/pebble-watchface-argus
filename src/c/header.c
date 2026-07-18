@@ -413,32 +413,39 @@ Header *header_create(Layer *parent) {
   if (!header) {
     return NULL;
   }
+  memset(header, 0, sizeof(*header));
 
   GRect bounds = layer_get_bounds(parent);
   header->container = layer_create(GRect(0, 0, bounds.size.w, HEADER_HEIGHT));
+  if (!header->container) {
+    free(header);
+    return NULL;
+  }
   layer_add_child(parent, header->container);
 
   header->bt_layer = layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, BT_ICON_WIDTH, HEADER_ICON_H));
-  layer_set_update_proc(header->bt_layer, prv_bt_update_proc);
-  layer_add_child(header->container, header->bt_layer);
-
   header->quiet_layer =
       layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, QUIET_MODE_ICON_WIDTH, HEADER_ICON_H));
-  layer_set_update_proc(header->quiet_layer, prv_quiet_update_proc);
-  layer_add_child(header->container, header->quiet_layer);
-
   header->weather_layer =
       layer_create(GRect(HEADER_ICONS_LEFT, HEADER_ICON_Y, WEATHER_STATUS_ICON_WIDTH, HEADER_ICON_H));
+  header->battery_layer = layer_create(GRect(bounds.size.w - HEADER_BATTERY_WIDTH, 2, 24, HEADER_HEIGHT - 4));
+  header->status_layer = layer_create(GRect(HEADER_STATUS_MIN_LEFT, 0, bounds.size.w - HEADER_STATUS_MIN_LEFT - HEADER_BATTERY_WIDTH,
+                                          HEADER_HEIGHT));
+  if (!header->bt_layer || !header->quiet_layer || !header->weather_layer || !header->battery_layer ||
+      !header->status_layer) {
+    header_destroy(header);
+    return NULL;
+  }
+
+  layer_set_update_proc(header->bt_layer, prv_bt_update_proc);
+  layer_add_child(header->container, header->bt_layer);
+  layer_set_update_proc(header->quiet_layer, prv_quiet_update_proc);
+  layer_add_child(header->container, header->quiet_layer);
   layer_set_update_proc(header->weather_layer, prv_weather_status_update_proc);
   layer_set_hidden(header->weather_layer, true);
   layer_add_child(header->container, header->weather_layer);
-
-  header->battery_layer = layer_create(GRect(bounds.size.w - HEADER_BATTERY_WIDTH, 2, 24, HEADER_HEIGHT - 4));
   layer_set_update_proc(header->battery_layer, prv_battery_update_proc);
   layer_add_child(header->container, header->battery_layer);
-
-  header->status_layer = layer_create(GRect(HEADER_STATUS_MIN_LEFT, 0, bounds.size.w - HEADER_STATUS_MIN_LEFT - HEADER_BATTERY_WIDTH,
-                                          HEADER_HEIGHT));
   layer_set_update_proc(header->status_layer, prv_status_layer_update_proc);
   layer_add_child(header->container, header->status_layer);
 
@@ -474,12 +481,24 @@ void header_destroy(Header *header) {
   if (s_header == header) {
     s_header = NULL;
   }
-  layer_destroy(header->status_layer);
-  layer_destroy(header->weather_layer);
-  layer_destroy(header->quiet_layer);
-  layer_destroy(header->bt_layer);
-  layer_destroy(header->battery_layer);
-  layer_destroy(header->container);
+  if (header->status_layer) {
+    layer_destroy(header->status_layer);
+  }
+  if (header->weather_layer) {
+    layer_destroy(header->weather_layer);
+  }
+  if (header->quiet_layer) {
+    layer_destroy(header->quiet_layer);
+  }
+  if (header->bt_layer) {
+    layer_destroy(header->bt_layer);
+  }
+  if (header->battery_layer) {
+    layer_destroy(header->battery_layer);
+  }
+  if (header->container) {
+    layer_destroy(header->container);
+  }
   free(header);
 }
 

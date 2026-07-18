@@ -1106,6 +1106,11 @@ void weather_set_updated_handler(WeatherUpdatedHandler handler) {
   s_updated_handler = handler;
 }
 
+void weather_deinit(void) {
+  prv_cancel_timers();
+  s_updated_handler = NULL;
+}
+
 void weather_ensure_view_coverage(void) {
   if (weather_use_demo_data()) {
     time_t now_hour = prv_current_hour_start();

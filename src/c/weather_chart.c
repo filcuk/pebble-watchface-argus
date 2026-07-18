@@ -765,21 +765,24 @@ WeatherChart *weather_chart_create(Layer *parent) {
   if (!chart) {
     return NULL;
   }
+  memset(chart, 0, sizeof(*chart));
 
   GRect bounds = layer_get_bounds(parent);
   chart->layer = layer_create(
       GRect(0, bounds.size.h - WEATHER_CHART_HEIGHT - Y_LABEL_HEADROOM, bounds.size.w,
             WEATHER_CHART_HEIGHT + Y_LABEL_HEADROOM));
-
   chart->plot_layer = layer_create(GRect(0, 0, 1, 1));
+  chart->decor_layer = layer_create(GRect(0, 0, bounds.size.w, WEATHER_CHART_HEIGHT + Y_LABEL_HEADROOM));
+  if (!chart->layer || !chart->plot_layer || !chart->decor_layer) {
+    weather_chart_destroy(chart);
+    return NULL;
+  }
+
   layer_set_clips(chart->plot_layer, true);
   layer_set_update_proc(chart->plot_layer, prv_plot_layer_update_proc);
   layer_add_child(chart->layer, chart->plot_layer);
-
-  chart->decor_layer = layer_create(GRect(0, 0, bounds.size.w, WEATHER_CHART_HEIGHT + Y_LABEL_HEADROOM));
   layer_set_update_proc(chart->decor_layer, prv_decor_layer_update_proc);
   layer_add_child(chart->layer, chart->decor_layer);
-
   layer_add_child(parent, chart->layer);
   chart->point_count = 0;
   s_weather_chart = chart;
@@ -793,7 +796,17 @@ void weather_chart_destroy(WeatherChart *chart) {
   if (s_weather_chart == chart) {
     s_weather_chart = NULL;
   }
-  layer_destroy(chart->layer);
+  if (chart->decor_layer && (!chart->layer || layer_get_parent(chart->decor_layer) != chart->layer)) {
+    layer_destroy(chart->decor_layer);
+    chart->decor_layer = NULL;
+  }
+  if (chart->plot_layer && (!chart->layer || layer_get_parent(chart->plot_layer) != chart->layer)) {
+    layer_destroy(chart->plot_layer);
+    chart->plot_layer = NULL;
+  }
+  if (chart->layer) {
+    layer_destroy(chart->layer);
+  }
   free(chart);
 }
 

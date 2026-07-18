@@ -60,6 +60,7 @@ typedef struct {
 } WeatherView;
 
 void weather_init(void);
+void weather_deinit(void);
 WeatherData *weather_get(void);
 void weather_apply_from_message(DictionaryIterator *iter);
 void weather_apply_demo_data(void);

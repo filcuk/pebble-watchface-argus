@@ -375,19 +375,22 @@ Calendar *calendar_create(Layer *parent) {
   if (!calendar) {
     return NULL;
   }
+  memset(calendar, 0, sizeof(*calendar));
 
   GRect bounds = layer_get_bounds(parent);
   calendar->layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
-  layer_set_update_proc(calendar->layer, prv_calendar_update_proc);
-
   calendar->holiday_layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
+  calendar->today_layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
+  if (!calendar->layer || !calendar->holiday_layer || !calendar->today_layer) {
+    calendar_destroy(calendar);
+    return NULL;
+  }
+
+  layer_set_update_proc(calendar->layer, prv_calendar_update_proc);
   layer_set_update_proc(calendar->holiday_layer, prv_holiday_layer_update_proc);
   layer_add_child(calendar->layer, calendar->holiday_layer);
-
-  calendar->today_layer = layer_create(GRect(0, 0, bounds.size.w, CALENDAR_HEIGHT));
   layer_set_update_proc(calendar->today_layer, prv_today_layer_update_proc);
   layer_add_child(calendar->layer, calendar->today_layer);
-
   layer_add_child(parent, calendar->layer);
 
   time_t now = argus_time_now();
@@ -421,7 +424,20 @@ void calendar_destroy(Calendar *calendar) {
   if (s_calendar == calendar) {
     s_calendar = NULL;
   }
-  layer_destroy(calendar->layer);
+  /* Destroy orphans first if create failed before parenting. */
+  if (calendar->today_layer &&
+      (!calendar->layer || layer_get_parent(calendar->today_layer) != calendar->layer)) {
+    layer_destroy(calendar->today_layer);
+    calendar->today_layer = NULL;
+  }
+  if (calendar->holiday_layer &&
+      (!calendar->layer || layer_get_parent(calendar->holiday_layer) != calendar->layer)) {
+    layer_destroy(calendar->holiday_layer);
+    calendar->holiday_layer = NULL;
+  }
+  if (calendar->layer) {
+    layer_destroy(calendar->layer);
+  }
   free(calendar);
 }
 

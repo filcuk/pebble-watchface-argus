@@ -396,6 +396,14 @@ static void prv_window_load(Window *window) {
 
   if (!s_header || !s_calendar || !s_time_display || !s_weather_chart) {
     APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to create watchface modules");
+    weather_chart_destroy(s_weather_chart);
+    s_weather_chart = NULL;
+    time_display_destroy(s_time_display);
+    s_time_display = NULL;
+    calendar_destroy(s_calendar);
+    s_calendar = NULL;
+    header_destroy(s_header);
+    s_header = NULL;
     return;
   }
 
@@ -659,6 +667,7 @@ static void deinit(void) {
   battery_state_service_unsubscribe();
   connection_service_unsubscribe();
   app_focus_service_unsubscribe();
+  weather_deinit();
   window_destroy(s_main_window);
 }
 
