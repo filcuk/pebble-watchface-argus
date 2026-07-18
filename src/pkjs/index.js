@@ -1138,9 +1138,8 @@ function sendWeatherPayload(payload, sendMeta, sendOptions) {
   if (sendMeta.apiLonE4 !== undefined && sendMeta.apiLonE4 !== null) {
     dict[keys.WeatherApiLonE4] = sendMeta.apiLonE4;
   }
-  if (sendMeta.statusFlags) {
-    dict[keys.WeatherStatusFlags] = sendMeta.statusFlags;
-  }
+  /* Always send flags (including 0). Omitting 0 left LOCATION_PENDING stuck on the watch. */
+  dict[keys.WeatherStatusFlags] = sendMeta.statusFlags || 0;
 
   Pebble.sendAppMessage(
     dict,

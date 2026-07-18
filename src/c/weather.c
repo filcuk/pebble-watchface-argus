@@ -1062,10 +1062,9 @@ void weather_apply_from_message(DictionaryIterator *iter) {
     s_weather.api_lon_e4 = t->value->int32;
   }
 
+  /* Default clear: a full payload without flags must not leave LOCATION_PENDING stuck. */
   t = dict_find(iter, MESSAGE_KEY_WeatherStatusFlags);
-  if (t) {
-    s_weather.status_flags = (uint8_t)t->value->int32;
-  }
+  s_weather.status_flags = t ? (uint8_t)t->value->int32 : 0;
 
   s_weather.hour_count = count;
   s_weather.version = WEATHER_PERSIST_VERSION;

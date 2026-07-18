@@ -4,6 +4,8 @@
 
 #define WEATHER_CHART_HEIGHT 96
 #define WEATHER_CHART_MIN_HEIGHT 52
+/* Layer height drawn above the layout frame for Y-axis labels; keep in sync with weather_chart.c. */
+#define WEATHER_CHART_TOP_OVERHANG 11
 
 typedef struct WeatherChart WeatherChart;
 

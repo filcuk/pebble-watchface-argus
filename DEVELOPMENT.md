@@ -33,6 +33,16 @@ pebble install --emulator emery   # emulator
 pebble logs --emulator emery
 ```
 
+### Shell aliases
+
+Source [`scripts/aliases.sh`](scripts/aliases.sh) in WSL for short forms (`pb`, `pbi`, `pl`, `pbic`, `pcfg`, …):
+
+```bash
+source scripts/aliases.sh
+```
+
+To load every new shell, add that line to `~/.bashrc`.
+
 After PKJS or `release.toml` changes, reinstall the `.pbw`. If JS changes do not appear, run `pebble clean && pebble build`. A good build logs a `merge_js` step listing `src/pkjs/*.js`.
 
 ### Physical watch (CloudPebble)
@@ -52,6 +62,19 @@ pebble screenshot --no-open frame.png
 ```
 
 Run only one `pebble install --emulator` at a time. Close the old emulator window before starting another.
+
+### Timeline Quick View (unobstructed area)
+
+The bottom slide-in overlay that shrinks the watchface is **Timeline Quick View** (Timeline Peek), not a normal app notification. Argus lays out from `layer_get_unobstructed_bounds` in `src/c/main.c` and reflows on obstruction changes (weather hides when space is tight; the clock recenters).
+
+Toggle it in the emulator with Argus already running:
+
+```bash
+pebble emu-set-timeline-quick-view on
+pebble emu-set-timeline-quick-view off
+```
+
+Use this to verify weather hiding and clock alignment. `Pebble.showSimpleNotificationOnPebble` (release notice) does **not** exercise this path — that is a full notification UI.
 
 ### Reset emulator data (`pebble wipe`)
 
@@ -96,7 +119,7 @@ Clay config must use built-in types only (`radiogroup`, `toggle`, `input`, `subm
 
 Edit [`release.toml`](release.toml) (`version`, `message`) before each release. `pebble build` runs `scripts/generate-release.js` (via `wscript` `options()`) and writes `src/pkjs/release.js`, syncing `package.json`.
 
-The update notice is shown via `Pebble.showSimpleNotificationOnPebble` on the phone. It is skipped when `argus-release-seen` in phone storage matches the release version (unless Debug → **Always**).
+The update notice is shown via `Pebble.showSimpleNotificationOnPebble` on the phone. It is skipped when `argus-release-seen` in phone storage matches the release version (unless Debug → **Always**). Leave `message` empty (or omit it) to ship a version with no update notice at all.
 
 ### Dual-store `.pbw` (temporary)
 
@@ -115,6 +138,16 @@ npm run build:store
 
 ## Screenshots and store assets
 
+**One-shot time simulation** — emulator must already be running with Argus installed:
+
+```bash
+bash scripts/simulate-time.sh "2026-12-25 15:00"
+bash scripts/simulate-time.sh --demo-weather "2026-07-06 09:00"
+bash scripts/simulate-time.sh --reset
+```
+
+Enables DebugMode and sets `CaptureTimeOffset`. On Emery/QEMU 10, `pebble emu-set-time` is ignored.
+
 **Timed capture** — emulator must already be running; do not pass `--emulator` to the script:
 
 ```bash
@@ -125,7 +158,7 @@ bash scripts/capture-screenshots.sh --simulate --duration 3h --interval 1m
 bash scripts/capture-screenshots.sh --simulate -d 14d -i 1h --start "2026-07-06 09:00"
 ```
 
-Simulated mode uses `CaptureTimeOffset` (debug mode is enabled automatically). On Emery/QEMU 10, `pebble emu-set-time` is ignored. Frames go to `captures/sim-*/frame-NNNN-*.png`.
+Simulated mode uses `CaptureTimeOffset` (debug mode is enabled automatically). Frames go to `captures/sim-*/frame-NNNN-*.png`.
 
 **Store demo scenario** — optional: set **Release notification → Never** in Clay first (phone-side only).
 
