@@ -66,8 +66,7 @@ var windInfoHtml =
   '</table>' +
   '</div>' +
   '<p class="argus-wind-note">' +
-  'Forces 9–12 only appear when the axis extends. Marks above force 8 are drawn in ' +
-  '<em>yellow</em>.' +
+  'Forces 9–12 appear only when the axis extends. Marks above force 8 are shown in <em>yellow</em>.' +
   '</p>' +
   '</div>';
 
