@@ -718,6 +718,10 @@ html.as .argus-about {
   font-size: 13px;
   line-height: 1.4;
 }
+html.as .argus-about strong {
+  font-weight: 600;
+  color: #6894b8 !important;
+}
 html.as .argus-about-section {
   margin: 0 0 1rem;
   padding-bottom: 0.75rem;
