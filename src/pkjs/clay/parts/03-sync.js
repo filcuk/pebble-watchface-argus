@@ -3,25 +3,26 @@
     var demoWeatherToggle = clayConfig.getItemByMessageKey('DemoWeather');
     var demoBiometricsToggle = clayConfig.getItemByMessageKey('DemoBiometrics');
     var weatherLogToggle = clayConfig.getItemByMessageKey('DebugWeatherLog');
+    var debugItems = [demoWeatherToggle, demoBiometricsToggle, weatherLogToggle];
+    var i;
 
-    if (!debugToggle || !demoWeatherToggle || !demoBiometricsToggle) {
+    if (!debugToggle) {
       return;
     }
 
-    if (debugToggle.get()) {
-      demoWeatherToggle.enable();
-      demoBiometricsToggle.enable();
-      if (weatherLogToggle) {
-        weatherLogToggle.enable();
+    var debugOn = !!debugToggle.get();
+    for (i = 0; i < debugItems.length; i += 1) {
+      var item = debugItems[i];
+      if (!item || !item.$element || !item.$element[0]) {
+        continue;
       }
-    } else {
-      demoWeatherToggle.set(false);
-      demoWeatherToggle.disable();
-      demoBiometricsToggle.set(false);
-      demoBiometricsToggle.disable();
-      if (weatherLogToggle) {
-        weatherLogToggle.set(false);
-        weatherLogToggle.disable();
+      if (debugOn) {
+        item.$element[0].classList.remove('hide');
+        item.enable();
+      } else {
+        item.set(false);
+        item.$element[0].classList.add('hide');
+        item.disable();
       }
     }
 
