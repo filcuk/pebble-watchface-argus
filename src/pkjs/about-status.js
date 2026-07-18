@@ -566,9 +566,9 @@ function holidaySectionHtml(options) {
 
   if (!cached.length) {
     lines.push(
-      '<p class="argus-about-line">No cached holidays yet for ' +
+      '<p class="argus-about-line">No cached holidays yet for <strong>' +
         escapeHtml(locationLabel) +
-        '.</p>'
+        '</strong>.</p>'
     );
     return '<div class="argus-about-section">' + lines.join('') + '</div>';
   }
@@ -589,9 +589,9 @@ function holidaySectionHtml(options) {
 
   if (!upcoming.length) {
     lines.push(
-      '<p class="argus-about-line">No holidays for ' +
+      '<p class="argus-about-line">No holidays for <strong>' +
         escapeHtml(locationLabel) +
-        ' in the current 14-day calendar window.</p>'
+        '</strong> in the current 14-day calendar window.</p>'
     );
   } else {
     lines.push(
@@ -633,10 +633,6 @@ function aboutIntroSectionHtml() {
   return (
     '<div class="argus-about-section">' +
     '<div class="argus-setting-label">Info</div>' +
-    '<p class="argus-about-line">' +
-    'Tip: Swipe left or right to navigate between pages!' +
-    '</p>' +
-    '<br>' +
     '<p class="argus-about-line argus-about-links">' +
     ' External links: ' +
     githubMarkSvg() +
@@ -651,6 +647,10 @@ function aboutIntroSectionHtml() {
     '<a href="' +
     helpUrl +
     '" target="_blank" rel="noopener noreferrer">Help</a>' +
+    '</p>' +
+    '<br>' +
+    '<p class="argus-about-line">' +
+    '<em>Tip: Swipe left or right to navigate between pages!</em>' +
     '</p>' +
     '</div>'
   );
