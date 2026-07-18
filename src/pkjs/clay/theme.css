@@ -65,8 +65,11 @@ html.as .argus-tabs {
   top: 0;
   z-index: 10;
   background: #1a1d21 !important;
-  padding: 0 0 4px;
-  margin-bottom: 8px;
+  /* Keep top/bottom gap inside sticky box so spacing survives when stuck
+     (form padding alone collapses at top: 0; margin-bottom isn't painted). */
+  margin-top: -12px;
+  margin-bottom: 0;
+  padding: 12px 0 12px;
 }
 html.as .argus-tabs::-webkit-scrollbar {
   display: none;
