@@ -76,6 +76,8 @@
       "WeatherApiLonE4",
       "WeatherStatusFlags",
       "WeatherIsDayHourly",
+      "WeatherSunriseEpochs",
+      "WeatherSunsetEpochs",
       "WindMax",
       "HeaderDisplay",
       "FullDateFormat",

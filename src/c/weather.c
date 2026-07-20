@@ -10,6 +10,7 @@
 #define WEATHER_PERSIST_FLAG_WIND 0x02
 #define WEATHER_PERSIST_FLAG_FEELS 0x04
 #define WEATHER_PERSIST_FLAG_WIND_DIR 0x08
+#define WEATHER_PERSIST_FLAG_SUN 0x10
 
 /* Compact meta blob — must stay under PERSIST_DATA_MAX_LENGTH (256). */
 typedef struct {
@@ -31,6 +32,13 @@ typedef struct {
   uint8_t status_flags;
 } WeatherPersistMeta;
 
+typedef struct {
+  uint8_t sun_count;
+  uint8_t _pad[3];
+  int32_t sunrise[WEATHER_MAX_SUN_DAYS];
+  int32_t sunset[WEATHER_MAX_SUN_DAYS];
+} WeatherPersistSun;
+
 #define WEATHER_RETRY_BASE_MS (30 * 1000)
 #define WEATHER_RETRY_CAP_MS (30 * 60 * 1000)
 #define WEATHER_RESPONSE_TIMEOUT_MS (30 * 1000)
@@ -41,6 +49,7 @@ static AppTimer *s_timeout_timer;
 static WeatherUpdatedHandler s_updated_handler;
 static time_t s_last_weather_request_at;
 static uint32_t s_retry_delay_ms;
+static bool s_was_night_paused;
 
 static void prv_notify_updated(void) {
   if (s_updated_handler) {
@@ -369,9 +378,26 @@ static bool weather_cache_is_valid(void) {
   return (now - cache_time) <= WEATHER_CACHE_MAX_AGE_S;
 }
 
-bool weather_is_night_now(void) {
-  time_t now = argus_time_now();
-  time_t now_hour = prv_current_hour_start();
+bool weather_is_night_at(time_t when) {
+  if (s_weather.has_sun_times && s_weather.sun_count > 0) {
+    for (uint8_t i = 0; i < s_weather.sun_count; i++) {
+      if (when >= (time_t)s_weather.sunrise[i] && when < (time_t)s_weather.sunset[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  time_t now_hour = when;
+  {
+    struct tm *tm_when = localtime(&when);
+    if (tm_when) {
+      struct tm hour_tm = *tm_when;
+      hour_tm.tm_min = 0;
+      hour_tm.tm_sec = 0;
+      now_hour = mktime(&hour_tm);
+    }
+  }
 
   if (s_weather.fetch_time > 0 && s_weather.hour_count > 0 && now_hour >= s_weather.fetch_time) {
     int index = (int)((now_hour - s_weather.fetch_time) / 3600);
@@ -380,11 +406,15 @@ bool weather_is_night_now(void) {
     }
   }
 
-  struct tm *tm = localtime(&now);
+  struct tm *tm = localtime(&when);
   if (!tm) {
     return false;
   }
   return tm->tm_hour < 6 || tm->tm_hour >= 20;
+}
+
+bool weather_is_night_now(void) {
+  return weather_is_night_at(argus_time_now());
 }
 
 static bool prv_should_pause_periodic_refresh(void) {
@@ -407,6 +437,21 @@ static bool prv_should_pause_periodic_refresh(void) {
 
 bool weather_is_night_pause_active(void) {
   return prv_should_pause_periodic_refresh();
+}
+
+bool weather_on_minute(void) {
+  bool forced = false;
+  const ArgusSettings *settings = settings_get();
+  bool pause_on = settings->pause_weather_at_night;
+  bool paused = prv_should_pause_periodic_refresh();
+
+  if (s_was_night_paused && pause_on && !weather_is_night_now()) {
+    weather_request_force();
+    forced = true;
+  }
+
+  s_was_night_paused = paused;
+  return forced;
 }
 
 static uint8_t prv_weather_update_interval_minutes(void) {
@@ -499,6 +544,7 @@ static void prv_persist_delete_all(void) {
   persist_delete(WEATHER_PERSIST_KEY_WIND);
   persist_delete(WEATHER_PERSIST_KEY_IS_DAY);
   persist_delete(WEATHER_PERSIST_KEY_WIND_DIR);
+  persist_delete(WEATHER_PERSIST_KEY_SUN);
 }
 
 static bool prv_persist_write_blob(uint32_t key, const void *data, size_t size) {
@@ -532,6 +578,9 @@ static void prv_persist_save(void) {
   }
   if (s_weather.has_feels_temps) {
     meta.flags |= WEATHER_PERSIST_FLAG_FEELS;
+  }
+  if (s_weather.has_sun_times) {
+    meta.flags |= WEATHER_PERSIST_FLAG_SUN;
   }
   meta.temp_min = s_weather.temp_min;
   meta.temp_max = s_weather.temp_max;
@@ -570,6 +619,16 @@ static void prv_persist_save(void) {
     ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_IS_DAY, s_weather.is_day, count);
   } else {
     persist_delete(WEATHER_PERSIST_KEY_IS_DAY);
+  }
+  if (s_weather.has_sun_times && s_weather.sun_count > 0 && s_weather.sun_count <= WEATHER_MAX_SUN_DAYS) {
+    WeatherPersistSun sun;
+    memset(&sun, 0, sizeof(sun));
+    sun.sun_count = s_weather.sun_count;
+    memcpy(sun.sunrise, s_weather.sunrise, sizeof(int32_t) * s_weather.sun_count);
+    memcpy(sun.sunset, s_weather.sunset, sizeof(int32_t) * s_weather.sun_count);
+    ok = ok && prv_persist_write_blob(WEATHER_PERSIST_KEY_SUN, &sun, sizeof(sun));
+  } else {
+    persist_delete(WEATHER_PERSIST_KEY_SUN);
   }
 
   if (!ok) {
@@ -617,6 +676,8 @@ static bool prv_persist_load(void) {
   s_weather.has_wind = (meta.flags & WEATHER_PERSIST_FLAG_WIND) != 0;
   s_weather.has_wind_dir = (meta.flags & WEATHER_PERSIST_FLAG_WIND_DIR) != 0;
   s_weather.has_feels_temps = (meta.flags & WEATHER_PERSIST_FLAG_FEELS) != 0;
+  s_weather.has_sun_times = (meta.flags & WEATHER_PERSIST_FLAG_SUN) != 0;
+  s_weather.sun_count = 0;
   s_weather.temp_min = meta.temp_min;
   s_weather.temp_max = meta.temp_max;
   s_weather.feels_temp_min = meta.feels_temp_min;
@@ -660,6 +721,19 @@ static bool prv_persist_load(void) {
         persist_read_data(WEATHER_PERSIST_KEY_IS_DAY, s_weather.is_day, count) != (int)count) {
       s_weather.has_is_day = false;
       memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
+    }
+  }
+  if (s_weather.has_sun_times) {
+    WeatherPersistSun sun;
+    if (persist_get_size(WEATHER_PERSIST_KEY_SUN) != (int)sizeof(sun) ||
+        persist_read_data(WEATHER_PERSIST_KEY_SUN, &sun, sizeof(sun)) != (int)sizeof(sun) ||
+        sun.sun_count == 0 || sun.sun_count > WEATHER_MAX_SUN_DAYS) {
+      s_weather.has_sun_times = false;
+      s_weather.sun_count = 0;
+    } else {
+      s_weather.sun_count = sun.sun_count;
+      memcpy(s_weather.sunrise, sun.sunrise, sizeof(int32_t) * sun.sun_count);
+      memcpy(s_weather.sunset, sun.sunset, sizeof(int32_t) * sun.sun_count);
     }
   }
 
@@ -824,6 +898,7 @@ void weather_init(void) {
   s_weather.version = WEATHER_PERSIST_VERSION;
   s_weather.state = WEATHER_STATE_LOADING;
   memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
+  s_was_night_paused = false;
 
   if (prv_persist_load()) {
     if (s_weather.hour_count > 0 && !s_weather.has_is_day) {
@@ -851,6 +926,8 @@ void weather_init(void) {
       prv_request_refresh(prv_current_hour_start());
     }
   }
+
+  s_was_night_paused = prv_should_pause_periodic_refresh();
 }
 
 WeatherData *weather_get(void) {
@@ -966,6 +1043,31 @@ void weather_apply_demo_data(void) {
   s_weather.has_wind_dir = true;
   s_weather.has_feels_temps = true;
 
+  /* Fixed 06:00 / 20:00 local sun for the demo span (matches demo is_day). */
+  {
+    time_t base = s_weather.fetch_time;
+    struct tm *tm_base = localtime(&base);
+    s_weather.sun_count = 0;
+    if (tm_base) {
+      for (uint8_t d = 0; d < 3 && s_weather.sun_count < WEATHER_MAX_SUN_DAYS; d++) {
+        struct tm day = *tm_base;
+        day.tm_mday += (int)d;
+        day.tm_hour = 6;
+        day.tm_min = 0;
+        day.tm_sec = 0;
+        time_t rise = mktime(&day);
+        day.tm_hour = 20;
+        time_t set = mktime(&day);
+        if (rise > 0 && set > rise) {
+          s_weather.sunrise[s_weather.sun_count] = (int32_t)rise;
+          s_weather.sunset[s_weather.sun_count] = (int32_t)set;
+          s_weather.sun_count++;
+        }
+      }
+    }
+    s_weather.has_sun_times = s_weather.sun_count > 0;
+  }
+
   prv_recompute_extremes();
 
   s_weather.version = WEATHER_PERSIST_VERSION;
@@ -1014,6 +1116,8 @@ void weather_apply_from_message(DictionaryIterator *iter) {
 
   s_weather.has_feels_temps = false;
   s_weather.has_is_day = false;
+  s_weather.has_sun_times = false;
+  s_weather.sun_count = 0;
   s_weather.has_wind = false;
   s_weather.has_wind_dir = false;
 
@@ -1051,6 +1155,31 @@ void weather_apply_from_message(DictionaryIterator *iter) {
     s_weather.has_is_day = true;
   } else {
     memset(s_weather.is_day, 1, sizeof(s_weather.is_day));
+  }
+
+  Tuple *sunrise_tuple = dict_find(iter, MESSAGE_KEY_WeatherSunriseEpochs);
+  Tuple *sunset_tuple = dict_find(iter, MESSAGE_KEY_WeatherSunsetEpochs);
+  if (sunrise_tuple && sunrise_tuple->type == TUPLE_BYTE_ARRAY && sunset_tuple &&
+      sunset_tuple->type == TUPLE_BYTE_ARRAY) {
+    uint8_t rise_n = (uint8_t)(sunrise_tuple->length / sizeof(int32_t));
+    uint8_t set_n = (uint8_t)(sunset_tuple->length / sizeof(int32_t));
+    uint8_t sun_n = rise_n < set_n ? rise_n : set_n;
+    if (sun_n > WEATHER_MAX_SUN_DAYS) {
+      sun_n = WEATHER_MAX_SUN_DAYS;
+    }
+    s_weather.sun_count = 0;
+    for (uint8_t i = 0; i < sun_n; i++) {
+      int32_t rise;
+      int32_t set;
+      memcpy(&rise, sunrise_tuple->value->data + i * sizeof(int32_t), sizeof(int32_t));
+      memcpy(&set, sunset_tuple->value->data + i * sizeof(int32_t), sizeof(int32_t));
+      if (rise > 0 && set > rise) {
+        s_weather.sunrise[s_weather.sun_count] = rise;
+        s_weather.sunset[s_weather.sun_count] = set;
+        s_weather.sun_count++;
+      }
+    }
+    s_weather.has_sun_times = s_weather.sun_count > 0;
   }
 
   Tuple *wind_tuple = dict_find(iter, MESSAGE_KEY_WeatherWindHourly);
