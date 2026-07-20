@@ -4,7 +4,7 @@
 version = "1.3.0"
 
 message = """
-Wind header option was added.
+Wind header option was added and night uses exact time.
 
 Thanks for your patronage <3
 """
