@@ -3,6 +3,7 @@
 #include <pebble.h>
 
 #define WEATHER_MAX_HOURS 72
+#define WEATHER_MAX_SUN_DAYS 4
 #define WEATHER_PERSIST_KEY_META 3
 #define WEATHER_PERSIST_KEY_TEMPS 30
 #define WEATHER_PERSIST_KEY_FEELS 31
@@ -10,7 +11,8 @@
 #define WEATHER_PERSIST_KEY_WIND 33
 #define WEATHER_PERSIST_KEY_IS_DAY 34
 #define WEATHER_PERSIST_KEY_WIND_DIR 35
-#define WEATHER_PERSIST_VERSION 5
+#define WEATHER_PERSIST_KEY_SUN 36
+#define WEATHER_PERSIST_VERSION 6
 #define WEATHER_CACHE_MAX_AGE_S (12 * 3600)
 #define WEATHER_STATUS_LOCATION_PENDING 0x01
 
@@ -37,7 +39,11 @@ typedef struct {
   uint8_t winds[WEATHER_MAX_HOURS];
   uint8_t wind_dirs[WEATHER_MAX_HOURS]; /* degrees / 2 (0–179) */
   uint8_t is_day[WEATHER_MAX_HOURS];
+  int32_t sunrise[WEATHER_MAX_SUN_DAYS];
+  int32_t sunset[WEATHER_MAX_SUN_DAYS];
+  uint8_t sun_count;
   bool has_is_day;
+  bool has_sun_times;
   bool has_wind;
   bool has_wind_dir;
   bool has_feels_temps;
@@ -72,8 +78,11 @@ void weather_request_force(void);
 /* Age/coverage-aware: night-pause skip if covering; else stale if missing
  * coverage; else periodic if due; else noop. Prefer this over force. */
 void weather_request_if_needed(void);
+bool weather_is_night_at(time_t when);
 bool weather_is_night_now(void);
 bool weather_is_night_pause_active(void);
+/* Minute tick: force-fetch on night→day while pause-at-night is enabled. */
+bool weather_on_minute(void);
 bool weather_is_refresh_due(void);
 WeatherFreshness weather_get_freshness(void);
 void weather_mark_error(void);

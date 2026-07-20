@@ -1,0 +1,28 @@
+---
+description: When implementing a plan, pause after each phase for user review and commit
+alwaysApply: true
+---
+
+# Plan implementation — pause after each phase
+
+When implementing a multi-phase plan, unless the user explicitly says otherwise:
+
+1. Complete **only the current phase**, then stop.
+2. Do **not** commit. Wait for the user to review and commit.
+3. Send a brief commit-oriented summary in this shape:
+
+```markdown
+## Phase N complete: <short title>
+
+<one-sentence summary of why / what landed>
+
+<details optional — only if more than one notable change>
+- change one
+- change two (`path` or key detail with `code` / **bold** as needed)
+</details>
+```
+
+Keep the summary very brief. Use a dashed list for commit detail only when needed. Use markdown sparingly for clarity (paths, key names, emphasis).
+
+4. Wait for the user to say **continue** (or equivalent) before starting the next phase.
+5. If they request changes, address those first; do not advance phases until they confirm.

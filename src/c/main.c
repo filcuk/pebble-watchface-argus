@@ -211,6 +211,10 @@ static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
 
   weather_slide_stale_hours();
 
+  if (weather_on_minute()) {
+    s_last_periodic_weather_refresh = now;
+  }
+
   WeatherView weather_view;
   weather_get_view(&weather_view);
   if (weather_view_has_data(&weather_view)) {

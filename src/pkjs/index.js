@@ -888,11 +888,33 @@ function shouldUseFetchCache(latitude, longitude, model, hours, startEpoch) {
 }
 
 function weatherIsNightNow(cache) {
-  var now = new Date();
-  var hour = now.getHours();
+  var nowEpoch = Math.floor(Date.now() / 1000);
+
+  if (cache && cache.dailySunrise && cache.dailySunset) {
+    var offset =
+      typeof cache.utcOffsetSeconds === 'number' ? cache.utcOffsetSeconds : 0;
+    var rises = cache.dailySunrise;
+    var sets = cache.dailySunset;
+    var n = Math.min(rises.length, sets.length);
+    var i;
+    var matched = false;
+    for (i = 0; i < n; i++) {
+      var rise = parseOpenMeteoTime(rises[i], offset);
+      var set = parseOpenMeteoTime(sets[i], offset);
+      if (!(rise > 0 && set > rise)) {
+        continue;
+      }
+      matched = true;
+      if (nowEpoch >= rise && nowEpoch < set) {
+        return false;
+      }
+    }
+    if (matched) {
+      return true;
+    }
+  }
 
   if (cache && cache.isDayBytes && cache.fetchTime && cache.count) {
-    var nowEpoch = Math.floor(now.getTime() / 1000);
     var currentHourStart = hourStartEpoch(nowEpoch);
     var index = Math.floor((currentHourStart - cache.fetchTime) / 3600);
     if (index >= 0 && index < cache.count && cache.isDayBytes[index] === 0) {
@@ -903,6 +925,7 @@ function weatherIsNightNow(cache) {
     }
   }
 
+  var hour = new Date().getHours();
   return hour >= NIGHT_FALLBACK_START_HOUR || hour < NIGHT_FALLBACK_END_HOUR;
 }
 
@@ -920,6 +943,18 @@ function packUint8Array(values, count) {
   var arr = [];
   for (var i = 0; i < count; i++) {
     arr.push(Math.min(255, Math.max(0, Math.round(values[i] || 0))));
+  }
+  return arr;
+}
+
+function packInt32ArrayLE(values, count) {
+  var arr = [];
+  for (var i = 0; i < count; i++) {
+    var v = values[i] | 0;
+    arr.push(v & 0xff);
+    arr.push((v >> 8) & 0xff);
+    arr.push((v >> 16) & 0xff);
+    arr.push((v >> 24) & 0xff);
   }
   return arr;
 }
@@ -968,6 +1003,35 @@ function extractDailySunTimes(json) {
   return {
     sunrise: daily.sunrise.slice(),
     sunset: daily.sunset.slice(),
+  };
+}
+
+function packSunEpochArrays(json) {
+  var sun = extractDailySunTimes(json);
+  if (!sun) {
+    return null;
+  }
+  var utcOffset =
+    typeof json.utc_offset_seconds === 'number' ? json.utc_offset_seconds : 0;
+  var max = 4;
+  var n = Math.min(max, sun.sunrise.length, sun.sunset.length);
+  var rises = [];
+  var sets = [];
+  var i;
+  for (i = 0; i < n; i++) {
+    var rise = parseOpenMeteoTime(sun.sunrise[i], utcOffset);
+    var set = parseOpenMeteoTime(sun.sunset[i], utcOffset);
+    if (rise > 0 && set > rise) {
+      rises.push(rise);
+      sets.push(set);
+    }
+  }
+  if (!rises.length) {
+    return null;
+  }
+  return {
+    sunriseEpochs: packInt32ArrayLE(rises, rises.length),
+    sunsetEpochs: packInt32ArrayLE(sets, sets.length),
   };
 }
 
@@ -1068,6 +1132,8 @@ function packWeatherPayload(json, hours, startEpoch) {
     windMax = 1;
   }
 
+  var sunPacked = packSunEpochArrays(json);
+
   return {
     count: count,
     tempMin: tempMin,
@@ -1103,6 +1169,8 @@ function packWeatherPayload(json, hours, startEpoch) {
         )
       : null,
     isDayBytes: packUint8Array(isDay.slice(startIndex, startIndex + count), count),
+    sunriseEpochs: sunPacked ? sunPacked.sunriseEpochs : null,
+    sunsetEpochs: sunPacked ? sunPacked.sunsetEpochs : null,
     fetchTime: parseOpenMeteoTime(times[startIndex], utcOffset),
   };
 }
@@ -1151,6 +1219,10 @@ function sendWeatherPayload(payload, sendMeta, sendOptions) {
     dict[keys.WeatherWindDirHourly] = payload.windDirBytes;
   }
   dict[keys.WeatherIsDayHourly] = payload.isDayBytes;
+  if (payload.sunriseEpochs && payload.sunsetEpochs) {
+    dict[keys.WeatherSunriseEpochs] = payload.sunriseEpochs;
+    dict[keys.WeatherSunsetEpochs] = payload.sunsetEpochs;
+  }
   if (sendMeta.apiFetchedAt) {
     dict[keys.WeatherApiFetchedAt] = sendMeta.apiFetchedAt;
   }

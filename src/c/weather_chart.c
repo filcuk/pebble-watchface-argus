@@ -547,8 +547,101 @@ static void prv_draw_night_region(GContext *ctx, GRect region) {
   graphics_draw_line(ctx, GPoint(right, top), GPoint(right, bottom));
 }
 
+static int prv_x_for_time(const WeatherData *data, const WeatherView *view, int plot_left, int plot_w, time_t when) {
+  if (!view || view->hour_count == 0) {
+    return plot_left;
+  }
+  if (view->hour_count == 1) {
+    return plot_left;
+  }
+
+  time_t t0 = prv_forecast_time_for_index(data, view, 0);
+  time_t t_last = prv_forecast_time_for_index(data, view, view->hour_count - 1);
+  if (when <= t0) {
+    return plot_left;
+  }
+  if (when >= t_last) {
+    return plot_left + plot_w;
+  }
+
+  for (int i = 0; i < (int)view->hour_count - 1; i++) {
+    time_t a = prv_forecast_time_for_index(data, view, i);
+    time_t b = prv_forecast_time_for_index(data, view, i + 1);
+    if (when >= a && when <= b) {
+      int xa = prv_plot_x(plot_left, plot_w, i, view->hour_count);
+      int xb = prv_plot_x(plot_left, plot_w, i + 1, view->hour_count);
+      if (b <= a) {
+        return xa;
+      }
+      return xa + (int)(((when - a) * (xb - xa)) / (b - a));
+    }
+  }
+
+  return plot_left + plot_w;
+}
+
+static void prv_draw_night_band_times(GContext *ctx, const WeatherData *data, const WeatherView *view, int plot_left,
+                                      int plot_right, int plot_w, int plot_top, int plot_bottom, time_t night_start,
+                                      time_t night_end) {
+  if (!view || view->hour_count == 0 || night_end <= night_start) {
+    return;
+  }
+
+  time_t view_start = prv_forecast_time_for_index(data, view, 0);
+  time_t view_end = prv_forecast_time_for_index(data, view, view->hour_count - 1);
+  if (night_end <= view_start || night_start >= view_end) {
+    return;
+  }
+  if (night_start < view_start) {
+    night_start = view_start;
+  }
+  if (night_end > view_end) {
+    night_end = view_end;
+  }
+  if (night_end <= night_start) {
+    return;
+  }
+
+  int left = prv_x_for_time(data, view, plot_left, plot_w, night_start);
+  int right = prv_x_for_time(data, view, plot_left, plot_w, night_end);
+  if (right <= left) {
+    return;
+  }
+  if (left < plot_left) {
+    left = plot_left;
+  }
+  if (right > plot_right) {
+    right = plot_right;
+  }
+  prv_draw_night_region(ctx, GRect(left, plot_top, right - left, plot_bottom - plot_top));
+}
+
+static void prv_draw_night_regions_from_sun(GContext *ctx, const WeatherData *data, const WeatherView *view,
+                                            int plot_left, int plot_right, int plot_top, int plot_bottom, int plot_w) {
+  time_t view_start = prv_forecast_time_for_index(data, view, 0);
+  time_t view_end = prv_forecast_time_for_index(data, view, view->hour_count - 1);
+
+  if (data->sunrise[0] > (int32_t)view_start) {
+    prv_draw_night_band_times(ctx, data, view, plot_left, plot_right, plot_w, plot_top, plot_bottom, view_start,
+                              (time_t)data->sunrise[0]);
+  }
+
+  for (uint8_t i = 0; i < data->sun_count; i++) {
+    time_t night_start = (time_t)data->sunset[i];
+    time_t night_end =
+        (i + 1 < data->sun_count) ? (time_t)data->sunrise[i + 1] : (view_end + 1);
+    prv_draw_night_band_times(ctx, data, view, plot_left, plot_right, plot_w, plot_top, plot_bottom, night_start,
+                              night_end);
+  }
+}
+
 static void prv_draw_night_regions(GContext *ctx, const WeatherData *data, const WeatherView *view, int plot_left,
                                    int plot_right, int plot_top, int plot_bottom, int plot_w) {
+  if (data->has_sun_times && data->sun_count > 0) {
+    prv_draw_night_regions_from_sun(ctx, data, view, plot_left, plot_right, plot_top, plot_bottom, plot_w);
+    return;
+  }
+
   int run_start = -1;
 
   for (int i = 0; i <= view->hour_count; i++) {

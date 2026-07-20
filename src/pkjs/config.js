@@ -294,7 +294,7 @@ module.exports = [
     type: 'toggle',
     messageKey: 'PauseWeatherAtNight',
     label: 'Pause at night',
-    description: 'Stop weather updates during night hours.',
+    description: 'Stop weather updates between sunset and sunrise.',
     group: 'tabWeather',
     defaultValue: false,
   },
