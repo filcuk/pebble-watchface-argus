@@ -484,6 +484,56 @@ function pauseWeatherAtNightEnabled() {
   return claySettingIsTruthy(getClaySetting('PauseWeatherAtNight', false));
 }
 
+function pauseWeatherModeManual() {
+  return String(getClaySetting('PauseWeatherMode', '0')) === '1';
+}
+
+function normalizePauseWeatherMinutes(value, fallback) {
+  var minutes = parseInt(value, 10);
+  if (isNaN(minutes) || minutes < 0 || minutes >= 24 * 60) {
+    return fallback;
+  }
+  if (minutes % 30 !== 0) {
+    minutes = Math.round(minutes / 30) * 30;
+    if (minutes >= 24 * 60) {
+      minutes = 0;
+    }
+  }
+  return minutes;
+}
+
+function getPauseWeatherStartMin() {
+  return normalizePauseWeatherMinutes(getClaySetting('PauseWeatherStartMin', '1200'), 20 * 60);
+}
+
+function getPauseWeatherEndMin() {
+  return normalizePauseWeatherMinutes(getClaySetting('PauseWeatherEndMin', '360'), 6 * 60);
+}
+
+function weatherInManualPauseWindow() {
+  var startMin = getPauseWeatherStartMin();
+  var endMin = getPauseWeatherEndMin();
+  if (startMin === endMin) {
+    return false;
+  }
+  var now = new Date();
+  var nowMin = now.getHours() * 60 + now.getMinutes();
+  if (startMin < endMin) {
+    return nowMin >= startMin && nowMin < endMin;
+  }
+  return nowMin >= startMin || nowMin < endMin;
+}
+
+function weatherPauseWindowActive(cache) {
+  if (!pauseWeatherAtNightEnabled()) {
+    return false;
+  }
+  if (pauseWeatherModeManual()) {
+    return weatherInManualPauseWindow();
+  }
+  return !!cache && weatherIsNightNow(cache);
+}
+
 function wlog(tag, msg) {
   weatherDebugLog.append(tag, msg);
 }
@@ -762,8 +812,7 @@ function injectAboutStatusForClayConfig() {
       regionCode: String(getClaySetting('HolidayRegion', '') || ''),
       weekStart: String(getClaySetting('WeekStart', '0')),
       now: getHolidayWatchNow() || new Date(),
-      pauseAtNight:
-        pauseWeatherAtNightEnabled() && !!weatherCache && weatherIsNightNow(weatherCache),
+      pauseAtNight: weatherPauseWindowActive(weatherCache),
     })
   );
 }
@@ -1453,14 +1502,17 @@ function getWeather(forEpoch, options) {
 
   if (!options.forceRefresh && pauseWeatherAtNightEnabled()) {
     var nightCache = readWeatherFetchCache();
-    if (nightCache && weatherIsNightNow(nightCache)) {
+    var pausedNow = pauseWeatherModeManual()
+      ? weatherInManualPauseWindow()
+      : nightCache && weatherIsNightNow(nightCache);
+    if (pausedNow) {
       console.log('Weather fetch paused at night');
-      if (nightCache.payload && weatherAlreadySentToWatch(nightCache)) {
+      if (nightCache && nightCache.payload && weatherAlreadySentToWatch(nightCache)) {
         wlog('NIGHT', 'skip same cache');
         return;
       }
       wlog('NIGHT', 'cache→watch');
-      if (nightCache.payload) {
+      if (nightCache && nightCache.payload) {
         sendWeatherPayload(nightCache.payload, buildSendMeta(null, null, nightCache, 0), {
           sentCache: nightCache,
         });

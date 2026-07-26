@@ -417,11 +417,49 @@ bool weather_is_night_now(void) {
   return weather_is_night_at(argus_time_now());
 }
 
+static bool prv_in_manual_pause_window(void) {
+  const ArgusSettings *settings = settings_get();
+  uint16_t start_min = settings->pause_weather_start_min;
+  uint16_t end_min = settings->pause_weather_end_min;
+  if (start_min == end_min) {
+    return false;
+  }
+
+  time_t now = argus_time_now();
+  struct tm *tm = localtime(&now);
+  if (!tm) {
+    return false;
+  }
+
+  uint16_t now_min = (uint16_t)(tm->tm_hour * 60 + tm->tm_min);
+  if (start_min < end_min) {
+    return now_min >= start_min && now_min < end_min;
+  }
+  return now_min >= start_min || now_min < end_min;
+}
+
+/* True when the configured pause schedule says "night" (sun or manual clock). */
+static bool prv_pause_window_active_now(void) {
+  const ArgusSettings *settings = settings_get();
+  if (!settings->pause_weather_at_night) {
+    return false;
+  }
+  if (settings->pause_weather_mode == PAUSE_WEATHER_MODE_MANUAL) {
+    return prv_in_manual_pause_window();
+  }
+  return weather_is_night_now();
+}
+
 static bool prv_should_pause_periodic_refresh(void) {
   const ArgusSettings *settings = settings_get();
   if (!settings->pause_weather_at_night) {
     return false;
   }
+
+  if (settings->pause_weather_mode == PAUSE_WEATHER_MODE_MANUAL) {
+    return prv_in_manual_pause_window();
+  }
+
   if (!weather_cache_is_valid()) {
     return false;
   }
@@ -443,14 +481,14 @@ bool weather_on_minute(void) {
   bool forced = false;
   const ArgusSettings *settings = settings_get();
   bool pause_on = settings->pause_weather_at_night;
-  bool paused = prv_should_pause_periodic_refresh();
+  bool in_window = prv_pause_window_active_now();
 
-  if (s_was_night_paused && pause_on && !weather_is_night_now()) {
+  if (s_was_night_paused && pause_on && !in_window) {
     weather_request_force();
     forced = true;
   }
 
-  s_was_night_paused = paused;
+  s_was_night_paused = in_window;
   return forced;
 }
 
@@ -927,7 +965,7 @@ void weather_init(void) {
     }
   }
 
-  s_was_night_paused = prv_should_pause_periodic_refresh();
+  s_was_night_paused = prv_pause_window_active_now();
 }
 
 WeatherData *weather_get(void) {

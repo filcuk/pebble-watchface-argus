@@ -8,6 +8,7 @@
     'ForecastHours',
     'TemperatureUnit',
     'WindUnit',
+    'PauseWeatherMode',
   ];
   var LIST_RADIO_KEYS = [
     'HeaderDisplay',
@@ -20,7 +21,11 @@
     'HolidayRegion',
     'ReleaseNotification',
   ];
-  var SELECT_DROPDOWN_KEYS = ['HolidayCountry'];
+  var SELECT_DROPDOWN_KEYS = [
+    'HolidayCountry',
+    'PauseWeatherStartMin',
+    'PauseWeatherEndMin',
+  ];
   var SUBHEADING_KEYS = [];
   var TITLE_INLINE_SEGMENT_KEYS = [
     'HourFormat',
@@ -28,6 +33,7 @@
     'LocationMode',
     'TemperatureUnit',
     'WindUnit',
+    'PauseWeatherMode',
   ];
   var INLINE_CONTROL_KEYS = SEGMENT_KEYS.filter(function (key) {
     return TITLE_INLINE_SEGMENT_KEYS.indexOf(key) === -1;
@@ -93,6 +99,8 @@
       'ManualLocation',
       'TemperatureDisplay',
       'PauseWeatherAtNight',
+      'PauseWeatherStartMin',
+      'PauseWeatherEndMin',
       'QuietModeDisplay',
       'ShowHolidays',
       'WeatherForceUpdate',
