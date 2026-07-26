@@ -294,9 +294,43 @@ module.exports = [
     type: 'toggle',
     messageKey: 'PauseWeatherAtNight',
     label: 'Pause at night',
-    description: 'Stop weather updates between sunset and sunrise.',
+    description:
+      'Stop weather updates at night. Automatic uses sunset to sunrise; Manual uses a fixed schedule.',
     group: 'tabWeather',
     defaultValue: false,
+  },
+  {
+    type: 'radiogroup',
+    messageKey: 'PauseWeatherMode',
+    label: 'Night pause',
+    group: 'tabWeather',
+    defaultValue: '0',
+    options: [
+      { label: 'Automatic', value: '0' },
+      { label: 'Manual', value: '1' },
+    ],
+  },
+  {
+    type: 'input',
+    messageKey: 'PauseWeatherStartMin',
+    label: 'Pause from',
+    description: 'Local time when weather updates stop.',
+    group: 'tabWeather',
+    defaultValue: '1200',
+    attributes: {
+      placeholder: 'Select time',
+    },
+  },
+  {
+    type: 'input',
+    messageKey: 'PauseWeatherEndMin',
+    label: 'Until',
+    description: 'Local time when weather updates resume.',
+    group: 'tabWeather',
+    defaultValue: '360',
+    attributes: {
+      placeholder: 'Select time',
+    },
   },
   {
     type: 'radiogroup',

@@ -63,6 +63,37 @@
     }
   }
 
+  function setItemVisibility(item, visible) {
+    if (!item || !item.$element || !item.$element[0]) {
+      return;
+    }
+    if (visible) {
+      item.$element[0].classList.remove('hide');
+      item.enable();
+    } else {
+      item.$element[0].classList.add('hide');
+      item.disable();
+    }
+  }
+
+  function syncPauseWeatherVisibility() {
+    var pauseToggle = clayConfig.getItemByMessageKey('PauseWeatherAtNight');
+    var pauseMode = clayConfig.getItemByMessageKey('PauseWeatherMode');
+    var startMin = clayConfig.getItemByMessageKey('PauseWeatherStartMin');
+    var endMin = clayConfig.getItemByMessageKey('PauseWeatherEndMin');
+
+    if (!pauseToggle) {
+      return;
+    }
+
+    var pauseOn = !!pauseToggle.get();
+    var isManual = pauseMode && String(normalizeClayValue(pauseMode.get())) === '1';
+
+    setItemVisibility(pauseMode, pauseOn);
+    setItemVisibility(startMin, pauseOn && isManual);
+    setItemVisibility(endMin, pauseOn && isManual);
+  }
+
   function syncHeaderDependentVisibility() {
     var headerDisplay = clayConfig.getItemByMessageKey('HeaderDisplay');
     var fullDateFormat = clayConfig.getItemByMessageKey('FullDateFormat');
@@ -214,9 +245,39 @@
     return holidayCountryOptions;
   }
 
+  function getPauseWeatherTimeOptions() {
+    var options = [];
+    var minutes;
+    for (minutes = 0; minutes < 24 * 60; minutes += 30) {
+      var hour = Math.floor(minutes / 60);
+      var min = minutes % 60;
+      var label =
+        (hour < 10 ? '0' : '') + hour + ':' + (min < 10 ? '0' : '') + min;
+      options.push({ label: label, value: String(minutes) });
+    }
+    return options;
+  }
+
+  function normalizePauseWeatherTimeValue(value) {
+    var minutes = parseInt(normalizeClayValue(value), 10);
+    if (isNaN(minutes) || minutes < 0 || minutes >= 24 * 60) {
+      return '';
+    }
+    if (minutes % 30 !== 0) {
+      minutes = Math.round(minutes / 30) * 30;
+      if (minutes >= 24 * 60) {
+        minutes = 0;
+      }
+    }
+    return String(minutes);
+  }
+
   function getSelectOptionsForKey(key, item) {
     if (key === 'HolidayCountry') {
       return getHolidayCountrySelectOptions();
+    }
+    if (key === 'PauseWeatherStartMin' || key === 'PauseWeatherEndMin') {
+      return getPauseWeatherTimeOptions();
     }
     return item.config.options || [];
   }
@@ -228,9 +289,7 @@
     }
 
     var root = item.$element[0];
-    if (key === 'HolidayCountry') {
-      root.classList.add('argus-holiday-dropdown');
-    }
+    root.classList.add('argus-holiday-dropdown');
 
     var radioGroup = root.querySelector('.radio-group');
     if (radioGroup) {
@@ -259,7 +318,18 @@
       });
     }
 
-    populateSelectOptions(select, getSelectOptionsForKey(key, item), normalizeClayValue(item.get()));
+    var selectedValue = normalizeClayValue(item.get());
+    if (key === 'PauseWeatherStartMin' || key === 'PauseWeatherEndMin') {
+      selectedValue = normalizePauseWeatherTimeValue(selectedValue);
+      if (!selectedValue) {
+        selectedValue = key === 'PauseWeatherStartMin' ? '1200' : '360';
+      }
+      if (String(normalizeClayValue(item.get())) !== selectedValue) {
+        item.set(selectedValue);
+      }
+    }
+
+    populateSelectOptions(select, getSelectOptionsForKey(key, item), selectedValue);
     return select;
   }
 

@@ -32,6 +32,9 @@ def main() -> None:
     print("=== clay-settings (weather-related) ===")
     for k in [
         "PauseWeatherAtNight",
+        "PauseWeatherMode",
+        "PauseWeatherStartMin",
+        "PauseWeatherEndMin",
         "WeatherUpdateInterval",
         "LocationMode",
         "ManualLocation",

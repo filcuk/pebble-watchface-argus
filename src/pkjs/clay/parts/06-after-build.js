@@ -44,6 +44,16 @@
       locationMode.on('change', syncManualLocationInput);
     }
 
+    syncPauseWeatherVisibility();
+    var pauseToggle = clayConfig.getItemByMessageKey('PauseWeatherAtNight');
+    var pauseMode = clayConfig.getItemByMessageKey('PauseWeatherMode');
+    if (pauseToggle) {
+      pauseToggle.on('change', syncPauseWeatherVisibility);
+    }
+    if (pauseMode) {
+      pauseMode.on('change', syncPauseWeatherVisibility);
+    }
+
     syncHeaderDependentVisibility();
     var headerDisplay = clayConfig.getItemByMessageKey('HeaderDisplay');
     if (headerDisplay) {

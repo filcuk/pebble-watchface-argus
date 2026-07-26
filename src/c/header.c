@@ -272,11 +272,13 @@ static void prv_layout_header_icons(Header *header, int header_width) {
   bool show_quiet = prv_quiet_should_show(header);
   bool show_weather = header->weather_status_kind != WEATHER_STATUS_ICON_NONE;
   int x = HEADER_ICONS_LEFT;
+  int icons_right = 0;
 
   if (show_bt) {
     layer_set_hidden(header->bt_layer, false);
     layer_set_frame(header->bt_layer, GRect(x, HEADER_ICON_Y, BT_ICON_WIDTH, HEADER_ICON_H));
     x += BT_ICON_WIDTH + HEADER_ICON_GAP;
+    icons_right = x - HEADER_ICON_GAP;
   } else {
     layer_set_hidden(header->bt_layer, true);
   }
@@ -285,6 +287,7 @@ static void prv_layout_header_icons(Header *header, int header_width) {
     layer_set_hidden(header->quiet_layer, false);
     layer_set_frame(header->quiet_layer, GRect(x, HEADER_ICON_Y, QUIET_MODE_ICON_WIDTH, HEADER_ICON_H));
     x += QUIET_MODE_ICON_WIDTH + HEADER_ICON_GAP;
+    icons_right = x - HEADER_ICON_GAP;
   } else {
     layer_set_hidden(header->quiet_layer, true);
   }
@@ -294,13 +297,36 @@ static void prv_layout_header_icons(Header *header, int header_width) {
     layer_set_frame(header->weather_layer,
                     GRect(x, HEADER_ICON_Y, WEATHER_STATUS_ICON_WIDTH, HEADER_ICON_H));
     x += WEATHER_STATUS_ICON_WIDTH + HEADER_ICON_GAP;
+    icons_right = x - HEADER_ICON_GAP;
   } else {
     layer_set_hidden(header->weather_layer, true);
   }
 
-  int status_left = (show_bt || show_quiet || show_weather) ? x + 2 : HEADER_STATUS_MIN_LEFT;
+  // Frame stays clear of icons (Pebble sibling redraw), but content centers in the
+  // symmetric band and only shifts right when it would collide with icons.
+  int status_left = HEADER_STATUS_MIN_LEFT;
+  if (icons_right > 0) {
+    int icons_clear = icons_right + HEADER_ICON_GAP;
+    if (icons_clear > status_left) {
+      status_left = icons_clear;
+    }
+  }
   layer_set_frame(header->status_layer,
                   GRect(status_left, 0, header_width - status_left - HEADER_BATTERY_WIDTH, HEADER_HEIGHT));
+  layer_mark_dirty(header->status_layer);
+}
+
+static int prv_status_content_x(Header *header, GRect bounds, int total_w) {
+  int header_width = layer_get_bounds(header->container).size.w;
+  int band_left = HEADER_STATUS_MIN_LEFT;
+  int band_width = header_width - HEADER_STATUS_MIN_LEFT - HEADER_BATTERY_WIDTH;
+  int ideal_global_x = band_left + (band_width - total_w) / 2;
+  int status_left = layer_get_frame(header->status_layer).origin.x;
+  int x = ideal_global_x - status_left;
+  if (x < bounds.origin.x) {
+    x = bounds.origin.x;
+  }
+  return x;
 }
 
 static void prv_sync_bt_visibility(Header *header) {
@@ -322,7 +348,7 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
     case HEADER_DISPLAY_STEPS: {
       GSize count_size = prv_text_size(header->status_text);
       int total_w = STEPS_ICON_WIDTH + STATUS_ICON_GAP + count_size.w;
-      int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      int x = prv_status_content_x(header, bounds, total_w);
       int icon_y = center_y - STEPS_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       steps_icon_draw(ctx, x, icon_y);
@@ -334,7 +360,7 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       GSize current_size = prv_text_size(header->status_temp_current_text);
       GSize range_size = prv_text_size_font(header->status_temp_range_text, prv_status_font_regular());
       int total_w = TEMP_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + range_size.w;
-      int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      int x = prv_status_content_x(header, bounds, total_w);
       int icon_y = center_y - TEMP_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       temp_icon_draw(ctx, x, icon_y);
@@ -348,7 +374,7 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       GSize current_size = prv_text_size(header->status_wind_current_text);
       GSize range_size = prv_text_size_font(header->status_wind_range_text, prv_status_font_regular());
       int total_w = WIND_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + range_size.w;
-      int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      int x = prv_status_content_x(header, bounds, total_w);
       int icon_y = center_y - WIND_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       wind_icon_draw(ctx, x, icon_y);
@@ -362,7 +388,7 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
       GSize current_size = prv_text_size(header->status_hr_current_text);
       GSize max_size = prv_text_size_font(header->status_hr_max_text, prv_status_font_regular());
       int total_w = HEART_ICON_WIDTH + STATUS_ICON_GAP + current_size.w + STATUS_ICON_GAP + max_size.w;
-      int x = bounds.origin.x + (bounds.size.w - total_w) / 2;
+      int x = prv_status_content_x(header, bounds, total_w);
       int icon_y = center_y - HEART_ICON_HEIGHT / 2 + STATUS_ICON_Y_OFFSET;
 
       heart_icon_draw(ctx, x, icon_y);
@@ -375,7 +401,7 @@ static void prv_status_layer_update_proc(Layer *layer, GContext *ctx) {
     case HEADER_DISPLAY_FULL_DATE:
     default: {
       GSize text_size = prv_text_size(header->status_text);
-      int x = bounds.origin.x + (bounds.size.w - text_size.w) / 2;
+      int x = prv_status_content_x(header, bounds, text_size.w);
       prv_draw_text(ctx, header->status_text, x, bounds);
       break;
     }

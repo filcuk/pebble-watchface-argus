@@ -283,7 +283,10 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   bool weather_ui = dict_find(iter, MESSAGE_KEY_WeatherTempHourly) || dict_find(iter, MESSAGE_KEY_DemoWeather) ||
                     dict_find(iter, MESSAGE_KEY_DebugMode) || dict_find(iter, MESSAGE_KEY_ForecastHours) ||
                     dict_find(iter, MESSAGE_KEY_TemperatureUnit) || dict_find(iter, MESSAGE_KEY_TemperatureDisplay) ||
-                    dict_find(iter, MESSAGE_KEY_PauseWeatherAtNight);
+                    dict_find(iter, MESSAGE_KEY_PauseWeatherAtNight) ||
+                    dict_find(iter, MESSAGE_KEY_PauseWeatherMode) ||
+                    dict_find(iter, MESSAGE_KEY_PauseWeatherStartMin) ||
+                    dict_find(iter, MESSAGE_KEY_PauseWeatherEndMin);
   bool time_settings = dict_find(iter, MESSAGE_KEY_HourFormat) || dict_find(iter, MESSAGE_KEY_ClockFont);
 
   settings_apply_from_message(iter);

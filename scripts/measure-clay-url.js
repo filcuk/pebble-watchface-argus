@@ -32,15 +32,25 @@ Module._resolveFilename = function (request, parent, isMain) {
   return originalResolveFilename.call(this, request, parent, isMain);
 };
 
-function parseMaxArg() {
-  var max = 180000;
+// Estimated budgets for the Clay data: URI — not verified on device WebViews.
+var DEFAULT_WARN = 200000;
+var DEFAULT_MAX = 400000;
+
+function parseSizeArgs() {
+  var warn = DEFAULT_WARN;
+  var max = DEFAULT_MAX;
   process.argv.slice(2).forEach(function (arg) {
-    var match = arg.match(/^--max(?:=(\d+))?$/);
-    if (match) {
-      max = match[1] ? parseInt(match[1], 10) : max;
+    var warnMatch = arg.match(/^--warn(?:=(\d+))?$/);
+    if (warnMatch) {
+      warn = warnMatch[1] ? parseInt(warnMatch[1], 10) : warn;
+      return;
+    }
+    var maxMatch = arg.match(/^--max(?:=(\d+))?$/);
+    if (maxMatch) {
+      max = maxMatch[1] ? parseInt(maxMatch[1], 10) : max;
     }
   });
-  return max;
+  return { warn: warn, max: max };
 }
 
 var Clay = require('@rebble/clay/dist/js/index.js');
@@ -89,11 +99,19 @@ try {
   console.log('total url length:', url.length);
   console.log('customFn contribution:', url.length - baseUrlLength);
 
-  var maxLength = parseMaxArg();
-  console.log('max allowed:', maxLength);
-  if (url.length > maxLength) {
-    console.error('Clay URL exceeds limit by', url.length - maxLength, 'bytes');
+  var limits = parseSizeArgs();
+  console.log('warn threshold:', limits.warn, '(estimated, not tested)');
+  console.log('max allowed:', limits.max, '(estimated, not tested)');
+  if (url.length > limits.max) {
+    console.error('Clay URL exceeds limit by', url.length - limits.max, 'bytes');
     process.exit(1);
+  }
+  if (url.length > limits.warn) {
+    console.warn(
+      'Clay URL exceeds warning threshold by',
+      url.length - limits.warn,
+      'bytes (estimated budget; not tested on device)'
+    );
   }
 } catch (err) {
   console.error('generateUrl failed:', err && err.stack ? err.stack : err);

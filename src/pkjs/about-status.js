@@ -330,77 +330,63 @@ function locationPending(cache, gps, options) {
   );
 }
 
-/* Cloud silhouette from weather_status_icon.c (14×14). '.' empty, 'w' white, 'f' fill. */
-var WEATHER_STATUS_CLOUD = [
-  '..............',
-  '..............',
-  '..............',
-  '......wwww....',
-  '.....wffffw...',
-  '..wwwfffffww..',
-  '.wfffwffffwfw.',
-  '.wfffffffwffw.',
-  '.wffffffffffw.',
-  '.wffffffffffw.',
-  '..wwwwwwwwww..',
-  '..............',
-  '..............',
-  '..............',
-];
-
-/* Pebble GColorOrange / GColorRed / GColorPurple. */
-var WEATHER_STATUS_FILL = {
-  orange: '#ffaa00',
-  red: '#ff0000',
-  purple: '#aa00ff',
+/* Inlined from custom icons weather/v2 (cloud-*.svg). Clay is a data URI — no external assets. */
+var WEATHER_STATUS_ICONS = {
+  blue:
+    '<svg class="argus-about-status-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true" focusable="false">' +
+    '<g fill="#FFFFFF">' +
+    '<rect x="6" y="3" width="4" height="1"/><rect x="5" y="4" width="1" height="1"/><rect x="10" y="4" width="1" height="3"/>' +
+    '<rect x="2" y="5" width="3" height="1"/><rect x="11" y="5" width="1" height="1"/><rect x="1" y="6" width="1" height="4"/>' +
+    '<rect x="5" y="6" width="1" height="1"/><rect x="12" y="6" width="1" height="4"/><rect x="9" y="7" width="1" height="1"/>' +
+    '<rect x="2" y="10" width="10" height="1"/>' +
+    '</g>' +
+    '<g fill="#6F83D9">' +
+    '<rect x="6" y="4" width="4" height="1"/><rect x="5" y="5" width="1" height="1"/><rect x="2" y="6" width="3" height="1"/>' +
+    '<rect x="6" y="6" width="1" height="1"/><rect x="11" y="6" width="1" height="1"/><rect x="2" y="7" width="1" height="3"/>' +
+    '<rect x="5" y="7" width="1" height="1"/><rect x="10" y="7" width="1" height="1"/><rect x="9" y="8" width="1" height="1"/>' +
+    '</g>' +
+    '<g fill="#2049FF">' +
+    '<rect x="6" y="5" width="4" height="1"/><rect x="7" y="6" width="3" height="1"/><rect x="3" y="7" width="2" height="3"/>' +
+    '<rect x="6" y="7" width="3" height="3"/><rect x="11" y="7" width="1" height="3"/><rect x="5" y="8" width="1" height="2"/>' +
+    '<rect x="10" y="8" width="1" height="2"/><rect x="9" y="9" width="1" height="1"/>' +
+    '</g></svg>',
+  yellow:
+    '<svg class="argus-about-status-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true" focusable="false">' +
+    '<g fill="#FFFFFF">' +
+    '<rect x="6" y="3" width="4" height="1"/><rect x="5" y="4" width="1" height="1"/><rect x="10" y="4" width="1" height="3"/>' +
+    '<rect x="2" y="5" width="3" height="1"/><rect x="11" y="5" width="1" height="1"/><rect x="1" y="6" width="1" height="4"/>' +
+    '<rect x="5" y="6" width="1" height="1"/><rect x="12" y="6" width="1" height="4"/><rect x="9" y="7" width="1" height="1"/>' +
+    '<rect x="2" y="10" width="10" height="1"/>' +
+    '</g>' +
+    '<g fill="#FFCA4F">' +
+    '<rect x="6" y="4" width="4" height="1"/><rect x="5" y="5" width="1" height="1"/><rect x="2" y="6" width="3" height="1"/>' +
+    '<rect x="6" y="6" width="1" height="1"/><rect x="11" y="6" width="1" height="1"/><rect x="2" y="7" width="1" height="3"/>' +
+    '<rect x="5" y="7" width="1" height="1"/><rect x="10" y="7" width="1" height="1"/><rect x="9" y="8" width="1" height="1"/>' +
+    '</g>' +
+    '<g fill="#FFB300">' +
+    '<rect x="6" y="5" width="4" height="1"/><rect x="7" y="6" width="3" height="1"/><rect x="3" y="7" width="2" height="3"/>' +
+    '<rect x="6" y="7" width="3" height="3"/><rect x="11" y="7" width="1" height="3"/><rect x="5" y="8" width="1" height="2"/>' +
+    '<rect x="10" y="8" width="1" height="2"/><rect x="9" y="9" width="1" height="1"/>' +
+    '</g></svg>',
+  red:
+    '<svg class="argus-about-status-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true" focusable="false">' +
+    '<g fill="#FFFFFF">' +
+    '<rect x="6" y="3" width="4" height="1"/><rect x="5" y="4" width="1" height="1"/><rect x="10" y="4" width="1" height="3"/>' +
+    '<rect x="2" y="5" width="3" height="1"/><rect x="11" y="5" width="1" height="1"/><rect x="1" y="6" width="1" height="4"/>' +
+    '<rect x="5" y="6" width="1" height="1"/><rect x="12" y="6" width="1" height="4"/><rect x="9" y="7" width="1" height="1"/>' +
+    '<rect x="2" y="10" width="10" height="1"/>' +
+    '</g>' +
+    '<g fill="#FF7676">' +
+    '<rect x="6" y="4" width="4" height="1"/><rect x="5" y="5" width="1" height="1"/><rect x="2" y="6" width="3" height="1"/>' +
+    '<rect x="6" y="6" width="1" height="1"/><rect x="11" y="6" width="1" height="1"/><rect x="2" y="7" width="1" height="3"/>' +
+    '<rect x="5" y="7" width="1" height="1"/><rect x="10" y="7" width="1" height="1"/><rect x="9" y="8" width="1" height="1"/>' +
+    '</g>' +
+    '<g fill="#FF0000">' +
+    '<rect x="6" y="5" width="4" height="1"/><rect x="7" y="6" width="3" height="1"/><rect x="3" y="7" width="2" height="3"/>' +
+    '<rect x="6" y="7" width="3" height="3"/><rect x="11" y="7" width="1" height="3"/><rect x="5" y="8" width="1" height="2"/>' +
+    '<rect x="10" y="8" width="1" height="2"/><rect x="9" y="9" width="1" height="1"/>' +
+    '</g></svg>',
 };
-
-function weatherStatusIconSvg(fillHex) {
-  var parts = [];
-  var y;
-  var x;
-  var ch;
-  var runCh;
-  var runStart;
-  var runLen;
-  var color;
-
-  for (y = 0; y < WEATHER_STATUS_CLOUD.length; y += 1) {
-    runCh = '';
-    runStart = 0;
-    runLen = 0;
-    for (x = 0; x <= 14; x += 1) {
-      ch = x < 14 ? WEATHER_STATUS_CLOUD[y].charAt(x) : '.';
-      if (ch === runCh && ch !== '.') {
-        runLen += 1;
-        continue;
-      }
-      if (runLen > 0) {
-        color = runCh === 'w' ? '#ffffff' : fillHex;
-        parts.push(
-          '<rect x="' +
-            runStart +
-            '" y="' +
-            y +
-            '" width="' +
-            runLen +
-            '" height="1" fill="' +
-            color +
-            '"></rect>'
-        );
-      }
-      runCh = ch;
-      runStart = x;
-      runLen = ch === '.' ? 0 : 1;
-    }
-  }
-
-  return (
-    '<svg class="argus-about-status-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false">' +
-    parts.join('') +
-    '</svg>'
-  );
-}
 
 function weatherSectionHtml(options) {
   var cache = readJson(WEATHER_FETCH_CACHE_KEY);
@@ -466,13 +452,13 @@ function weatherSectionHtml(options) {
   lines.push(
     '<div class="argus-setting-subheading">Weather status</div>' +
       '<p class="argus-about-line">' +
-      weatherStatusIconSvg(WEATHER_STATUS_FILL.purple) +
+      WEATHER_STATUS_ICONS.blue +
       ' Updates paused</p>' +
       '<p class="argus-about-line">' +
-      weatherStatusIconSvg(WEATHER_STATUS_FILL.orange) +
+      WEATHER_STATUS_ICONS.yellow +
       ' Older than set interval</p>' +
       '<p class="argus-about-line">' +
-      weatherStatusIconSvg(WEATHER_STATUS_FILL.red) +
+      WEATHER_STATUS_ICONS.red +
       ' Pending or age &gt; 3× interval</p>'
   );
 

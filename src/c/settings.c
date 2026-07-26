@@ -167,6 +167,31 @@ typedef struct {
   bool quiet_mode_display;
 } ArgusSettingsV9;
 
+typedef struct {
+  uint8_t version;
+  HourFormat hour_format;
+  ClockFont clock_font;
+  WeekStart week_start;
+  WeekNumberMode week_number_mode;
+  BluetoothDisplay bluetooth_display;
+  LocationMode location_mode;
+  HeaderDisplayMode header_display_mode;
+  FullDateFormat full_date_format;
+  char manual_location[48];
+  uint8_t forecast_hours;
+  bool temperature_fahrenheit;
+  TemperatureDisplay temperature_display;
+  bool show_event_indicators;
+  bool debug_mode;
+  bool demo_weather;
+  bool demo_biometrics;
+  BiometricUpdateMode biometric_update_mode;
+  bool pause_weather_at_night;
+  uint8_t weather_update_interval_min;
+  bool quiet_mode_display;
+  bool wind_mph;
+} ArgusSettingsV10;
+
 static void settings_set_defaults(void) {
   s_settings.version = SETTINGS_PERSIST_VERSION;
   s_settings.hour_format = HOUR_FORMAT_SYSTEM;
@@ -190,12 +215,19 @@ static void settings_set_defaults(void) {
   s_settings.weather_update_interval_min = WEATHER_UPDATE_INTERVAL_60_MIN;
   s_settings.quiet_mode_display = true;
   s_settings.wind_mph = false;
+  s_settings.pause_weather_mode = PAUSE_WEATHER_MODE_AUTOMATIC;
+  s_settings.pause_weather_start_min = 20 * 60;
+  s_settings.pause_weather_end_min = 6 * 60;
 }
 
 static bool settings_is_valid_weather_update_interval(uint8_t minutes) {
   return minutes == WEATHER_UPDATE_INTERVAL_5_MIN || minutes == WEATHER_UPDATE_INTERVAL_15_MIN ||
          minutes == WEATHER_UPDATE_INTERVAL_30_MIN || minutes == WEATHER_UPDATE_INTERVAL_60_MIN ||
          minutes == WEATHER_UPDATE_INTERVAL_120_MIN || minutes == WEATHER_UPDATE_INTERVAL_180_MIN;
+}
+
+static bool settings_is_valid_pause_weather_minutes(uint16_t minutes) {
+  return minutes < (24 * 60) && (minutes % 30) == 0;
 }
 
 static void settings_validate(void) {
@@ -222,6 +254,15 @@ static void settings_validate(void) {
   }
   if (!settings_is_valid_weather_update_interval(s_settings.weather_update_interval_min)) {
     s_settings.weather_update_interval_min = WEATHER_UPDATE_INTERVAL_60_MIN;
+  }
+  if (s_settings.pause_weather_mode > PAUSE_WEATHER_MODE_MANUAL) {
+    s_settings.pause_weather_mode = PAUSE_WEATHER_MODE_AUTOMATIC;
+  }
+  if (!settings_is_valid_pause_weather_minutes(s_settings.pause_weather_start_min)) {
+    s_settings.pause_weather_start_min = 20 * 60;
+  }
+  if (!settings_is_valid_pause_weather_minutes(s_settings.pause_weather_end_min)) {
+    s_settings.pause_weather_end_min = 6 * 60;
   }
 }
 
@@ -404,6 +445,33 @@ static void settings_migrate_from_v9(const ArgusSettingsV9 *legacy) {
   s_settings.version = SETTINGS_PERSIST_VERSION;
 }
 
+static void settings_migrate_from_v10(const ArgusSettingsV10 *legacy) {
+  settings_set_defaults();
+  s_settings.hour_format = legacy->hour_format;
+  s_settings.clock_font = legacy->clock_font;
+  s_settings.week_start = legacy->week_start;
+  s_settings.week_number_mode = legacy->week_number_mode;
+  s_settings.bluetooth_display = legacy->bluetooth_display;
+  s_settings.location_mode = legacy->location_mode;
+  s_settings.header_display_mode = legacy->header_display_mode;
+  s_settings.full_date_format = legacy->full_date_format;
+  strncpy(s_settings.manual_location, legacy->manual_location, sizeof(s_settings.manual_location) - 1);
+  s_settings.manual_location[sizeof(s_settings.manual_location) - 1] = '\0';
+  s_settings.forecast_hours = legacy->forecast_hours;
+  s_settings.temperature_fahrenheit = legacy->temperature_fahrenheit;
+  s_settings.temperature_display = legacy->temperature_display;
+  s_settings.show_event_indicators = legacy->show_event_indicators;
+  s_settings.debug_mode = legacy->debug_mode;
+  s_settings.demo_weather = legacy->demo_weather;
+  s_settings.demo_biometrics = legacy->demo_biometrics;
+  s_settings.biometric_update_mode = legacy->biometric_update_mode;
+  s_settings.pause_weather_at_night = legacy->pause_weather_at_night;
+  s_settings.weather_update_interval_min = legacy->weather_update_interval_min;
+  s_settings.quiet_mode_display = legacy->quiet_mode_display;
+  s_settings.wind_mph = legacy->wind_mph;
+  s_settings.version = SETTINGS_PERSIST_VERSION;
+}
+
 void settings_init(void) {
   settings_set_defaults();
   if (!persist_exists(SETTINGS_PERSIST_KEY)) {
@@ -513,6 +581,18 @@ void settings_init(void) {
     if (legacy.version == 9) {
       APP_LOG(APP_LOG_LEVEL_INFO, "Migrating settings from version 9");
       settings_migrate_from_v9(&legacy);
+      settings_validate();
+      settings_save();
+      return;
+    }
+  }
+
+  if (persist_size == sizeof(ArgusSettingsV10)) {
+    ArgusSettingsV10 legacy;
+    persist_read_data(SETTINGS_PERSIST_KEY, &legacy, sizeof(legacy));
+    if (legacy.version == 10) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Migrating settings from version 10");
+      settings_migrate_from_v10(&legacy);
       settings_validate();
       settings_save();
       return;
@@ -701,6 +781,33 @@ void settings_apply_from_message(DictionaryIterator *iter) {
   if (t) {
     s_settings.pause_weather_at_night = settings_tuple_to_int32(t) != 0;
     changed = true;
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_PauseWeatherMode);
+  if (t) {
+    int32_t mode = settings_tuple_to_int32(t);
+    if (mode == PAUSE_WEATHER_MODE_AUTOMATIC || mode == PAUSE_WEATHER_MODE_MANUAL) {
+      s_settings.pause_weather_mode = (PauseWeatherMode)mode;
+      changed = true;
+    }
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_PauseWeatherStartMin);
+  if (t) {
+    uint16_t minutes = (uint16_t)settings_tuple_to_int32(t);
+    if (settings_is_valid_pause_weather_minutes(minutes)) {
+      s_settings.pause_weather_start_min = minutes;
+      changed = true;
+    }
+  }
+
+  t = dict_find(iter, MESSAGE_KEY_PauseWeatherEndMin);
+  if (t) {
+    uint16_t minutes = (uint16_t)settings_tuple_to_int32(t);
+    if (settings_is_valid_pause_weather_minutes(minutes)) {
+      s_settings.pause_weather_end_min = minutes;
+      changed = true;
+    }
   }
 
   t = dict_find(iter, MESSAGE_KEY_WeatherUpdateInterval);

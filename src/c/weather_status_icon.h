@@ -9,9 +9,9 @@
 
 typedef enum {
   WEATHER_STATUS_ICON_NONE = 0,
-  WEATHER_STATUS_ICON_ORANGE = 1,
+  WEATHER_STATUS_ICON_YELLOW = 1,
   WEATHER_STATUS_ICON_RED = 2,
-  WEATHER_STATUS_ICON_PURPLE = 3,
+  WEATHER_STATUS_ICON_BLUE = 3,
 } WeatherStatusIconKind;
 
 WeatherStatusIconKind weather_status_icon_kind(void);

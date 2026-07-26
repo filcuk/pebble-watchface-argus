@@ -39,7 +39,7 @@ Do **not** reintroduce custom Clay components under `clay-components/` unless yo
 
 The entire settings page is one `data:` URI passed to `Pebble.openURL()`. Size matters.
 
-- Measure: `npm run measure-clay` (uses `scripts/measure-clay-url.js`, fails above **180 KB** by default)
+- Measure: `npm run measure-clay` (uses `scripts/measure-clay-url.js`; warns above **200 KB**, fails above **400 KB** — estimated budgets, not tested on device)
 - Regenerate: `pebble build` runs `scripts/build-custom-clay.js` via `wscript` (or `npm run build:clay` alone)
 - As of the modular refactor: total ~**158 KB** (customFn ~**44 KB**, config JSON ~**13 KB**, Clay base ~**114 KB**)
 - Keep static prose/HTML in `config.js`; keep logic in `clay/parts/`; CSS in `clay/theme.css`
@@ -105,9 +105,10 @@ Inject theme CSS **last** in `AFTER_BUILD` so it wins the cascade. Remove any ex
 
 | UI pattern | Clay type | Keys / notes |
 |------------|-----------|--------------|
-| Segment pills | `radiogroup` + `.argus-segment-radiogroup` | `HourFormat`, `WeekStart`, `BluetoothDisplay`, `LocationMode`, `ForecastHours`, `TemperatureUnit`, `WeekNumberMode` (label: Calendar; ISO/US) |
+| Segment pills | `radiogroup` + `.argus-segment-radiogroup` | `HourFormat`, `WeekStart`, `BluetoothDisplay`, `LocationMode`, `ForecastHours`, `TemperatureUnit`, `WeekNumberMode` (label: Calendar; ISO/US), `PauseWeatherMode` (Automatic/Manual; visible when Pause at night is on) |
 | List radiogroup | `radiogroup` + `.argus-list-radiogroup` | `HeaderDisplay`, `ClockFont`, `RealtimeSteps`, `WeatherProvider`, `GpsMaxAge`, `WeatherUpdateInterval`, `HolidayRegion` (hidden when country has no subdivisions) |
 | Holiday country dropdown | `input` in config + native `<select>` in `clay/parts/` | `HolidayCountry`; country list fetched from Nager.Date when settings open (cached in phone `localStorage`); region names from hidden `text` item `argus-holiday-subdivisions-data` (~2 KB), with API fallback for other countries |
+| Night pause time dropdowns | `input` in config + native `<select>` in `clay/parts/` | `PauseWeatherStartMin` / `PauseWeatherEndMin` (minutes from midnight, 30-min steps; visible when Pause at night + Manual) |
 | Weather help tables | `text` items in config (`argus-precipitation-info`, `argus-wind-info`) | Static HTML in `defaultValue`; `applyRowStyles()` adds layout classes only |
 | Boolean toggle | `toggle` + `.argus-inline-control` | `TemperatureDisplay`, `PauseWeatherAtNight`, debug toggles |
 | Text input | `input` | `ManualLocation` (hidden when Location is Auto; GPS frequency hidden when Manual) |

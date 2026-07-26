@@ -9,7 +9,7 @@
   "scripts": {
     "build:clay": "node scripts/build-custom-clay.js",
     "build:store": "node scripts/build-store-pbws.js",
-    "measure-clay": "node scripts/measure-clay-url.js --max=180000"
+    "measure-clay": "node scripts/measure-clay-url.js"
   },
   "dependencies": {
     "@rebble/clay": "^1.0.10"
@@ -46,6 +46,9 @@
       "ForecastHours",
       "WeatherProvider",
       "PauseWeatherAtNight",
+      "PauseWeatherMode",
+      "PauseWeatherStartMin",
+      "PauseWeatherEndMin",
       "WeatherUpdateInterval",
       "GpsMaxAge",
       "TemperatureUnit",

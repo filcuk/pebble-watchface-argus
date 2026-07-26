@@ -44,7 +44,7 @@ Fetch behaviour:
 | Setting | Default | Notes |
 |---------|---------|-------|
 | Weather model | Auto | Open-Meteo seamless models (ECMWF, GFS, ICON, Météo-France, JMA, GEM, UKMO) |
-| Pause at night | Off | Skips periodic refreshes between sunset and sunrise; force-fetches at dawn |
+| Pause at night | Off | Automatic: skip refreshes sunset→sunrise; Manual: fixed local schedule (30-min steps); force-fetch when the pause window ends |
 | Update interval | 30 min | Watch request cadence: 5, 15, 30, or 60 minutes |
 
 Weather data is fetched on the phone via Open-Meteo (no API key). Each update sends a full hourly payload to the watch; refresh interval and GPS reuse settings reduce how often the phone hits the network or re-acquires location.
