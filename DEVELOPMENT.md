@@ -105,7 +105,7 @@ If save opens a broken `$$RETURN_TO$$` URL, re-run `python3 scripts/patch-pebble
 
 Clay config must use built-in types only (`radiogroup`, `toggle`, `input`, `submit`, `text`). Unsupported types (e.g. `select`) break the config page.
 
-**Clay UI sources** — edit [`src/pkjs/clay/`](src/pkjs/clay/) (`theme.css`, `parts/*.js`), not [`src/pkjs/custom-clay.js`](src/pkjs/custom-clay.js) directly. `pebble build` regenerates `custom-clay.js` automatically (via `wscript`); you do **not** need `npm run build:clay` before every build. Optional: `npm run build:clay` for a Clay-only rebuild; `npm run measure-clay` to check URL size (limit **180 KB**; override with `--max=200000`).
+**Clay UI sources** — edit [`src/pkjs/clay/`](src/pkjs/clay/) (`theme.css`, `parts/*.js`), not [`src/pkjs/custom-clay.js`](src/pkjs/custom-clay.js) directly. `pebble build` regenerates `custom-clay.js` automatically (via `wscript`); you do **not** need `npm run build:clay` before every build. Optional: `npm run build:clay` for a Clay-only rebuild; `npm run measure-clay` to check URL size (warn **200 KB**, fail **400 KB** — estimated, not tested; override with `--warn=` / `--max=`).
 
 ### Troubleshooting
 

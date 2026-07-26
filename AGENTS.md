@@ -39,7 +39,7 @@ Do **not** reintroduce custom Clay components under `clay-components/` unless yo
 
 The entire settings page is one `data:` URI passed to `Pebble.openURL()`. Size matters.
 
-- Measure: `npm run measure-clay` (uses `scripts/measure-clay-url.js`, fails above **180 KB** by default)
+- Measure: `npm run measure-clay` (uses `scripts/measure-clay-url.js`; warns above **200 KB**, fails above **400 KB** — estimated budgets, not tested on device)
 - Regenerate: `pebble build` runs `scripts/build-custom-clay.js` via `wscript` (or `npm run build:clay` alone)
 - As of the modular refactor: total ~**158 KB** (customFn ~**44 KB**, config JSON ~**13 KB**, Clay base ~**114 KB**)
 - Keep static prose/HTML in `config.js`; keep logic in `clay/parts/`; CSS in `clay/theme.css`
