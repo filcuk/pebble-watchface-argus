@@ -1,10 +1,10 @@
 # Edit this file on each release. Run `pebble build` (or `node scripts/generate-release.js`)
 # to sync package.json and generate src/pkjs/release.js for the update notice.
 
-version = "1.3.0"
+version = "1.3.1"
 
 message = """
-Night now uses exact time. If you use night pause, the handling and settings were improved. A header for wind was added.
+Hotfix for temperatures over 99°! Thanks for your report from the 'sun-drenched deserts of the USA'.
 
-Thanks for your patronage <3
+Stay safe out there.
 """

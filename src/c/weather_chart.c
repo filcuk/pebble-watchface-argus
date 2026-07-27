@@ -32,6 +32,7 @@ typedef struct {
   int axis_y;
   int plot_w;
   int plot_h;
+  int y_label_width;
   int8_t axis_min;
   int8_t axis_max;
   uint8_t wind_axis_max;
@@ -43,6 +44,7 @@ static WeatherChart *s_weather_chart;
 #define CHART_MARGIN_H 4
 #define CHART_MARGIN_RIGHT 6
 #define Y_LABEL_WIDTH 14
+#define Y_LABEL_WIDTH_WIDE 20
 #define Y_LABEL_HEIGHT 14
 #define Y_LABEL_AXIS_GAP 3
 #define Y_LABEL_Y_OFFSET -3
@@ -100,8 +102,13 @@ static WeatherChart *s_weather_chart;
 
 static const uint8_t BEAUFORT_KMH_LOWER[] = {0, 1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118};
 
-static void prv_chart_geometry(GRect bounds, ChartGeometry *geo) {
-  int plot_left = CHART_MARGIN_H + Y_LABEL_WIDTH + Y_LABEL_AXIS_GAP;
+static void prv_format_temp_label(char *buf, size_t len, int8_t temp);
+static int prv_y_label_width_for_range(int8_t axis_min, int8_t axis_max);
+static bool prv_wind_exceeds_beaufort_8(uint8_t wind_kmh);
+static uint8_t prv_wind_axis_max_for_view(const WeatherData *data, const WeatherView *view);
+
+static void prv_chart_geometry(GRect bounds, int y_label_width, ChartGeometry *geo) {
+  int plot_left = CHART_MARGIN_H + y_label_width + Y_LABEL_AXIS_GAP;
   int plot_right = bounds.size.w - CHART_MARGIN_RIGHT - WIND_X_ARM;
   int plot_w = plot_right - plot_left;
   int plot_top = CHART_PLOT_TOP;
@@ -122,13 +129,7 @@ static void prv_chart_geometry(GRect bounds, ChartGeometry *geo) {
   geo->plot_h = plot_h;
 }
 
-static bool prv_wind_exceeds_beaufort_8(uint8_t wind_kmh);
-static uint8_t prv_wind_axis_max_for_view(const WeatherData *data, const WeatherView *view);
-
 static bool prv_compute_layout(GRect bounds, const WeatherData *data, const WeatherView *view, ChartLayout *layout) {
-  ChartGeometry geo;
-  prv_chart_geometry(bounds, &geo);
-
   int8_t min_temp = formatting_display_temp(weather_display_temp_min_for_view(view));
   int8_t max_temp = formatting_display_temp(weather_display_temp_max_for_view(view));
   if (max_temp <= min_temp) {
@@ -140,6 +141,10 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, const Weat
     axis_max = axis_min + 1;
   }
 
+  int y_label_width = prv_y_label_width_for_range(axis_min, axis_max);
+  ChartGeometry geo;
+  prv_chart_geometry(bounds, y_label_width, &geo);
+
   uint8_t wind_axis_max = prv_wind_axis_max_for_view(data, view);
 
   layout->plot_left = geo.plot_left;
@@ -148,6 +153,7 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, const Weat
   layout->axis_y = geo.axis_y;
   layout->plot_w = geo.plot_w;
   layout->plot_h = geo.plot_h;
+  layout->y_label_width = y_label_width;
   layout->axis_min = axis_min;
   layout->axis_max = axis_max;
   layout->wind_axis_max = wind_axis_max;
@@ -155,11 +161,10 @@ static bool prv_compute_layout(GRect bounds, const WeatherData *data, const Weat
   return true;
 }
 
-static void prv_sync_plot_layer_frame(WeatherChart *chart, GRect decor_bounds) {
-  ChartGeometry geo;
-  prv_chart_geometry(decor_bounds, &geo);
+static void prv_sync_plot_layer_frame(WeatherChart *chart, const ChartLayout *layout) {
   layer_set_frame(chart->plot_layer,
-                  GRect(geo.plot_left, geo.plot_top - PLOT_TOP_OVERFLOW, geo.plot_w, geo.plot_h + PLOT_TOP_OVERFLOW));
+                  GRect(layout->plot_left, layout->plot_top - PLOT_TOP_OVERFLOW, layout->plot_w,
+                        layout->plot_h + PLOT_TOP_OVERFLOW));
 }
 
 static time_t prv_forecast_time_for_index(const WeatherData *data, const WeatherView *view, int local_index) {
@@ -292,6 +297,19 @@ static bool prv_is_x_minor_tick_index(const WeatherData *data, const WeatherView
 
 static void prv_format_temp_label(char *buf, size_t len, int8_t temp) {
   snprintf(buf, len, "%d", (int)temp);
+}
+
+static int prv_y_label_width_for_range(int8_t axis_min, int8_t axis_max) {
+  char buf[8];
+  prv_format_temp_label(buf, sizeof(buf), axis_min);
+  if ((int)strlen(buf) >= 3) {
+    return Y_LABEL_WIDTH_WIDE;
+  }
+  prv_format_temp_label(buf, sizeof(buf), axis_max);
+  if ((int)strlen(buf) >= 3) {
+    return Y_LABEL_WIDTH_WIDE;
+  }
+  return Y_LABEL_WIDTH;
 }
 
 static int prv_plot_x(int plot_left, int plot_w, int index, int hour_count) {
@@ -684,7 +702,7 @@ static void prv_draw_y_axis_minor_ticks(GContext *ctx, int plot_left, int plot_t
 }
 
 static void prv_draw_y_axis_ticks(GContext *ctx, GFont font, int plot_left, int plot_top, int plot_h, int8_t min_temp,
-                                  int8_t max_temp) {
+                                  int8_t max_temp, int y_label_width) {
   static char label[8];
 
   prv_draw_y_axis_minor_ticks(ctx, plot_left, plot_top, plot_h, min_temp, max_temp);
@@ -701,7 +719,7 @@ static void prv_draw_y_axis_ticks(GContext *ctx, GFont font, int plot_left, int 
     prv_format_temp_label(label, sizeof(label), temp);
     graphics_context_set_text_color(ctx, CHART_LABEL_COLOR);
     graphics_draw_text(ctx, label, font,
-                       GRect(CHART_MARGIN_H, y - Y_LABEL_HEIGHT / 2 + Y_LABEL_Y_OFFSET, Y_LABEL_WIDTH, Y_LABEL_HEIGHT),
+                       GRect(CHART_MARGIN_H, y - Y_LABEL_HEIGHT / 2 + Y_LABEL_Y_OFFSET, y_label_width, Y_LABEL_HEIGHT),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
   }
 }
@@ -838,12 +856,12 @@ static void prv_decor_layer_update_proc(Layer *layer, GContext *ctx) {
   if (!prv_compute_layout(bounds, data, &view, &layout)) {
     return;
   }
-  prv_sync_plot_layer_frame(chart, bounds);
+  prv_sync_plot_layer_frame(chart, &layout);
 
   GFont axis_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
 
   prv_draw_y_axis_ticks(ctx, axis_font, layout.plot_left, layout.plot_top, layout.plot_h, layout.axis_min,
-                        layout.axis_max);
+                        layout.axis_max, layout.y_label_width);
   prv_draw_x_axis(ctx, data, &view, axis_font, layout.plot_left, layout.plot_w, layout.axis_y,
                   bounds.size.w - CHART_MARGIN_RIGHT);
 
@@ -914,7 +932,20 @@ void weather_chart_set_bounds(WeatherChart *chart, GRect frame) {
                   GRect(frame.origin.x, frame.origin.y - Y_LABEL_HEADROOM, frame.size.w,
                         frame.size.h + Y_LABEL_HEADROOM));
   layer_set_frame(chart->decor_layer, GRect(0, 0, frame.size.w, frame.size.h + Y_LABEL_HEADROOM));
-  prv_sync_plot_layer_frame(chart, layer_get_bounds(chart->decor_layer));
+
+  GRect decor_bounds = layer_get_bounds(chart->decor_layer);
+  WeatherData *data = weather_get();
+  WeatherView view;
+  weather_get_view(&view);
+  ChartLayout layout;
+  if (weather_view_has_data(&view) && prv_compute_layout(decor_bounds, data, &view, &layout)) {
+    prv_sync_plot_layer_frame(chart, &layout);
+  } else {
+    ChartGeometry geo;
+    prv_chart_geometry(decor_bounds, Y_LABEL_WIDTH, &geo);
+    layer_set_frame(chart->plot_layer,
+                    GRect(geo.plot_left, geo.plot_top - PLOT_TOP_OVERFLOW, geo.plot_w, geo.plot_h + PLOT_TOP_OVERFLOW));
+  }
 }
 
 void weather_chart_refresh(WeatherChart *chart) {
